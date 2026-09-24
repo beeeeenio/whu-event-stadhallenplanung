@@ -449,6 +449,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                   isSelected={selectedId === id}
                   onSelect={() => tool === 'select' && !placement && onSelect(id)}
                   onDragEnd={(x, y) => updateItemTransform(id, x, y)}
+                  onRotate={(rotation) => updateItemTransform(id, phaseData.x, phaseData.y, rotation)}
                   draggable={tool === 'select' && !placement}
                   zoom={zoom}
                 />

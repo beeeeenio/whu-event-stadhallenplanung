@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Group, Rect, Circle, Line, Text } from 'react-konva'
 import type { EventItem, PhaseData } from '../types'
 import { metersToPixels } from '../utils/scale'
@@ -10,6 +11,8 @@ interface Props {
   isSelected: boolean
   onSelect: () => void
   onDragEnd: (x: number, y: number) => void
+  /** freie 360°-Drehung per Maus-/Touch-Ziehen am Rotationsgriff */
+  onRotate?: (rotationDeg: number) => void
   draggable?: boolean
   /** aktueller Canvas-Zoom, um eine konstante Mindest-Klickfläche auf dem Bildschirm sicherzustellen */
   zoom?: number
@@ -33,6 +36,7 @@ export default function EventItemShape({
   isSelected,
   onSelect,
   onDragEnd,
+  onRotate,
   draggable = true,
   zoom = 1,
 }: Props) {
@@ -59,11 +63,49 @@ export default function EventItemShape({
   const hitX = isRound ? -hitW / 2 : -(hitW - w) / 2
   const hitY = isRound ? -hitH / 2 : -(hitH - h) / 2
 
+  // Rotationsgriff: fester Punkt oberhalb der Objektmitte, im lokalen (ungedrehten) Koordinatensystem
+  // der Gruppe. Der Griff selbst bleibt an dieser Stelle fixiert — beim Ziehen wird nur der
+  // Zeigerwinkel relativ zum Objektmittelpunkt in Weltkoordinaten berechnet und als neue absolute
+  // Rotation gemeldet (klassischer Konva-"Rotate handle"-Trick).
+  const centerX = isRound ? 0 : w / 2
+  const topY = isRound ? -w / 2 : 0
+  const handleDist = 26 / zoom
+  const handleX = centerX
+  const handleY = topY - handleDist
+
+  // Während des Ziehens nur lokal (visuell) drehen; erst am Ende ein einziges Mal an den Store
+  // committen — sonst würde jeder Mausmove-Frame einen eigenen Undo-Schritt erzeugen.
+  const [liveRotation, setLiveRotation] = useState<number | null>(null)
+
+  const angleFromPointer = (e: Konva.KonvaEventObject<DragEvent>): number | null => {
+    const layer = e.target.getLayer()
+    const pointer = layer?.getRelativePointerPosition()
+    e.target.position({ x: handleX, y: handleY })
+    if (!pointer) return null
+    const dx = pointer.x - phaseData.x
+    const dy = pointer.y - phaseData.y
+    if (dx === 0 && dy === 0) return null
+    return ((Math.atan2(dy, dx) * 180) / Math.PI + 90 + 360) % 360
+  }
+
+  const handleRotateDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true
+    const angle = angleFromPointer(e)
+    if (angle !== null) setLiveRotation(angle)
+  }
+
+  const handleRotateDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true
+    const angle = angleFromPointer(e)
+    setLiveRotation(null)
+    if (angle !== null) onRotate?.(angle)
+  }
+
   return (
     <Group
       x={phaseData.x}
       y={phaseData.y}
-      rotation={phaseData.rotation}
+      rotation={liveRotation ?? phaseData.rotation}
       draggable={draggable}
       onClick={onSelect}
       onTap={onSelect}
@@ -186,6 +228,29 @@ export default function EventItemShape({
             align="center"
             y={(isRound ? w / 2 : h) + 3}
             x={isRound ? -w / 2 : 0}
+          />
+        </>
+      )}
+      {isSelected && onRotate && (
+        <>
+          <Line
+            points={[centerX, topY, handleX, handleY]}
+            stroke="#2563eb"
+            strokeWidth={1 / zoom}
+            listening={false}
+          />
+          <Circle
+            x={handleX}
+            y={handleY}
+            radius={7 / zoom}
+            fill="#ffffff"
+            stroke="#2563eb"
+            strokeWidth={1.5 / zoom}
+            draggable
+            onDragMove={handleRotateDragMove}
+            onDragEnd={handleRotateDragEnd}
+            onMouseDown={stopBubble}
+            onTouchStart={stopBubble}
           />
         </>
       )}
