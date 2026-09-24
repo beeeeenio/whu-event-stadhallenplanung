@@ -44,6 +44,11 @@ export default function EditorView() {
         e.preventDefault()
         const newId = duplicateItem(selectedId)
         if (newId) setSelectedId(newId)
+        return
+      }
+
+      if (e.key === 'Escape' && selectedId) {
+        setSelectedId(null)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -73,8 +78,15 @@ export default function EditorView() {
           />
           {selectedItem && (
             <div className="absolute top-3 right-3 bg-white shadow-lg border border-gray-200 rounded-lg p-3.5 w-60 text-xs space-y-3">
-              <div className="font-semibold text-gray-800 text-sm pb-1 border-b border-gray-100">
-                Objekt-Eigenschaften
+              <div className="flex items-center justify-between gap-2 pb-1 border-b border-gray-100">
+                <span className="font-semibold text-gray-800 text-sm">Objekt-Eigenschaften</span>
+                <button
+                  onClick={() => setSelectedId(null)}
+                  title="Schließen (Esc)"
+                  className="text-gray-400 hover:text-gray-700 leading-none text-base px-1 -mr-1"
+                >
+                  ×
+                </button>
               </div>
               <label className="block space-y-1">
                 <span className="text-gray-500">Bezeichnung</span>
