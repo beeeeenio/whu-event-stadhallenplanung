@@ -21,7 +21,9 @@ export default function EditorView() {
   const renameItem = useEventStore((s) => s.renameItem)
   const resizeItem = useEventStore((s) => s.resizeItem)
   const setItemColor = useEventStore((s) => s.setItemColor)
+  const rotateItem = useEventStore((s) => s.rotateItem)
   const duplicateItem = useEventStore((s) => s.duplicateItem)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const undo = useEventStore((s) => s.undo)
   const redo = useEventStore((s) => s.redo)
   const items = useEventStore((s) => s.items)
@@ -47,13 +49,32 @@ export default function EditorView() {
         return
       }
 
-      if (e.key === 'Escape' && selectedId) {
+      if (!isMod && e.key.toLowerCase() === 'r' && selectedId) {
+        e.preventDefault()
+        rotateItem(selectedId, e.shiftKey ? -90 : 90)
+        return
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        e.preventDefault()
+        removeItem(selectedId)
         setSelectedId(null)
+        return
+      }
+
+      if (e.key === '?' && !isMod) {
+        setShortcutsOpen((v) => !v)
+        return
+      }
+
+      if (e.key === 'Escape') {
+        if (selectedId) setSelectedId(null)
+        else setShortcutsOpen(false)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo, redo, duplicateItem, selectedId])
+  }, [undo, redo, duplicateItem, rotateItem, removeItem, selectedId])
 
   const handleExportPdf = async () => {
     const planImageDataUrl = await canvasRef.current?.exportSnapshot()
@@ -126,6 +147,27 @@ export default function EditorView() {
                   Größe: {selectedItem.width}m × {selectedItem.height}m
                 </div>
               )}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-gray-500">
+                  Drehung: {Math.round(selectedItem.phaseData[currentPhaseId]?.rotation ?? 0)}°
+                </span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => rotateItem(selectedItem.id, -90)}
+                    title="90° gegen den Uhrzeigersinn drehen (Umschalt+R)"
+                    className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50"
+                  >
+                    ⟲
+                  </button>
+                  <button
+                    onClick={() => rotateItem(selectedItem.id, 90)}
+                    title="90° im Uhrzeigersinn drehen (R)"
+                    className="w-6 h-6 flex items-center justify-center border border-gray-200 rounded hover:bg-gray-50"
+                  >
+                    ⟳
+                  </button>
+                </div>
+              </div>
               {selectedItem.type === 'area' && (
                 <div>
                   <div className="text-gray-500 mb-1.5">Farbe</div>
@@ -172,6 +214,37 @@ export default function EditorView() {
                   Objekt löschen
                 </button>
               </div>
+            </div>
+          )}
+
+          <button
+            onClick={() => setShortcutsOpen((v) => !v)}
+            title="Tastatur-Shortcuts (?)"
+            className="absolute bottom-3 left-3 w-7 h-7 rounded-full bg-white border border-gray-200 shadow text-gray-500 hover:text-gray-800 hover:bg-gray-50 flex items-center justify-center text-sm font-medium"
+          >
+            ?
+          </button>
+          {shortcutsOpen && (
+            <div className="absolute bottom-12 left-3 bg-white shadow-lg border border-gray-200 rounded-lg p-3.5 w-64 text-xs space-y-2">
+              <div className="flex items-center justify-between gap-2 pb-1 border-b border-gray-100">
+                <span className="font-semibold text-gray-800 text-sm">Tastatur-Shortcuts</span>
+                <button
+                  onClick={() => setShortcutsOpen(false)}
+                  className="text-gray-400 hover:text-gray-700 leading-none text-base px-1 -mr-1"
+                >
+                  ×
+                </button>
+              </div>
+              <ul className="space-y-1 text-gray-600">
+                <li className="flex justify-between"><span>Objekt drehen</span><span className="font-mono text-gray-400">R</span></li>
+                <li className="flex justify-between"><span>… gegen Uhrzeigersinn</span><span className="font-mono text-gray-400">⇧R</span></li>
+                <li className="flex justify-between"><span>Duplizieren</span><span className="font-mono text-gray-400">⌘D</span></li>
+                <li className="flex justify-between"><span>Löschen</span><span className="font-mono text-gray-400">⌫</span></li>
+                <li className="flex justify-between"><span>Abwählen / schließen</span><span className="font-mono text-gray-400">Esc</span></li>
+                <li className="flex justify-between"><span>Rückgängig</span><span className="font-mono text-gray-400">⌘Z</span></li>
+                <li className="flex justify-between"><span>Wiederholen</span><span className="font-mono text-gray-400">⌘⇧Z</span></li>
+                <li className="flex justify-between"><span>Diese Hilfe</span><span className="font-mono text-gray-400">?</span></li>
+              </ul>
             </div>
           )}
         </div>

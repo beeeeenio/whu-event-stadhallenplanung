@@ -41,6 +41,7 @@ interface Store extends EventState {
   addItemsBatch: (items: EventItem[]) => void
   removeItem: (itemId: string) => void
   updateItemTransform: (itemId: string, x: number, y: number, rotation?: number) => void
+  rotateItem: (itemId: string, deltaDeg: number) => void
   toggleItemVisible: (itemId: string, visible?: boolean) => void
   renameItem: (itemId: string, label: string) => void
   resizeItem: (itemId: string, width: number, height: number) => void
@@ -187,6 +188,29 @@ export const useEventStore = create<Store>((set, get) => {
                   y,
                   rotation: rotation ?? current.rotation,
                 },
+              },
+            },
+          },
+        }
+      })
+    },
+
+    rotateItem: (itemId, deltaDeg) => {
+      pushHistory()
+      set((state) => {
+        const item = state.items[itemId]
+        if (!item) return state
+        const current = item.phaseData[state.currentPhaseId]
+        if (!current) return state
+        const rotation = (((current.rotation + deltaDeg) % 360) + 360) % 360
+        return {
+          items: {
+            ...state.items,
+            [itemId]: {
+              ...item,
+              phaseData: {
+                ...item.phaseData,
+                [state.currentPhaseId]: { ...current, rotation },
               },
             },
           },
