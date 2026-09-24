@@ -1,127 +1,211 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useEventStore } from '../store/store'
 import { countVisibleItems, visibleItemList } from '../utils/countItems'
 import { exportInventoryCsv } from '../utils/exportInventory'
-import { btn, panel, panelHeader, panelTitle, panelSubtitle, collapseToggle } from '../utils/ui'
+import { crossPhaseInventory, peakAsSummary, sortPhases } from '../utils/phaseDiff'
+import { btn, island, segmentedGroup, segmentedItem } from '../utils/ui'
 
 interface Props {
   selectedId: string | null
   onSelect: (id: string) => void
+  onClose: () => void
 }
 
-export default function InventoryPanel({ selectedId, onSelect }: Props) {
-  const [tab, setTab] = useState<'summary' | 'list'>('summary')
-  const [collapsed, setCollapsed] = useState(false)
+type Tab = 'summary' | 'list' | 'phases'
+
+/**
+ * Inventar als schwebendes Blatt rechts (Konzept B). Übersicht/Liste beziehen sich auf die
+ * aktive Phase; „Alle Phasen“ zeigt den Bedarf über den ganzen Ablauf mit Maximalbedarf (Konzept C).
+ */
+export default function InventoryPanel({ selectedId, onSelect, onClose }: Props) {
+  const [tab, setTab] = useState<Tab>('summary')
   const items = useEventStore((s) => s.items)
   const itemOrder = useEventStore((s) => s.itemOrder)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const eventName = useEventStore((s) => s.eventName)
   const phases = useEventStore((s) => s.phases)
   const removeItem = useEventStore((s) => s.removeItem)
+  const toggleItemVisible = useEventStore((s) => s.toggleItemVisible)
 
   const counts = countVisibleItems(items, currentPhaseId)
   const list = visibleItemList(items, itemOrder, currentPhaseId)
+  const hiddenHere = itemOrder
+    .map((id) => items[id])
+    .filter((it) => it && !it.phaseData[currentPhaseId]?.visible)
   const phaseName = phases.find((p) => p.id === currentPhaseId)?.name ?? 'Phase'
-
-  if (collapsed) {
-    return (
-      <aside className={`w-9 shrink-0 border-l border-gray-200 h-full flex flex-col items-center ${panel}`}>
-        <button onClick={() => setCollapsed(false)} title="Inventar einblenden" className={collapseToggle}>
-          «
-        </button>
-        <span
-          className="flex-1 flex items-center justify-center text-[11px] font-semibold text-gray-400 uppercase tracking-wide"
-          style={{ writingMode: 'vertical-rl' }}
-        >
-          Inventar
-        </span>
-      </aside>
-    )
-  }
+  const sorted = useMemo(() => sortPhases(phases), [phases])
+  const cross = useMemo(() => crossPhaseInventory(items, phases), [items, phases])
+  const currentIdx = sorted.findIndex((p) => p.id === currentPhaseId)
 
   return (
-    <aside className={`w-72 shrink-0 border-l border-gray-200 h-full ${panel}`}>
-      <div className={`${panelHeader} flex items-start justify-between gap-2`}>
+    <aside className={`w-[min(340px,calc(100vw-32px))] max-h-full flex flex-col overflow-hidden ${island}`}>
+      <div className="px-4 pt-3.5 pb-2 flex items-start justify-between gap-2">
         <div>
-          <h2 className={panelTitle}>Inventar</h2>
-          <p className={panelSubtitle}>Live-Stückliste der aktiven Phase</p>
+          <h2 className="text-sm font-bold text-ink">Inventar</h2>
+          <p className="text-xs text-ink3 mt-0.5">
+            {tab === 'phases' ? 'Bedarf über alle Phasen' : `Live-Stückliste · ${phaseName}`}
+          </p>
         </div>
-        <button onClick={() => setCollapsed(true)} title="Inventar einklappen" className="text-gray-400 hover:text-gray-700 shrink-0">
-          »
+        <button onClick={onClose} title="Schließen" className="w-8 h-8 rounded-full text-ink3 hover:bg-chip -mr-1.5">
+          ×
         </button>
       </div>
 
-      <div className="flex border-b border-gray-200 p-1 gap-1">
-        <button
-          onClick={() => setTab('summary')}
-          className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${
-            tab === 'summary' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          Übersicht
-        </button>
-        <button
-          onClick={() => setTab('list')}
-          className={`flex-1 text-xs py-1.5 rounded-md font-medium transition-colors ${
-            tab === 'list' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          Liste
-        </button>
+      <div className="px-3 pb-2">
+        <div className={`${segmentedGroup} w-full`}>
+          <button onClick={() => setTab('summary')} className={segmentedItem(tab === 'summary', 'flex-1')}>
+            Übersicht
+          </button>
+          <button onClick={() => setTab('list')} className={segmentedItem(tab === 'list', 'flex-1')}>
+            Liste
+          </button>
+          <button onClick={() => setTab('phases')} className={segmentedItem(tab === 'phases', 'flex-1')}>
+            Alle Phasen
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
-        {tab === 'summary' ? (
-          <ul className="space-y-1">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-2">
+        {tab === 'summary' && (
+          <ul className="space-y-0.5">
             {counts.summary.map((row) => (
-              <li key={row.label} className="flex items-center gap-2 text-xs text-gray-700 py-1.5 px-1 rounded hover:bg-gray-50">
-                <span className="text-sm w-4 text-center">{row.icon}</span>
-                <span className="font-mono w-6 text-right text-gray-500">{row.count}×</span>
-                <span className="truncate">{row.label}</span>
+              <li key={row.label} className="flex items-center gap-2 text-xs text-ink py-1.5 px-1 border-b border-chip last:border-0">
+                <span className="text-sm w-4 text-center text-ink2">{row.icon}</span>
+                <span className="truncate flex-1">{row.label}</span>
+                <span className="font-mono font-semibold tabular-nums">{row.count}</span>
               </li>
             ))}
             {counts.summary.length === 0 && (
-              <li className="text-xs text-gray-400 text-center py-4">Keine Objekte in dieser Phase</li>
+              <li className="text-xs text-ink3 text-center py-4">Keine Objekte in dieser Phase</li>
             )}
           </ul>
-        ) : (
-          <ul className="space-y-1">
-            {list.map((item, i) => (
-              <li key={item.id} className="flex items-center gap-1">
-                <button
-                  onClick={() => onSelect(item.id)}
-                  className={`flex-1 text-left text-xs px-2 py-1.5 rounded-md truncate transition-colors ${
-                    selectedId === item.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  {i + 1}. {item.label}
-                </button>
-                <button
-                  onClick={() => removeItem(item.id)}
-                  title="Löschen"
-                  className="text-gray-300 hover:text-red-600 hover:bg-red-50 text-sm w-6 h-6 rounded flex items-center justify-center leading-none transition-colors"
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-            {list.length === 0 && <li className="text-xs text-gray-400 text-center py-4">Keine Objekte in dieser Phase</li>}
-          </ul>
+        )}
+
+        {tab === 'list' && (
+          <>
+            <ul className="space-y-0.5">
+              {list.map((item, i) => (
+                <li key={item.id} className="flex items-center gap-1">
+                  <button
+                    onClick={() => onSelect(item.id)}
+                    className={`flex-1 text-left text-xs px-2 py-1.5 rounded-lg truncate transition-colors ${
+                      selectedId === item.id ? 'bg-accent-soft text-accent font-semibold' : 'text-ink hover:bg-chip'
+                    }`}
+                  >
+                    {i + 1}. {item.label}
+                  </button>
+                  <button
+                    onClick={() => toggleItemVisible(item.id, false)}
+                    title="Nur in dieser Phase ausblenden"
+                    className="text-ink3 hover:text-ink hover:bg-chip text-[11px] w-6 h-6 rounded flex items-center justify-center"
+                  >
+                    ◌
+                  </button>
+                  <button
+                    onClick={() => removeItem(item.id)}
+                    title="Löschen"
+                    className="text-ink3 hover:text-red-700 hover:bg-red-50 text-sm w-6 h-6 rounded flex items-center justify-center leading-none transition-colors"
+                  >
+                    ×
+                  </button>
+                </li>
+              ))}
+              {list.length === 0 && <li className="text-xs text-ink3 text-center py-4">Keine Objekte in dieser Phase</li>}
+            </ul>
+            {hiddenHere.length > 0 && (
+              <div className="mt-3 pt-2 border-t border-line">
+                <div className="text-[10.5px] font-semibold text-ink3 uppercase tracking-[0.1em] px-1 mb-1">
+                  In dieser Phase ausgeblendet
+                </div>
+                <ul className="space-y-0.5">
+                  {hiddenHere.map((item) => (
+                    <li key={item.id} className="flex items-center gap-1 text-xs text-ink3">
+                      <span className="flex-1 truncate px-2 py-1">{item.label}</span>
+                      <button
+                        onClick={() => toggleItemVisible(item.id, true)}
+                        className="px-2 py-1 rounded-md text-accent hover:bg-accent-soft font-semibold"
+                      >
+                        Einblenden
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
+
+        {tab === 'phases' && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs tabular-nums">
+              <thead>
+                <tr className="text-[10.5px] font-mono text-ink3">
+                  <th className="text-left font-medium pb-1.5 pr-2">Objekt</th>
+                  {sorted.map((p, i) => (
+                    <th
+                      key={p.id}
+                      className={`text-right font-medium pb-1.5 px-1 max-w-[56px] truncate ${i === currentIdx ? 'text-ink' : ''}`}
+                      title={p.name}
+                    >
+                      {p.name.length > 7 ? p.name.slice(0, 6) + '…' : p.name}
+                    </th>
+                  ))}
+                  <th className="text-right font-semibold pb-1.5 pl-1 text-accent">Max</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cross.map((r) => (
+                  <tr key={r.label} className="border-t border-chip">
+                    <td className="py-1.5 pr-2 text-ink truncate max-w-[130px]" title={r.label}>
+                      {r.label}
+                    </td>
+                    {r.perPhase.map((n, i) => (
+                      <td key={i} className={`py-1.5 px-1 text-right ${i === currentIdx ? 'font-semibold text-ink' : 'text-ink2'} ${n === 0 ? 'text-ink3/60' : ''}`}>
+                        {n || '–'}
+                      </td>
+                    ))}
+                    <td className="py-1.5 pl-1 text-right font-bold text-accent">{r.max}</td>
+                  </tr>
+                ))}
+                {cross.length === 0 && (
+                  <tr>
+                    <td colSpan={sorted.length + 2} className="text-center text-ink3 py-4">
+                      Noch keine Objekte geplant
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+            <p className="text-[11px] text-ink3 mt-2">Max = höchster Bedarf in einer Phase, also was vor Ort vorhanden sein muss.</p>
+          </div>
         )}
       </div>
 
-      <div className="border-t border-gray-200 p-3 text-xs text-gray-600 space-y-1 bg-gray-50">
-        <div className="flex justify-between"><span>Stühle gesamt</span><span className="font-mono text-gray-800">{counts.totalChairs}</span></div>
-        <div className="flex justify-between"><span>Bühnenpodeste gesamt</span><span className="font-mono text-gray-800">{counts.totalPodiums}</span></div>
-        <div className="flex justify-between"><span>Vorhang (lfm)</span><span className="font-mono text-gray-800">{counts.curtainMeters.toFixed(1)}</span></div>
-      </div>
-
-      <div className="border-t border-gray-200 p-3 flex items-center justify-between">
-        <span className="text-xs text-gray-500">Total <strong className="text-gray-800">{counts.total}</strong> Objekte</span>
-        <button onClick={() => exportInventoryCsv(eventName, phaseName, counts.summary)} className={btn('dark', 'sm')}>
-          ⬇ Export
-        </button>
-      </div>
+      {tab !== 'phases' ? (
+        <>
+          <div className="border-t border-line px-4 py-2.5 text-xs text-ink2 space-y-1 bg-ground/60">
+            <div className="flex justify-between"><span>Stühle gesamt</span><span className="font-mono text-ink">{counts.totalChairs}</span></div>
+            <div className="flex justify-between"><span>Bühnenpodeste gesamt</span><span className="font-mono text-ink">{counts.totalPodiums}</span></div>
+            <div className="flex justify-between"><span>Vorhang (lfm)</span><span className="font-mono text-ink">{counts.curtainMeters.toFixed(1)}</span></div>
+          </div>
+          <div className="border-t border-line px-4 py-2.5 flex items-center justify-between">
+            <span className="text-xs text-ink3">Total <strong className="text-ink">{counts.total}</strong> Objekte</span>
+            <button onClick={() => exportInventoryCsv(eventName, phaseName, counts.summary)} className={btn('dark', 'sm')}>
+              ⬇ Export
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="border-t border-line px-4 py-2.5 flex items-center justify-between">
+          <span className="text-xs text-ink3">{sorted.length} Phasen</span>
+          <button
+            onClick={() => exportInventoryCsv(eventName, 'Maximalbedarf', peakAsSummary(cross))}
+            className={btn('dark', 'sm')}
+          >
+            ⬇ Maximalbedarf CSV
+          </button>
+        </div>
+      )}
     </aside>
   )
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useEventStore } from '../store/store'
 import { useProjectsStore } from '../store/projectsStore'
 import type { LayerState } from '../types'
-import { btn, dividerV, popoverPanel } from '../utils/ui'
+import { island, islandBtn, kbd } from '../utils/ui'
 
 const LAYER_LABELS: Record<keyof LayerState, string> = {
   walls: 'Grundriss',
@@ -14,9 +14,14 @@ const LAYER_LABELS: Record<keyof LayerState, string> = {
 interface Props {
   onExportPdf: () => Promise<void>
   onPresent: () => void
+  onOpenCommand: () => void
+  onionSkin: boolean
+  onToggleOnionSkin: () => void
+  hasPreviousPhase: boolean
 }
 
-export default function Toolbar({ onExportPdf, onPresent }: Props) {
+/** Schwebende Kopf-Inseln: Projekt links, Befehlszeile mittig, Verlauf/Ansicht/Export rechts. */
+export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSkin, onToggleOnionSkin, hasPreviousPhase }: Props) {
   const eventName = useEventStore((s) => s.eventName)
   const setEventName = useEventStore((s) => s.setEventName)
   const layers = useEventStore((s) => s.layers)
@@ -35,90 +40,86 @@ export default function Toolbar({ onExportPdf, onPresent }: Props) {
   useEffect(() => {
     if (!viewMenuOpen) return
     function onClickOutside(e: MouseEvent) {
-      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) {
-        setViewMenuOpen(false)
-      }
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) setViewMenuOpen(false)
     }
     window.addEventListener('mousedown', onClickOutside)
     return () => window.removeEventListener('mousedown', onClickOutside)
   }, [viewMenuOpen])
 
+  const check = 'accent-[#1e5e7a] w-4 h-4'
+
   return (
-    <div className="border-b border-gray-200 bg-white px-4 py-2.5 flex flex-wrap items-center gap-3">
-      <button onClick={closeProject} title="Zurück zur Projektübersicht" className={btn('ghost', 'sm')}>
-        ← Projekte
+    <>
+      <div className={`absolute top-4 left-4 z-20 flex items-center gap-2 p-1.5 pr-3 ${island}`}>
+        <button onClick={closeProject} title="Zurück zur Projektübersicht" className={islandBtn('chip', 'px-0 w-10 text-base')}>
+          ‹
+        </button>
+        <div className="flex flex-col min-w-0">
+          <input
+            value={eventName}
+            onChange={(e) => setEventName(e.target.value)}
+            className="text-[15px] font-bold text-ink bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-accent/30 rounded px-1 w-[min(220px,40vw)]"
+            title="Projektname"
+          />
+          <span className="text-[11px] text-ink3 px-1 leading-tight">Kongresshalle Vallendar · Projekte</span>
+        </div>
+      </div>
+
+      <button
+        onClick={onOpenCommand}
+        className={`absolute top-4 left-1/2 -translate-x-1/2 z-20 hidden lg:flex items-center gap-2 h-[52px] px-4 w-[min(400px,30vw)] text-sm text-ink3 hover:text-ink2 ${island}`}
+        title="Befehlszeile (⌘K)"
+      >
+        <span>⌕</span>
+        <span className="truncate">Objekt, Befehl oder Phase…</span>
+        <span className={`ml-auto ${kbd}`}>⌘K</span>
       </button>
 
-      <input
-        value={eventName}
-        onChange={(e) => setEventName(e.target.value)}
-        className="text-sm font-semibold text-gray-800 border-none focus:outline-none focus:ring-2 focus:ring-blue-300 rounded px-1.5 py-1 min-w-[160px]"
-      />
-
-      <div className={dividerV} />
-
-      <div className="relative" ref={viewMenuRef}>
-        <button onClick={() => setViewMenuOpen((v) => !v)} className={btn(viewMenuOpen ? 'secondary' : 'ghost', 'sm')}>
-          Ansicht ▾
+      <div className={`absolute top-4 right-4 z-20 flex items-center gap-1 p-1.5 ${island}`}>
+        <button onClick={onOpenCommand} className={islandBtn('plain', 'lg:hidden')} title="Befehlszeile (⌘K)">
+          ⌕
         </button>
-        {viewMenuOpen && (
-          <div
-            className={`${popoverPanel} w-64 space-y-3`}
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div>
-              <span className="font-semibold text-gray-500 text-[11px] uppercase tracking-wide">Ansicht</span>
-              <div className="mt-1.5 flex flex-col gap-1.5 text-xs text-gray-600">
-                {(Object.keys(LAYER_LABELS) as (keyof LayerState)[]).map((key) => (
-                  <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={layers[key]}
-                      onChange={() => toggleLayer(key)}
-                      className="accent-blue-600 w-3.5 h-3.5"
-                    />
-                    {LAYER_LABELS[key]}
+        <button onClick={undo} disabled={!canUndo} title="Rückgängig (Strg/Cmd+Z)" className={islandBtn('plain')}>
+          ↺
+        </button>
+        <button onClick={redo} disabled={!canRedo} title="Wiederholen (Strg/Cmd+Shift+Z)" className={islandBtn('plain')}>
+          ↻
+        </button>
+        <div className="relative" ref={viewMenuRef}>
+          <button onClick={() => setViewMenuOpen((v) => !v)} className={islandBtn(viewMenuOpen ? 'chip' : 'plain')}>
+            Ansicht ▾
+          </button>
+          {viewMenuOpen && (
+            <div className={`absolute right-0 top-full mt-2 z-30 w-60 p-3 space-y-3 ${island}`} onMouseDown={(e) => e.stopPropagation()}>
+              <div>
+                <span className="font-semibold text-ink3 text-[10.5px] uppercase tracking-[0.1em]">Ansicht</span>
+                <div className="mt-2 flex flex-col gap-2 text-[13px] text-ink">
+                  {(Object.keys(LAYER_LABELS) as (keyof LayerState)[]).map((key) => (
+                    <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
+                      <input type="checkbox" checked={layers[key]} onChange={() => toggleLayer(key)} className={check} />
+                      {LAYER_LABELS[key]}
+                    </label>
+                  ))}
+                  <label className={`flex items-center gap-2 select-none ${hasPreviousPhase ? 'cursor-pointer' : 'opacity-40'}`}>
+                    <input type="checkbox" checked={onionSkin && hasPreviousPhase} disabled={!hasPreviousPhase} onChange={onToggleOnionSkin} className={check} />
+                    Vorphase einblenden
                   </label>
-                ))}
+                </div>
+              </div>
+              <div className="pt-2 border-t border-chip">
+                <span className="font-semibold text-ink3 text-[10.5px] uppercase tracking-[0.1em]">Saal</span>
+                <div className="mt-2 flex gap-3 text-[13px] text-ink">
+                  {(['saal1', 'saal2', 'saal3'] as const).map((key) => (
+                    <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input type="checkbox" checked={saalSplit[key]} onChange={() => toggleSaal(key)} className={check} />
+                      {key.replace('saal', 'Saal ')}
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
-
-            <div className="pt-2 border-t border-gray-100">
-              <span className="font-semibold text-gray-500 text-[11px] uppercase tracking-wide">Saal</span>
-              <div className="mt-1.5 flex flex-col gap-1.5 text-xs text-gray-600">
-                {(['saal1', 'saal2', 'saal3'] as const).map((key) => (
-                  <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={saalSplit[key]}
-                      onChange={() => toggleSaal(key)}
-                      className="accent-blue-600 w-3.5 h-3.5"
-                    />
-                    {key.replace('saal', 'Saal ')}
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className={dividerV} />
-
-      <div className="flex items-center gap-1.5">
-        <span className="font-semibold text-gray-500 text-[11px] uppercase tracking-wide mr-0.5">Verlauf</span>
-        <button onClick={undo} disabled={!canUndo} title="Rückgängig (Strg/Cmd+Z)" className={btn('secondary', 'sm')}>
-          ↺ Rückgängig
-        </button>
-        <button onClick={redo} disabled={!canRedo} title="Wiederholen (Strg/Cmd+Shift+Z)" className={btn('secondary', 'sm')}>
-          ↻ Wiederholen
-        </button>
-      </div>
-
-      <div className="ml-auto flex items-center gap-2">
-        <button onClick={onPresent} title="Phasen im Vollbild durchgehen" className={btn('secondary', 'sm')}>
-          ▶ Präsentation
-        </button>
+          )}
+        </div>
         <button
           onClick={async () => {
             setExporting(true)
@@ -129,11 +130,15 @@ export default function Toolbar({ onExportPdf, onPresent }: Props) {
             }
           }}
           disabled={exporting}
-          className={btn('primary', 'sm')}
+          className={islandBtn('chip')}
+          title="PDF exportieren (aktuelle Phase)"
         >
-          {exporting ? 'Exportiere…' : 'PDF exportieren'}
+          {exporting ? 'Exportiere…' : 'PDF'}
+        </button>
+        <button onClick={onPresent} title="Phasen im Vollbild durchgehen" className={islandBtn('dark')}>
+          ▶ <span className="hidden sm:inline">Präsentation</span>
         </button>
       </div>
-    </div>
+    </>
   )
 }

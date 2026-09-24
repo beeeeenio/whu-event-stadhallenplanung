@@ -12,14 +12,19 @@ const AUTO_ADVANCE_MS = 4000
 
 interface Props {
   onClose: () => void
+  /** Phase, mit der die Präsentation beginnt (Standard: erste Phase). */
+  startPhaseId?: string
 }
 
-export default function PresentationMode({ onClose }: Props) {
+export default function PresentationMode({ onClose, startPhaseId }: Props) {
   const phases = useEventStore((s) => s.phases)
   const items = useEventStore((s) => s.items)
   const itemOrder = useEventStore((s) => s.itemOrder)
   const layers = useEventStore((s) => s.layers)
-  const [index, setIndex] = useState(0)
+  const [index, setIndex] = useState(() => {
+    const sorted = [...phases].sort((a, b) => a.order - b.order)
+    return Math.max(0, sorted.findIndex((p) => p.id === startPhaseId))
+  })
   const [playing, setPlaying] = useState(false)
   const [image] = useImage(layers.simplified ? '/plans/power-plan-simple.png' : '/plans/power-plan.png')
 

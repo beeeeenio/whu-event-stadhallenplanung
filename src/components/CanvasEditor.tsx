@@ -7,17 +7,44 @@ import { metersToPixels, pixelsToMeters, DEFAULT_PIXELS_PER_METER, POWER_PLAN_NA
 import { RIGGING_BARS, STAGE_FRONT_EDGE } from '../data/rigging'
 import EventItemShape from './EventItemShape'
 import type { ItemType } from '../types'
-import { segmentedGroup, segmentedItem } from '../utils/ui'
+import type { Placement } from '../utils/placement'
+import { island } from '../utils/ui'
+
+export type ToolMode = 'select' | 'measure' | 'area'
+
+/** Aktueller Ausschnitt des Plans (für schwebende Bedienelemente an der Auswahl). */
+export interface CanvasViewport {
+  zoom: number
+  x: number
+  y: number
+  width: number
+  height: number
+}
 
 interface Props {
   pixelsPerMeter: number
   selectedId: string | null
   onSelect: (id: string | null) => void
+  /** Werkzeug von außen steuern (Werkzeug-Dock). Ohne Angabe verwaltet der Canvas es selbst. */
+  tool?: ToolMode
+  onToolChange?: (tool: ToolMode) => void
+  /** Aktiver „Antippen & Platzieren“-Modus: Klick in den Plan setzt das Objekt an diese Stelle. */
+  placement?: Placement | null
+  onPlacementDone?: () => void
+  /** Phase, deren (geänderte) Objekte als Geisterbild unter der aktuellen Phase liegen. */
+  ghostPhaseId?: string | null
+  /** IDs der Objekte fürs Geisterbild (vorberechnet: in der Vorphase anders/vorhanden). */
+  ghostItemIds?: string[]
+  onViewportChange?: (viewport: CanvasViewport) => void
 }
 
 export interface CanvasEditorHandle {
   /** Rendert den kompletten Erdgeschoss-Plan inkl. aller platzierten Objekte/Bereiche als PNG-DataURL. */
   exportSnapshot: () => Promise<string | null>
+  /** Mittelpunkt des sichtbaren Ausschnitts in Canvas-Koordinaten (px), z. B. für Einfügen per Befehl. */
+  getViewCenter: () => { x: number; y: number }
+  /** Ansicht auf den ganzen Grundriss einpassen. */
+  fitToView: () => void
 }
 
 // Canvas-Grundfläche = kalibriertes Erdgeschoss (Stromplan). Bei DEFAULT_PIXELS_PER_METER=20px/m
@@ -29,10 +56,19 @@ const MIN_ZOOM = 0.25
 const MAX_ZOOM = 6
 const ZOOM_STEP = 0.1
 
-type ToolMode = 'select' | 'measure' | 'area'
-
 const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor(
-  { pixelsPerMeter, selectedId, onSelect },
+  {
+    pixelsPerMeter,
+    selectedId,
+    onSelect,
+    tool: toolProp,
+    onToolChange,
+    placement = null,
+    onPlacementDone,
+    ghostPhaseId = null,
+    ghostItemIds = [],
+    onViewportChange,
+  },
   ref,
 ) {
   const items = useEventStore((s) => s.items)
@@ -59,7 +95,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const [zoom, setZoom] = useState(1)
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 })
   const [hasFit, setHasFit] = useState(false)
-  const [tool, setTool] = useState<ToolMode>('select')
+  const [toolState, setToolState] = useState<ToolMode>('select')
+  const tool = toolProp ?? toolState
+  const setTool = (next: ToolMode) => {
+    if (onToolChange) onToolChange(next)
+    else setToolState(next)
+  }
   const [measurePoints, setMeasurePoints] = useState<{ x: number; y: number }[]>([])
   const [measureCursor, setMeasureCursor] = useState<{ x: number; y: number } | null>(null)
   const [areaStart, setAreaStart] = useState<{ x: number; y: number } | null>(null)
@@ -111,7 +152,27 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
 
       return dataUrl
     },
+    getViewCenter: () => {
+      const w = containerSize?.width ?? STAGE_WIDTH
+      const h = containerSize?.height ?? STAGE_HEIGHT
+      return { x: (w / 2 - stagePos.x) / zoom, y: (h / 2 - stagePos.y) / zoom }
+    },
+    fitToView: () => setHasFit(false),
   }))
+
+  // Ausschnitt nach außen melden, damit z. B. die Kontextleiste an der Auswahl mitwandert
+  useEffect(() => {
+    if (!containerSize) return
+    onViewportChange?.({ zoom, x: stagePos.x, y: stagePos.y, width: containerSize.width, height: containerSize.height })
+  }, [zoom, stagePos, containerSize, onViewportChange])
+
+  // Wird das Werkzeug von außen gewechselt (Dock/Tastatur), laufende Zeichenvorgänge abbrechen
+  useEffect(() => {
+    setMeasurePoints([])
+    setMeasureCursor(null)
+    setAreaStart(null)
+    setAreaCursor(null)
+  }, [tool])
 
   // Container-Größe verfolgen (für passgenauen Stage-Viewport). Erst nach der ersten
   // echten Messung wird gefittet, damit kein falscher Platzhalterwert einfließt.
@@ -150,14 +211,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-
-  /** Werkzeug wechseln und alle laufenden Zeichenvorgänge (Messen/Bereich) sauber abbrechen. */
-  const switchTool = (next: ToolMode) => {
-    setTool(next)
-    setMeasurePoints([])
-    setAreaStart(null)
-    setAreaCursor(null)
-  }
 
   /** Zoomt auf einen festen Bildschirmpunkt (Cursor oder Viewport-Mitte), Objekt unter dem Punkt bleibt stehen. */
   const zoomAtPoint = (newZoomRaw: number, point: { x: number; y: number }) => {
@@ -205,6 +258,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       return
     }
 
+    if (placement) return // Klick wird von handlePlacementClick verarbeitet
     if (e.target === stage) onSelect(null)
   }
 
@@ -243,6 +297,18 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     setTool('select')
   }
 
+  /** „Antippen & Platzieren“: Klick/Tipp in den Plan setzt das gewählte Objekt an diese Stelle. */
+  const handlePlacementClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (!placement || tool !== 'select') return
+    const stage = e.target.getStage()
+    if (!stage) return
+    const pt = stagePointerToInternal(stage)
+    if (!pt) return
+    const id = placement.place(pt.x, pt.y)
+    if (id) onSelect(id)
+    if (placement.once) onPlacementDone?.()
+  }
+
   const handleContainerDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     const type = e.dataTransfer.getData('application/item-type')
@@ -269,65 +335,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       : null
 
   return (
-    <div className="w-full h-full flex flex-col">
-      {/* Werkzeugleiste: Werkzeug-Auswahl + Zoom */}
-      <div className="flex items-center gap-3 border-b border-gray-200 bg-white px-3 py-2 text-xs">
-        <div className={segmentedGroup}>
-          <button onClick={() => switchTool('select')} className={segmentedItem(tool === 'select')}>
-            ⭠ Auswählen
-          </button>
-          <button onClick={() => switchTool('measure')} className={segmentedItem(tool === 'measure')}>
-            📏 Messen
-          </button>
-          <button onClick={() => switchTool('area')} className={segmentedItem(tool === 'area')}>
-            🔲 Bereich
-          </button>
-        </div>
-
-        {tool === 'measure' ? (
-          <span className="text-gray-500">
-            Klicken Sie zwei Punkte an, um eine Strecke zu messen (Esc zum Zurücksetzen)
-          </span>
-        ) : tool === 'area' ? (
-          <span className="text-gray-500">
-            Rechteck aufziehen, um einen Bereich/Stand zu markieren (Esc zum Abbrechen)
-          </span>
-        ) : (
-          <span className="text-gray-400">Ziehen Sie den leeren Plan zum Verschieben der Ansicht</span>
-        )}
-
-        <div className="ml-auto flex items-center gap-1.5">
-          <div className="flex items-center rounded-md border border-gray-200 overflow-hidden shadow-sm">
-            <button
-              onClick={() => zoomAtPoint(zoom - ZOOM_STEP, viewportCenter)}
-              className="w-7 h-7 flex items-center justify-center bg-white text-gray-600 hover:bg-gray-50 transition-colors"
-              title="Verkleinern"
-            >
-              −
-            </button>
-            <span className="w-12 text-center font-mono text-gray-700 border-x border-gray-200 h-7 flex items-center justify-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              onClick={() => zoomAtPoint(zoom + ZOOM_STEP, viewportCenter)}
-              className="w-7 h-7 flex items-center justify-center bg-white text-gray-600 hover:bg-gray-50 transition-colors"
-              title="Vergrößern"
-            >
-              +
-            </button>
-          </div>
-          <button
-            onClick={() => setHasFit(false)}
-            className="px-2.5 h-7 border border-gray-200 rounded-md bg-white text-gray-600 hover:bg-gray-50 transition-colors shadow-sm font-medium"
-          >
-            Einpassen
-          </button>
-        </div>
-      </div>
-
+    <div className="w-full h-full relative">
       <div
         ref={containerRef}
-        className="flex-1 overflow-hidden bg-gray-100 relative"
+        className={`absolute inset-0 overflow-hidden bg-ground ${
+          placement || tool !== 'select' ? 'cursor-crosshair' : ''
+        }`}
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleContainerDrop}
       >
@@ -350,6 +363,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           onMouseDown={handleStageMouseDown}
           onMouseMove={handleStageMouseMove}
           onMouseUp={handleStageMouseUp}
+          onClick={handlePlacementClick}
+          onTap={handlePlacementClick}
         >
           {/* Wände / Grundriss (Erdgeschoss, kalibriert) */}
           {layers.walls && (
@@ -396,6 +411,30 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
             </Layer>
           )}
 
+          {/* Geisterbild der Vorphase (Konzept C): nur, was dort anders stand oder inzwischen weg ist */}
+          {ghostPhaseId && ghostItemIds.length > 0 && (
+            <Layer listening={false} opacity={0.3}>
+              {ghostItemIds.map((id) => {
+                const item = items[id]
+                const phaseData = item?.phaseData[ghostPhaseId]
+                if (!item || !phaseData) return null
+                return (
+                  <EventItemShape
+                    key={`ghost-${id}`}
+                    item={item}
+                    phaseData={phaseData}
+                    pixelsPerMeter={pixelsPerMeter}
+                    isSelected={false}
+                    onSelect={() => {}}
+                    onDragEnd={() => {}}
+                    draggable={false}
+                    zoom={zoom}
+                  />
+                )
+              })}
+            </Layer>
+          )}
+
           {/* Event-Objekte der aktiven Phase */}
           <Layer>
             {visibleItemIds.map((id) => {
@@ -408,9 +447,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                   phaseData={phaseData}
                   pixelsPerMeter={pixelsPerMeter}
                   isSelected={selectedId === id}
-                  onSelect={() => tool === 'select' && onSelect(id)}
+                  onSelect={() => tool === 'select' && !placement && onSelect(id)}
                   onDragEnd={(x, y) => updateItemTransform(id, x, y)}
-                  draggable={tool === 'select'}
+                  draggable={tool === 'select' && !placement}
                   zoom={zoom}
                 />
               )
@@ -475,13 +514,61 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
         </Stage>
       </div>
 
-      {/* Statusleiste */}
-      <div className="border-t border-gray-200 bg-gray-50 px-3 py-1.5 text-[11px] text-gray-500 flex justify-between">
-        <span>
-          Maßstab: {Math.round(pixelsPerMeter * zoom * 10) / 10} px/m · Zoom: {Math.round(zoom * 100)}%
+      {/* Zoom-Insel (schwebt links über dem Plan) */}
+      <div className={`absolute left-4 top-[84px] z-10 flex flex-col items-center p-1 gap-0.5 ${island}`}>
+        <button
+          onClick={() => zoomAtPoint(zoom + ZOOM_STEP, viewportCenter)}
+          className="w-9 h-9 rounded-xl text-ink hover:bg-chip text-lg leading-none"
+          title="Vergrößern"
+        >
+          +
+        </button>
+        <span className="font-mono text-[10.5px] text-ink2 py-0.5" title="Zoom">
+          {Math.round(zoom * 100)}%
         </span>
-        <span>{itemOrder.length} Objekte gesamt · {visibleItemIds.length} sichtbar</span>
+        <button
+          onClick={() => zoomAtPoint(zoom - ZOOM_STEP, viewportCenter)}
+          className="w-9 h-9 rounded-xl text-ink hover:bg-chip text-lg leading-none"
+          title="Verkleinern"
+        >
+          −
+        </button>
+        <div className="w-6 h-px bg-line my-0.5" />
+        <button
+          onClick={() => setHasFit(false)}
+          className="w-9 h-9 rounded-xl text-ink hover:bg-chip text-[15px] leading-none"
+          title="Einpassen"
+        >
+          ⤢
+        </button>
       </div>
+
+      {/* Maßstab + Objektzahl (ehemalige Statusleiste) */}
+      <div className="absolute left-[72px] top-[92px] z-10 pointer-events-none flex flex-col gap-1 font-mono text-[10.5px] text-ink2">
+        <span className="flex items-center gap-1.5">
+          <i
+            className="block h-1.5 border-[1.5px] border-t-0 border-ink2"
+            style={{ width: Math.max(12, metersToPixels(5, pixelsPerMeter) * zoom) }}
+          />
+          5 m
+        </span>
+        <span className="text-ink3">
+          {Math.round(pixelsPerMeter * zoom * 10) / 10} px/m · {visibleItemIds.length} sichtbar / {itemOrder.length} gesamt
+        </span>
+      </div>
+
+      {/* Werkzeug-Hinweis */}
+      {(tool !== 'select' || placement) && (
+        <div className="absolute left-1/2 -translate-x-1/2 top-[76px] z-10 pointer-events-none">
+          <div className="bg-accent text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg whitespace-nowrap">
+            {placement
+              ? `Tippen/Klicken zum Platzieren · ${placement.label}${placement.once ? '' : ' · Esc beendet'}`
+              : tool === 'measure'
+                ? 'Messen: zwei Punkte anklicken · Esc setzt zurück'
+                : 'Bereich: Rechteck aufziehen · Esc bricht ab'}
+          </div>
+        </div>
+      )}
     </div>
   )
 })

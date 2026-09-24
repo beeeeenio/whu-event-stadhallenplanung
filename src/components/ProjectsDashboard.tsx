@@ -35,7 +35,7 @@ export default function ProjectsDashboard() {
   }
 
   return (
-    <div className="h-screen w-screen overflow-y-auto bg-gray-50">
+    <div className="h-screen w-screen overflow-y-auto bg-ground">
       <div className="max-w-3xl mx-auto px-6 py-10">
         <h1 className="text-2xl font-semibold text-gray-800 mb-1">Kongresshalle Vallendar – Event-Planungstool</h1>
         <p className="text-sm text-gray-500 mb-8">Projekte verwalten und Hallenpläne bearbeiten</p>
@@ -46,7 +46,7 @@ export default function ProjectsDashboard() {
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
             placeholder="Name des neuen Projekts (z. B. Gala-Dinner Mittwoch)"
-            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-300"
+            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent/50"
           />
           <button onClick={handleCreate} className={btn('primary', 'md')}>
             + Neues Projekt
@@ -62,7 +62,7 @@ export default function ProjectsDashboard() {
             {sorted.map((p) => (
               <li
                 key={p.id}
-                className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md hover:border-gray-300 transition-all"
+                className="bg-white border border-gray-200 rounded-2xl p-4 hover:shadow-md hover:border-gray-300 transition-all"
               >
                 {renamingId === p.id ? (
                   <input
