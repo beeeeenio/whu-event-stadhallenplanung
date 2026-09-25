@@ -31,7 +31,7 @@ export default function InventoryPanel({ selectedId, onSelect, onClose }: Props)
   const list = visibleItemList(items, itemOrder, currentPhaseId)
   const hiddenHere = itemOrder
     .map((id) => items[id])
-    .filter((it) => it && !it.phaseData[currentPhaseId]?.visible)
+    .filter((it) => it && it.phaseData[currentPhaseId] && !it.phaseData[currentPhaseId].visible)
   const phaseName = phases.find((p) => p.id === currentPhaseId)?.name ?? 'Phase'
   const sorted = useMemo(() => sortPhases(phases), [phases])
   const cross = useMemo(() => crossPhaseInventory(items, phases), [items, phases])

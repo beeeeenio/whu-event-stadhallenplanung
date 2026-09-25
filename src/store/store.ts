@@ -160,12 +160,22 @@ export const useEventStore = create<Store>((set, get) => {
       }))
     },
 
+    // Löscht das Objekt nur aus der aktuellen Phase (entfernt dessen phaseData-Eintrag dort).
+    // Existiert es danach in keiner Phase mehr, wird es komplett entfernt — so bleibt es in
+    // anderen Phasen (z.B. nach "Phase übernehmen") unangetastet.
     removeItem: (itemId) => {
       pushHistory()
       set((state) => {
-        const items = { ...state.items }
-        delete items[itemId]
-        return { items, itemOrder: state.itemOrder.filter((id) => id !== itemId) }
+        const item = state.items[itemId]
+        if (!item) return state
+        const phaseData = { ...item.phaseData }
+        delete phaseData[state.currentPhaseId]
+        if (Object.keys(phaseData).length === 0) {
+          const items = { ...state.items }
+          delete items[itemId]
+          return { items, itemOrder: state.itemOrder.filter((id) => id !== itemId) }
+        }
+        return { items: { ...state.items, [itemId]: { ...item, phaseData } } }
       })
     },
 
