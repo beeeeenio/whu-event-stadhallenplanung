@@ -1,4 +1,4 @@
-import { memo, useState } from 'react'
+import { memo, useRef } from 'react'
 import { Group, Rect, Circle, Line, Text } from 'react-konva'
 import type { EventItem, PhaseData } from '../types'
 import { metersToPixels } from '../utils/scale'
@@ -77,9 +77,11 @@ function EventItemShape({
   const handleX = centerX
   const handleY = topY - handleDist
 
-  // Während des Ziehens nur lokal (visuell) drehen; erst am Ende ein einziges Mal an den Store
-  // committen — sonst würde jeder Mausmove-Frame einen eigenen Undo-Schritt erzeugen.
-  const [liveRotation, setLiveRotation] = useState<number | null>(null)
+  // Während des Ziehens die Gruppe direkt über die Konva-Node drehen (wie Konva es beim normalen
+  // Verschieben ohnehin intern tut) statt über React-State — ein setState pro Mausmove-Frame würde
+  // jedes Mal die ganze Komponente neu rendern/abgleichen und fühlte sich spürbar träge an. Erst am
+  // Ende wird die Rotation ein einziges Mal an den Store committet (ein Undo-Schritt pro Zug).
+  const groupRef = useRef<Konva.Group>(null)
 
   const angleFromPointer = (e: Konva.KonvaEventObject<DragEvent>): number | null => {
     const layer = e.target.getLayer()
@@ -95,21 +97,23 @@ function EventItemShape({
   const handleRotateDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true
     const angle = angleFromPointer(e)
-    if (angle !== null) setLiveRotation(angle)
+    if (angle === null || !groupRef.current) return
+    groupRef.current.rotation(angle)
+    groupRef.current.getLayer()?.batchDraw()
   }
 
   const handleRotateDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true
     const angle = angleFromPointer(e)
-    setLiveRotation(null)
     if (angle !== null) onRotate?.(item.id, phaseData.x, phaseData.y, angle)
   }
 
   return (
     <Group
+      ref={groupRef}
       x={phaseData.x}
       y={phaseData.y}
-      rotation={liveRotation ?? phaseData.rotation}
+      rotation={phaseData.rotation}
       draggable={draggable}
       onClick={handleSelect}
       onTap={handleSelect}

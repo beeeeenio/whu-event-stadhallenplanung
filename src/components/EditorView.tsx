@@ -316,15 +316,18 @@ export default function EditorView() {
     commandOpen, placement, tool, pickerOpen, propertiesOpen, shortcutsOpen, inventoryOpen,
   ])
 
-  // Kontextleiste an der Auswahl ausrichten
+  // Kontextleiste an der Auswahl ausrichten. Über dem Objekt braucht es genug Abstand, um den
+  // Rotationsgriff (fest ~26 Bildschirm-Pixel über der Objekt-Oberkante, siehe EventItemShape)
+  // freizulassen — sonst legt sich die Leiste über den Griff und man kommt nicht mehr an ihn heran.
+  const ROTATE_HANDLE_CLEARANCE = 40
   let barStyle: React.CSSProperties | null = null
   if (selectedItem && selectedVisible && viewport && !placement && tool === 'select') {
     const b = screenBounds(selectedItem, currentPhaseId, viewport)
     if (b) {
       const cx = Math.min(Math.max((b.minX + b.maxX) / 2, 230), viewport.width - 230)
-      const above = b.minY - 12 > 150
+      const above = b.minY - ROTATE_HANDLE_CLEARANCE > 150
       barStyle = above
-        ? { left: cx, top: b.minY - 12, transform: 'translate(-50%, -100%)' }
+        ? { left: cx, top: b.minY - ROTATE_HANDLE_CLEARANCE, transform: 'translate(-50%, -100%)' }
         : { left: cx, top: Math.min(b.maxY + 12, viewport.height - 220), transform: 'translate(-50%, 0)' }
     }
   }
