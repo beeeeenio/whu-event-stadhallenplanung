@@ -6,7 +6,6 @@ import { useEventStore } from '../store/store'
 import { metersToPixels, pixelsToMeters, DEFAULT_PIXELS_PER_METER, POWER_PLAN_NATIVE_PIXELS_PER_METER } from '../utils/scale'
 import { RIGGING_BARS, STAGE_FRONT_EDGE } from '../data/rigging'
 import EventItemShape from './EventItemShape'
-import type { ItemType } from '../types'
 import type { Placement } from '../utils/placement'
 import { island } from '../utils/ui'
 
@@ -45,6 +44,9 @@ export interface CanvasEditorHandle {
   getViewCenter: () => { x: number; y: number }
   /** Ansicht auf den ganzen Grundriss einpassen. */
   fitToView: () => void
+  /** Bildschirmkoordinaten (z. B. e.clientX/Y beim Ziehen aus der Objekt-Bibliothek) in
+   *  Canvas-Koordinaten umrechnen, oder null außerhalb der Plan-Fläche. */
+  screenToCanvas: (clientX: number, clientY: number) => { x: number; y: number } | null
 }
 
 // Canvas-Grundfläche = kalibriertes Erdgeschoss (Stromplan). Bei DEFAULT_PIXELS_PER_METER=20px/m
@@ -77,7 +79,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const layers = useEventStore((s) => s.layers)
   const updateItemTransform = useEventStore((s) => s.updateItemTransform)
-  const addItem = useEventStore((s) => s.addItem)
   const addArea = useEventStore((s) => s.addArea)
 
   // Basis-Grundriss: kalibrierter Stromplan Erdgeschoss (enthält bereits Wände).
@@ -159,6 +160,15 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       return { x: (w / 2 - stagePos.x) / zoom, y: (h / 2 - stagePos.y) / zoom }
     },
     fitToView: () => setHasFit(false),
+    screenToCanvas: (clientX, clientY) => {
+      const el = containerRef.current
+      if (!el) return null
+      const rect = el.getBoundingClientRect()
+      const screenX = clientX - rect.left
+      const screenY = clientY - rect.top
+      if (screenX < 0 || screenY < 0 || screenX > rect.width || screenY > rect.height) return null
+      return { x: (screenX - stagePos.x) / zoom, y: (screenY - stagePos.y) / zoom }
+    },
   }))
 
   // Ausschnitt nach außen melden, damit z. B. die Kontextleiste an der Auswahl mitwandert
@@ -310,19 +320,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     if (placement.once) onPlacementDone?.()
   }
 
-  const handleContainerDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const type = e.dataTransfer.getData('application/item-type')
-    if (!type || !containerRef.current) return
-    const rect = containerRef.current.getBoundingClientRect()
-    const screenX = e.clientX - rect.left
-    const screenY = e.clientY - rect.top
-    const x = (screenX - stagePos.x) / zoom
-    const y = (screenY - stagePos.y) / zoom
-    const id = addItem(type as ItemType, x, y)
-    onSelect(id)
-  }
-
   // Stabile Handler für EventItemShape (React.memo): aktuelle Werte über Refs lesen, damit sich
   // die Funktionsreferenz nie ändert und beim Verschieben EINES Objekts nicht alle anderen
   // Objekte neu gerendert/abgeglichen werden.
@@ -360,8 +357,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
         className={`absolute inset-0 overflow-hidden bg-ground ${
           placement || tool !== 'select' ? 'cursor-crosshair' : ''
         }`}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={handleContainerDrop}
       >
         <Stage
           ref={stageRef}

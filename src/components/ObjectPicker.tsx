@@ -19,6 +19,8 @@ interface Props {
   onCreateChairRows: (rows: number, perRow: number, mode: 'tap' | 'center') => void
   onImportNivtec: () => void
   onClose: () => void
+  /** Kachel per Zeigergerät aus der Bibliothek gezogen: sofortige Formvorschau, kein natives HTML5-DnD-Ghost-Bild. */
+  onTileDragStart: (e: React.PointerEvent, type: ItemType) => void
 }
 
 const TABS: { key: PickerTab; label: string }[] = [
@@ -38,6 +40,7 @@ export default function ObjectPicker({
   onCreateChairRows,
   onImportNivtec,
   onClose,
+  onTileDragStart,
 }: Props) {
   const [query, setQuery] = useState('')
   const searching = query.trim().length > 0
@@ -89,8 +92,7 @@ export default function ObjectPicker({
             {tiles.map((tpl) => (
               <button
                 key={tpl.type}
-                draggable
-                onDragStart={(e) => e.dataTransfer.setData('application/item-type', tpl.type)}
+                onPointerDown={(e) => onTileDragStart(e, tpl.type)}
                 onClick={() => onPick(tpl.type)}
                 onDoubleClick={() => onInsertCenter(tpl.type)}
                 className={`flex flex-col items-center justify-center gap-1 px-1.5 py-2 rounded-xl border text-center transition-all min-h-[78px] ${

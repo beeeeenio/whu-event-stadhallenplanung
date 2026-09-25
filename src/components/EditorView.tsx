@@ -71,6 +71,10 @@ export default function EditorView() {
   const [viewport, setViewport] = useState<CanvasViewport | null>(null)
   const canvasRef = useRef<CanvasEditorHandle>(null)
 
+  /** Kachel aus der Objekt-Bibliothek gezogen: Formvorschau folgt dem Zeiger bis zum Loslassen. */
+  const [dragGhost, setDragGhost] = useState<{ type: ItemType; x: number; y: number } | null>(null)
+  const dragStateRef = useRef<{ type: ItemType; startX: number; startY: number; dragging: boolean } | null>(null)
+
   const phases = useEventStore((s) => s.phases)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const items = useEventStore((s) => s.items)
@@ -163,6 +167,40 @@ export default function EditorView() {
       setPickerOpen(false)
     },
     [addChairRowGroup, viewCenter, select],
+  )
+
+  /** Kachel aus der Bibliothek per Zeiger gezogen: sofortige Formvorschau statt des trägen
+   *  nativen HTML5-Drag-Ghosts, Objekt wird erst beim Loslassen über dem Plan angelegt. */
+  const handleTileDragStart = useCallback(
+    (e: React.PointerEvent, type: ItemType) => {
+      if (e.button !== 0) return
+      dragStateRef.current = { type, startX: e.clientX, startY: e.clientY, dragging: false }
+
+      const onMove = (ev: PointerEvent) => {
+        const st = dragStateRef.current
+        if (!st) return
+        if (!st.dragging) {
+          if (Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) < 5) return
+          st.dragging = true
+        }
+        setDragGhost({ type: st.type, x: ev.clientX, y: ev.clientY })
+      }
+      const onUp = (ev: PointerEvent) => {
+        window.removeEventListener('pointermove', onMove)
+        const st = dragStateRef.current
+        dragStateRef.current = null
+        setDragGhost(null)
+        if (!st?.dragging) return
+        const pos = canvasRef.current?.screenToCanvas(ev.clientX, ev.clientY)
+        if (!pos) return
+        const id = addItem(st.type, pos.x, pos.y)
+        select(id)
+        setPickerOpen(false)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp, { once: true })
+    },
+    [addItem, select],
   )
 
   const handleExportPdf = useCallback(async () => {
@@ -395,6 +433,7 @@ export default function EditorView() {
             onCreateChairRows={placeChairRows}
             onImportNivtec={nivtec.open}
             onClose={() => setPickerOpen(false)}
+            onTileDragStart={handleTileDragStart}
           />
         </div>
       )}
@@ -492,6 +531,30 @@ export default function EditorView() {
 
       {commandOpen && <CommandBar onClose={() => setCommandOpen(false)} actions={commandActions} />}
       {nivtec.inputElement}
+
+      {/* Formvorschau beim Ziehen einer Kachel aus der Objekt-Bibliothek: nimmt sofort die
+          echte Größe/Form des Objekts an und folgt dem Zeiger, statt des trägen Browser-Ghosts. */}
+      {dragGhost && (() => {
+        const tpl = ITEM_LIBRARY.find((t) => t.type === dragGhost.type)
+        const isRound = dragGhost.type === 'table_round' || dragGhost.type === 'table_high'
+        const zoom = viewport?.zoom ?? 1
+        const w = Math.max(metersToPixels(tpl?.width ?? 1, PPM) * zoom, 22)
+        const h = Math.max(metersToPixels(tpl?.height ?? 1, PPM) * zoom, 22)
+        return (
+          <div
+            className="fixed z-50 pointer-events-none flex items-center justify-center text-lg bg-accent-soft/90 border-2 border-accent shadow-lg text-ink"
+            style={{
+              left: dragGhost.x - w / 2,
+              top: dragGhost.y - h / 2,
+              width: w,
+              height: h,
+              borderRadius: isRound ? '9999px' : '10px',
+            }}
+          >
+            {tpl?.icon}
+          </div>
+        )
+      })()}
     </div>
   )
 }
