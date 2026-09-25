@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Group, Rect, Circle, Line, Text } from 'react-konva'
 import type { EventItem, PhaseData } from '../types'
 import { metersToPixels } from '../utils/scale'
@@ -9,10 +9,12 @@ interface Props {
   phaseData: PhaseData
   pixelsPerMeter: number
   isSelected: boolean
-  onSelect: () => void
-  onDragEnd: (x: number, y: number) => void
+  /** Callbacks erhalten die Item-ID, damit der Parent stabile (referenzgleiche) Handler
+   *  übergeben kann und React.memo unveränderte Objekte beim Re-Render überspringt. */
+  onSelect: (id: string) => void
+  onDragEnd: (id: string, x: number, y: number) => void
   /** freie 360°-Drehung per Maus-/Touch-Ziehen am Rotationsgriff */
-  onRotate?: (rotationDeg: number) => void
+  onRotate?: (id: string, x: number, y: number, rotationDeg: number) => void
   draggable?: boolean
   /** aktueller Canvas-Zoom, um eine konstante Mindest-Klickfläche auf dem Bildschirm sicherzustellen */
   zoom?: number
@@ -29,7 +31,7 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`
 }
 
-export default function EventItemShape({
+function EventItemShape({
   item,
   phaseData,
   pixelsPerMeter,
@@ -45,7 +47,7 @@ export default function EventItemShape({
   const isRound = item.type === 'table_round' || item.type === 'table_high'
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    onDragEnd(e.target.x(), e.target.y())
+    onDragEnd(item.id, e.target.x(), e.target.y())
   }
 
   // Stage ist ebenfalls draggable (zum Verschieben der Ansicht). Ohne cancelBubble würde ein
@@ -53,6 +55,8 @@ export default function EventItemShape({
   const stopBubble = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     e.cancelBubble = true
   }
+
+  const handleSelect = () => onSelect(item.id)
 
   const stroke = isSelected ? '#2563eb' : '#374151'
   const strokeWidth = isSelected ? 2 : 1
@@ -98,7 +102,7 @@ export default function EventItemShape({
     e.cancelBubble = true
     const angle = angleFromPointer(e)
     setLiveRotation(null)
-    if (angle !== null) onRotate?.(angle)
+    if (angle !== null) onRotate?.(item.id, phaseData.x, phaseData.y, angle)
   }
 
   return (
@@ -107,8 +111,8 @@ export default function EventItemShape({
       y={phaseData.y}
       rotation={liveRotation ?? phaseData.rotation}
       draggable={draggable}
-      onClick={onSelect}
-      onTap={onSelect}
+      onClick={handleSelect}
+      onTap={handleSelect}
       onDragEnd={handleDragEnd}
       onMouseDown={stopBubble}
       onTouchStart={stopBubble}
@@ -116,11 +120,11 @@ export default function EventItemShape({
       {/* Unsichtbare, vergrößerte Trefferfläche für zuverlässiges Greifen auch bei kleinem Zoom */}
       <Rect x={hitX} y={hitY} width={hitW} height={hitH} fill="rgba(255,255,255,0.001)" />
       {item.type === 'table_round' || item.type === 'table_high' ? (
-        <Circle radius={w / 2} fill="#fef3c7" stroke={stroke} strokeWidth={strokeWidth} />
+        <Circle radius={w / 2} fill="#fef3c7" stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
       ) : item.type === 'curtain' ? (
-        <Line points={[0, 0, w, 0]} stroke="#7c3aed" strokeWidth={6} lineCap="round" />
+        <Line points={[0, 0, w, 0]} stroke="#7c3aed" strokeWidth={6} lineCap="round" perfectDrawEnabled={false} />
       ) : item.type === 'truss' ? (
-        <Rect width={w} height={h} fill="#e5e7eb" stroke={stroke} strokeWidth={strokeWidth} dash={[4, 4]} />
+        <Rect width={w} height={h} fill="#e5e7eb" stroke={stroke} strokeWidth={strokeWidth} dash={[4, 4]} perfectDrawEnabled={false} />
       ) : item.type === 'nivtec_group' ? (
         <>
           {/* Nur die tatsächlichen NivTec-Systempodeste zeichnen — kein Umriss-Rechteck über die
@@ -140,6 +144,8 @@ export default function EventItemShape({
                 fill={piece.corner ? '#bfdbfe' : '#dbeafe'}
                 stroke={isSelected ? '#2563eb' : '#1d4ed8'}
                 strokeWidth={isSelected ? 2 : 1}
+                perfectDrawEnabled={false}
+                listening={false}
               />
             )
           })}
@@ -152,6 +158,7 @@ export default function EventItemShape({
           stroke={item.color ?? '#10b981'}
           strokeWidth={isSelected ? 3 : 2}
           dash={[6, 3]}
+          perfectDrawEnabled={false}
         />
       ) : item.type === 'chair_row_group' && item.grid ? (
         <>
@@ -163,6 +170,8 @@ export default function EventItemShape({
             stroke={stroke}
             strokeWidth={strokeWidth}
             dash={[3, 3]}
+            perfectDrawEnabled={false}
+            listening={false}
           />
           {Array.from({ length: item.grid.rows }).map((_, r) =>
             Array.from({ length: item.grid!.cols }).map((_, c) => {
@@ -179,17 +188,20 @@ export default function EventItemShape({
                   fill="#f3f4f6"
                   stroke="#9ca3af"
                   strokeWidth={0.5}
+                  perfectDrawEnabled={false}
+                  listening={false}
                 />
               )
             }),
           )}
         </>
       ) : (
-        <Rect width={w} height={h} fill="#f3f4f6" stroke={stroke} strokeWidth={strokeWidth} />
+        <Rect width={w} height={h} fill="#f3f4f6" stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
       )}
       {item.type === 'area' ? (
         <>
           <Text
+              listening={false}
             text={item.label}
             fontSize={11}
             fontStyle="bold"
@@ -199,6 +211,7 @@ export default function EventItemShape({
             fill={item.color ?? '#059669'}
           />
           <Text
+              listening={false}
             text={`${item.width.toFixed(2)} × ${item.height.toFixed(2)} m`}
             fontSize={9}
             width={w}
@@ -211,6 +224,7 @@ export default function EventItemShape({
         <>
           {item.type !== 'curtain' && (
             <Text
+              listening={false}
               text={item.label}
               fontSize={9}
               width={Math.max(w, 40)}
@@ -221,6 +235,7 @@ export default function EventItemShape({
           )}
           {/* Maßangabe (B x H in Metern), wie im Referenz-Tool */}
           <Text
+              listening={false}
             text={`${item.width.toFixed(2)} × ${item.height.toFixed(2)} m`}
             fontSize={8}
             fill="#6b7280"
@@ -257,3 +272,5 @@ export default function EventItemShape({
     </Group>
   )
 }
+
+export default memo(EventItemShape)

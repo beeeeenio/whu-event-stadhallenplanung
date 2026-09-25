@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { Stage, Layer, Image as KonvaImage, Line, Group, Rect, Text, Circle } from 'react-konva'
 import type Konva from 'konva'
 import useImage from '../utils/useImage'
@@ -55,6 +55,7 @@ const STAGE_HEIGHT = Math.round(1240 * CALIBRATION_SCALE)
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 6
 const ZOOM_STEP = 0.1
+const noop = () => {}
 
 const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor(
   {
@@ -322,6 +323,24 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     onSelect(id)
   }
 
+  // Stabile Handler für EventItemShape (React.memo): aktuelle Werte über Refs lesen, damit sich
+  // die Funktionsreferenz nie ändert und beim Verschieben EINES Objekts nicht alle anderen
+  // Objekte neu gerendert/abgeglichen werden.
+  const selectCtxRef = useRef({ tool, placement, onSelect })
+  selectCtxRef.current = { tool, placement, onSelect }
+  const handleItemSelect = useCallback((id: string) => {
+    const { tool: t, placement: p, onSelect: sel } = selectCtxRef.current
+    if (t === 'select' && !p) sel(id)
+  }, [])
+  const handleItemDragEnd = useCallback(
+    (id: string, x: number, y: number) => updateItemTransform(id, x, y),
+    [updateItemTransform],
+  )
+  const handleItemRotate = useCallback(
+    (id: string, x: number, y: number, rotation: number) => updateItemTransform(id, x, y, rotation),
+    [updateItemTransform],
+  )
+
   const visibleItemIds = itemOrder.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible)
 
   const measureEnd = measurePoints.length === 2 ? measurePoints[1] : measureCursor
@@ -425,8 +444,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                     phaseData={phaseData}
                     pixelsPerMeter={pixelsPerMeter}
                     isSelected={false}
-                    onSelect={() => {}}
-                    onDragEnd={() => {}}
+                    onSelect={noop}
+                    onDragEnd={noop}
                     draggable={false}
                     zoom={zoom}
                   />
@@ -447,9 +466,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                   phaseData={phaseData}
                   pixelsPerMeter={pixelsPerMeter}
                   isSelected={selectedId === id}
-                  onSelect={() => tool === 'select' && !placement && onSelect(id)}
-                  onDragEnd={(x, y) => updateItemTransform(id, x, y)}
-                  onRotate={(rotation) => updateItemTransform(id, phaseData.x, phaseData.y, rotation)}
+                  onSelect={handleItemSelect}
+                  onDragEnd={handleItemDragEnd}
+                  onRotate={handleItemRotate}
                   draggable={tool === 'select' && !placement}
                   zoom={zoom}
                 />
