@@ -50,9 +50,9 @@ export default function PhaseTimeline({ onPresent, onionSkin, onToggleOnionSkin,
     setRenamingId(null)
   }
 
-  const commitAdd = () => {
+  const commitAdd = (empty: boolean) => {
     const name = newPhaseName.trim() || `Phase ${phases.length + 1}`
-    addPhase(name)
+    addPhase(name, empty)
     setNewPhaseName('')
     setAdding(false)
   }
@@ -186,20 +186,37 @@ export default function PhaseTimeline({ onPresent, onionSkin, onToggleOnionSkin,
         })}
 
         {adding ? (
-          <div className="shrink-0 w-[168px] rounded-xl border border-dashed border-accent bg-white px-2.5 py-1.5 flex flex-col justify-center gap-1">
+          <div className="shrink-0 w-[196px] rounded-xl border border-dashed border-accent bg-white px-2.5 py-1.5 flex flex-col justify-center gap-1.5">
             <input
               autoFocus
               value={newPhaseName}
               onChange={(e) => setNewPhaseName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') commitAdd()
+                if (e.key === 'Enter') commitAdd(e.shiftKey)
                 if (e.key === 'Escape') setAdding(false)
               }}
-              onBlur={() => (newPhaseName.trim() ? commitAdd() : setAdding(false))}
+              onBlur={() => (newPhaseName.trim() ? commitAdd(false) : setAdding(false))}
               placeholder="Neue Phase…"
               className="w-full text-sm font-bold text-ink focus:outline-none bg-transparent"
             />
-            <span className="text-[10.5px] text-ink3">übernimmt den aktuellen Aufbau · ↵</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => commitAdd(false)}
+                title="Übernimmt den aktuellen Aufbau als Startpunkt (↵)"
+                className="px-1.5 py-0.5 rounded-md bg-accent-soft text-accent text-[10.5px] font-semibold hover:bg-accent/20"
+              >
+                Übernehmen ↵
+              </button>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => commitAdd(true)}
+                title="Beginnt ohne übernommene Objekte (⇧↵)"
+                className="px-1.5 py-0.5 rounded-md bg-chip text-ink2 text-[10.5px] hover:bg-chip-hover"
+              >
+                Leer ⇧↵
+              </button>
+            </div>
           </div>
         ) : (
           <button

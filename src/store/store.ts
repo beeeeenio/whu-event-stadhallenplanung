@@ -30,7 +30,7 @@ interface Store extends EventState {
   setEventName: (name: string) => void
 
   // Phases
-  addPhase: (name: string) => void
+  addPhase: (name: string, empty?: boolean) => void
   removePhase: (phaseId: string) => void
   renamePhase: (phaseId: string, name: string) => void
   setCurrentPhase: (phaseId: string) => void
@@ -91,14 +91,15 @@ export const useEventStore = create<Store>((set, get) => {
 
     setEventName: (name) => set({ eventName: name }),
 
-    addPhase: (name) =>
+    addPhase: (name, empty) =>
       set((state) => {
         const newPhase: Phase = { id: uuid(), name, order: state.phases.length }
-        // carry over current visible layout as starting point for the new phase
+        // Standardmäßig den aktuell sichtbaren Aufbau als Startpunkt übernehmen; bei `empty`
+        // beginnt die neue Phase stattdessen komplett leer (kein Objekt darin sichtbar).
         const items = { ...state.items }
         for (const id of Object.keys(items)) {
           const item = items[id]
-          const prev = item.phaseData[state.currentPhaseId]
+          const prev = empty ? undefined : item.phaseData[state.currentPhaseId]
           items[id] = {
             ...item,
             phaseData: {
