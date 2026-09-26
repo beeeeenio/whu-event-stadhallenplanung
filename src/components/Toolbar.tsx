@@ -4,6 +4,7 @@ import { useProjectsStore } from '../store/projectsStore'
 import type { LayerState } from '../types'
 import { island, islandBtn, kbd } from '../utils/ui'
 import TemplatesMenu from './TemplatesMenu'
+import VersionsMenu from './VersionsMenu'
 
 const LAYER_LABELS: Record<keyof LayerState, string> = {
   walls: 'Grundriss',
@@ -84,6 +85,7 @@ export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSk
         <button onClick={redo} disabled={!canRedo} title="Wiederholen (Strg/Cmd+Shift+Z)" className={islandBtn('plain')}>
           ↻
         </button>
+        <VersionsMenu />
         <div className="relative" ref={viewMenuRef}>
           <button onClick={() => setViewMenuOpen((v) => !v)} className={islandBtn(viewMenuOpen ? 'chip' : 'plain')}>
             Ansicht ▾

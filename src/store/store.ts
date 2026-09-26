@@ -21,6 +21,17 @@ export const AREA_COLORS = [
 interface HistorySnapshot {
   items: Record<string, EventItem>
   itemOrder: string[]
+  /** Nur beim Wiederherstellen einer Version gesetzt: dann macht Undo auch Phasen/Name rückgängig. */
+  project?: Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases'>
+}
+
+/** Gegenstück zum Undo/Redo-Ziel erzeugen; Phasen/Name nur mitsichern, wenn das Ziel sie ersetzt. */
+function counterSnapshot(state: EventState, target: HistorySnapshot): HistorySnapshot {
+  const snap: HistorySnapshot = { items: state.items, itemOrder: state.itemOrder }
+  if (target.project) {
+    snap.project = { eventName: state.eventName, currentPhaseId: state.currentPhaseId, phases: state.phases }
+  }
+  return snap
 }
 
 interface Store extends EventState {
@@ -64,6 +75,8 @@ interface Store extends EventState {
 
   // Undo/Redo (wirkt auf Objekt-Änderungen: platzieren, verschieben, löschen, umbenennen)
   undo: () => void
+  /** Gespeicherte Version wiederherstellen — als EIN Undo-Schritt (inkl. Phasen und Name). */
+  restoreVersion: (data: Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder'>) => void
   redo: () => void
 
   // Projekte: kompletten Zustand aus einem gespeicherten Projekt laden bzw. für die Speicherung exportieren
@@ -393,8 +406,9 @@ export const useEventStore = create<Store>((set, get) => {
         if (state.historyPast.length === 0) return state
         const previous = state.historyPast[state.historyPast.length - 1]
         const newPast = state.historyPast.slice(0, -1)
-        const currentSnapshot: HistorySnapshot = { items: state.items, itemOrder: state.itemOrder }
+        const currentSnapshot = counterSnapshot(state, previous)
         return {
+          ...previous.project,
           items: previous.items,
           itemOrder: previous.itemOrder,
           historyPast: newPast,
@@ -407,14 +421,29 @@ export const useEventStore = create<Store>((set, get) => {
         if (state.historyFuture.length === 0) return state
         const next = state.historyFuture[state.historyFuture.length - 1]
         const newFuture = state.historyFuture.slice(0, -1)
-        const currentSnapshot: HistorySnapshot = { items: state.items, itemOrder: state.itemOrder }
+        const currentSnapshot = counterSnapshot(state, next)
         return {
+          ...next.project,
           items: next.items,
           itemOrder: next.itemOrder,
           historyPast: [...state.historyPast, currentSnapshot],
           historyFuture: newFuture,
         }
       }),
+
+    restoreVersion: (data) => {
+      // Wie pushHistory, aber zusätzlich Phasen/Name sichern, da die Version diese ebenfalls ersetzt
+      const { items, itemOrder, eventName, currentPhaseId, phases, historyPast } = get()
+      const snap: HistorySnapshot = { items, itemOrder, project: { eventName, currentPhaseId, phases } }
+      set({ historyPast: [...historyPast, snap].slice(-MAX_HISTORY), historyFuture: [] })
+      set({
+        eventName: data.eventName,
+        currentPhaseId: data.currentPhaseId,
+        phases: data.phases,
+        items: data.items,
+        itemOrder: data.itemOrder,
+      })
+    },
 
     hydrate: (data) =>
       set({
