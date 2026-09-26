@@ -4,6 +4,7 @@ import { countVisibleItems, visibleItemList } from '../utils/countItems'
 import { exportInventoryCsv } from '../utils/exportInventory'
 import { crossPhaseInventory, peakAsSummary, sortPhases } from '../utils/phaseDiff'
 import { btn, input, island, segmentedGroup, segmentedItem } from '../utils/ui'
+import type { EventItem, Phase } from '../types'
 
 interface Props {
   selectedId: string | null
@@ -12,6 +13,32 @@ interface Props {
 }
 
 type Tab = 'summary' | 'list' | 'phases'
+
+/**
+ * Kleine Punktreihe pro Objekt: zeigt auf einen Blick, in welchen Phasen es sichtbar,
+ * ausgeblendet oder gar nicht vorhanden ist — sonst verliert man bei vielen Phasen leicht
+ * den Überblick, wo ein "ausgeblendetes" Objekt überall geparkt ist.
+ */
+function PhaseVisibilityDots({ item, phases, currentPhaseId }: { item: EventItem; phases: Phase[]; currentPhaseId: string }) {
+  return (
+    <div className="flex items-center gap-1 px-2 pb-1.5 -mt-0.5">
+      {phases.map((p) => {
+        const pd = item.phaseData[p.id]
+        const state = !pd ? 'none' : pd.visible ? 'visible' : 'hidden'
+        const label = state === 'visible' ? 'sichtbar' : state === 'hidden' ? 'ausgeblendet' : 'nicht vorhanden'
+        return (
+          <span
+            key={p.id}
+            title={`${p.name}: ${label}`}
+            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+              state === 'visible' ? 'bg-accent' : state === 'hidden' ? 'border border-ink3' : 'bg-chip'
+            } ${p.id === currentPhaseId ? 'ring-1 ring-offset-1 ring-ink2' : ''}`}
+          />
+        )
+      })}
+    </div>
+  )
+}
 
 /**
  * Inventar als schwebendes Blatt rechts (Konzept B). Übersicht/Liste beziehen sich auf die
@@ -97,29 +124,32 @@ export default function InventoryPanel({ selectedId, onSelect, onClose }: Props)
             />
             <ul className="space-y-0.5">
               {filteredList.map(({ item, n }) => (
-                <li key={item.id} className="flex items-center gap-1">
-                  <button
-                    onClick={() => onSelect(item.id)}
-                    className={`flex-1 text-left text-xs px-2 py-1.5 rounded-lg truncate transition-colors ${
-                      selectedId === item.id ? 'bg-accent-soft text-accent font-semibold' : 'text-ink hover:bg-chip'
-                    }`}
-                  >
-                    {n}. {item.label}
-                  </button>
-                  <button
-                    onClick={() => toggleItemVisible(item.id, false)}
-                    title="Nur in dieser Phase ausblenden"
-                    className="text-ink3 hover:text-ink hover:bg-chip text-[11px] w-6 h-6 rounded flex items-center justify-center"
-                  >
-                    ◌
-                  </button>
-                  <button
-                    onClick={() => removeItem(item.id)}
-                    title="Löschen"
-                    className="text-ink3 hover:text-red-700 hover:bg-red-50 text-sm w-6 h-6 rounded flex items-center justify-center leading-none transition-colors"
-                  >
-                    ×
-                  </button>
+                <li key={item.id}>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => onSelect(item.id)}
+                      className={`flex-1 text-left text-xs px-2 py-1.5 rounded-lg truncate transition-colors ${
+                        selectedId === item.id ? 'bg-accent-soft text-accent font-semibold' : 'text-ink hover:bg-chip'
+                      }`}
+                    >
+                      {n}. {item.label}
+                    </button>
+                    <button
+                      onClick={() => toggleItemVisible(item.id, false)}
+                      title="Nur in dieser Phase ausblenden"
+                      className="text-ink3 hover:text-ink hover:bg-chip text-[11px] w-6 h-6 rounded flex items-center justify-center"
+                    >
+                      ◌
+                    </button>
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      title="Löschen"
+                      className="text-ink3 hover:text-red-700 hover:bg-red-50 text-sm w-6 h-6 rounded flex items-center justify-center leading-none transition-colors"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  {sorted.length > 1 && <PhaseVisibilityDots item={item} phases={sorted} currentPhaseId={currentPhaseId} />}
                 </li>
               ))}
               {list.length === 0 && <li className="text-xs text-ink3 text-center py-4">Keine Objekte in dieser Phase</li>}
@@ -134,14 +164,17 @@ export default function InventoryPanel({ selectedId, onSelect, onClose }: Props)
                 </div>
                 <ul className="space-y-0.5">
                   {hiddenHere.map((item) => (
-                    <li key={item.id} className="flex items-center gap-1 text-xs text-ink3">
-                      <span className="flex-1 truncate px-2 py-1">{item.label}</span>
-                      <button
-                        onClick={() => toggleItemVisible(item.id, true)}
-                        className="px-2 py-1 rounded-md text-accent hover:bg-accent-soft font-semibold"
-                      >
-                        Einblenden
-                      </button>
+                    <li key={item.id}>
+                      <div className="flex items-center gap-1 text-xs text-ink3">
+                        <span className="flex-1 truncate px-2 py-1">{item.label}</span>
+                        <button
+                          onClick={() => toggleItemVisible(item.id, true)}
+                          className="px-2 py-1 rounded-md text-accent hover:bg-accent-soft font-semibold"
+                        >
+                          Einblenden
+                        </button>
+                      </div>
+                      {sorted.length > 1 && <PhaseVisibilityDots item={item} phases={sorted} currentPhaseId={currentPhaseId} />}
                     </li>
                   ))}
                 </ul>
