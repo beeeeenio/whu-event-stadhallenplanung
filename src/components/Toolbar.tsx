@@ -3,6 +3,7 @@ import { useEventStore } from '../store/store'
 import { useProjectsStore } from '../store/projectsStore'
 import type { LayerState } from '../types'
 import { island, islandBtn, kbd } from '../utils/ui'
+import TemplatesMenu from './TemplatesMenu'
 
 const LAYER_LABELS: Record<keyof LayerState, string> = {
   walls: 'Grundriss',
@@ -107,6 +108,7 @@ export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSk
             </div>
           )}
         </div>
+        <TemplatesMenu />
         <button
           onClick={async () => {
             setExporting(true)
