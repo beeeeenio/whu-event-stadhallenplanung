@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useEventStore, AREA_COLORS } from '../store/store'
 import type { EventItem } from '../types'
 import { btn, input as inputCls, island } from '../utils/ui'
@@ -130,6 +131,8 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
           </button>
         </div>
       </div>
+      {/* key inkl. Notiz: bei Undo/Redo von außen geänderte Notiz neu übernehmen */}
+      <NoteField key={`${item.id}:${item.note ?? ''}`} itemId={item.id} note={item.note ?? ''} />
       {item.type === 'area' && (
         <div>
           <div className="text-ink3 mb-1.5">Farbe</div>
@@ -164,5 +167,30 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
         </button>
       </div>
     </div>
+  )
+}
+
+/** Notiz zum Objekt: lokal editiert, beim Verlassen des Feldes (ein Undo-Schritt) übernommen. */
+function NoteField({ itemId, note }: { itemId: string; note: string }) {
+  const setItemNote = useEventStore((s) => s.setItemNote)
+  const [value, setValue] = useState(note)
+  const commit = () => {
+    if (value !== note) setItemNote(itemId, value)
+  }
+  return (
+    <label className="block space-y-1">
+      <span className="text-ink3">Notiz</span>
+      <textarea
+        rows={3}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setValue(note)
+        }}
+        placeholder="z. B. Aufbauhinweis…"
+        className={`w-full resize-y ${inputCls}`}
+      />
+    </label>
   )
 }

@@ -33,6 +33,7 @@ interface Store extends EventState {
   addPhase: (name: string, empty?: boolean) => void
   removePhase: (phaseId: string) => void
   renamePhase: (phaseId: string, name: string) => void
+  setPhaseNote: (phaseId: string, note: string) => void
   setCurrentPhase: (phaseId: string) => void
   reorderPhases: (phases: Phase[]) => void
 
@@ -44,6 +45,7 @@ interface Store extends EventState {
   rotateItem: (itemId: string, deltaDeg: number) => void
   toggleItemVisible: (itemId: string, visible?: boolean) => void
   renameItem: (itemId: string, label: string) => void
+  setItemNote: (itemId: string, note: string) => void
   resizeItem: (itemId: string, width: number, height: number) => void
   setItemColor: (itemId: string, color: string) => void
 
@@ -120,6 +122,11 @@ export const useEventStore = create<Store>((set, get) => {
     renamePhase: (phaseId, name) =>
       set((state) => ({
         phases: state.phases.map((p) => (p.id === phaseId ? { ...p, name } : p)),
+      })),
+
+    setPhaseNote: (phaseId, note) =>
+      set((state) => ({
+        phases: state.phases.map((p) => (p.id === phaseId ? { ...p, note } : p)),
       })),
 
     setCurrentPhase: (phaseId) => set({ currentPhaseId: phaseId }),
@@ -253,6 +260,13 @@ export const useEventStore = create<Store>((set, get) => {
       pushHistory()
       set((state) => ({
         items: { ...state.items, [itemId]: { ...state.items[itemId], label } },
+      }))
+    },
+
+    setItemNote: (itemId, note) => {
+      pushHistory()
+      set((state) => ({
+        items: { ...state.items, [itemId]: { ...state.items[itemId], note } },
       }))
     },
 

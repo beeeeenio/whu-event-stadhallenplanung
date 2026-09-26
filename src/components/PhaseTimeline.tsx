@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useEventStore } from '../store/store'
 import { countVisibleItems } from '../utils/countItems'
 import { diffPhases, sortPhases } from '../utils/phaseDiff'
-import { island, islandBtn } from '../utils/ui'
+import { btn, input, island, islandBtn } from '../utils/ui'
 
 interface Props {
   onPresent: () => void
@@ -25,6 +25,7 @@ export default function PhaseTimeline({ onPresent, onionSkin, onToggleOnionSkin,
   const addPhase = useEventStore((s) => s.addPhase)
   const removePhase = useEventStore((s) => s.removePhase)
   const renamePhase = useEventStore((s) => s.renamePhase)
+  const setPhaseNote = useEventStore((s) => s.setPhaseNote)
   const reorderPhases = useEventStore((s) => s.reorderPhases)
 
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -32,6 +33,8 @@ export default function PhaseTimeline({ onPresent, onionSkin, onToggleOnionSkin,
   const [adding, setAdding] = useState(false)
   const [newPhaseName, setNewPhaseName] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [noteId, setNoteId] = useState<string | null>(null)
+  const [noteValue, setNoteValue] = useState('')
 
   const sorted = useMemo(() => sortPhases(phases), [phases])
   const stats = useMemo(
@@ -48,6 +51,18 @@ export default function PhaseTimeline({ onPresent, onionSkin, onToggleOnionSkin,
   const commitRename = (id: string) => {
     if (renameValue.trim()) renamePhase(id, renameValue.trim())
     setRenamingId(null)
+  }
+
+  const openNote = (id: string) => {
+    if (noteId === id) return commitNote()
+    if (noteId) commitNote()
+    setNoteId(id)
+    setNoteValue(phases.find((p) => p.id === id)?.note ?? '')
+  }
+
+  const commitNote = () => {
+    if (noteId) setPhaseNote(noteId, noteValue.trim())
+    setNoteId(null)
   }
 
   const commitAdd = (empty: boolean) => {
@@ -67,7 +82,36 @@ export default function PhaseTimeline({ onPresent, onionSkin, onToggleOnionSkin,
   }
 
   return (
-    <div className={`flex items-stretch gap-3 p-2 pr-3 ${island}`}>
+    <div className={`relative flex items-stretch gap-3 p-2 pr-3 ${island}`}>
+      {noteId && (
+        <div className={`absolute left-16 bottom-full mb-2 z-30 p-3 w-72 text-xs space-y-2 ${island}`}>
+          <div className="flex items-center justify-between gap-2 pb-1 border-b border-chip">
+            <span className="font-bold text-ink text-sm truncate">
+              Notiz · {phases.find((p) => p.id === noteId)?.name}
+            </span>
+            <button onClick={() => setNoteId(null)} title="Verwerfen (Esc)" className="text-ink3 hover:text-ink leading-none text-base px-1 -mr-1">
+              ×
+            </button>
+          </div>
+          <textarea
+            autoFocus
+            rows={4}
+            value={noteValue}
+            onChange={(e) => setNoteValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setNoteId(null)
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) commitNote()
+            }}
+            placeholder="Hinweise zu dieser Phase…"
+            className={`w-full resize-y ${input}`}
+          />
+          <div className="flex justify-end">
+            <button onClick={commitNote} className={btn('dark', 'sm')} title="Speichern (⌘↵)">
+              Speichern
+            </button>
+          </div>
+        </div>
+      )}
       <button
         onClick={onPresent}
         className="w-12 shrink-0 rounded-xl bg-accent text-white grid place-items-center text-lg hover:bg-accent-hover transition-colors"
@@ -99,6 +143,22 @@ export default function PhaseTimeline({ onPresent, onionSkin, onToggleOnionSkin,
                 <span>Phase {i + 1}</span>
                 <span>·</span>
                 <span>{count} Obj.</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openNote(p.id)
+                  }}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  className={`w-5 h-5 rounded hover:bg-chip grid place-items-center ${
+                    p.note ? 'text-accent' : 'opacity-0 group-hover:opacity-100 focus:opacity-100'
+                  }`}
+                  title={p.note ? `Notiz: ${p.note}` : 'Notiz hinzufügen'}
+                >
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill={p.note ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinejoin="round">
+                    <path d="M5 3h10l4 4v14H5z" />
+                    {!p.note && <path d="M9 11h6M9 15h4" />}
+                  </svg>
+                </button>
                 <span className="ml-auto flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => {

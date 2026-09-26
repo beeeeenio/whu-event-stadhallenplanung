@@ -62,12 +62,16 @@ export interface EventItem {
   color?: string
   /** Nur für type 'chair_row_group': Anzahl Reihen/Stühle je Reihe und Abstand, damit die Gruppe als ein Objekt gezogen werden kann. */
   grid?: { rows: number; cols: number; spacingM: number }
+  /** Freitext-Notiz zum Objekt (z. B. „Kabel bis Bühne legen“). */
+  note?: string
 }
 
 export interface Phase {
   id: string
   name: string
   order: number
+  /** Freitext-Notiz zur Phase (z. B. Ablauf-/Umbauhinweise). */
+  note?: string
 }
 
 export type LayerId = 'walls' | 'rigging' | 'power' | 'simplified'
