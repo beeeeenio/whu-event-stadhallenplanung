@@ -15,7 +15,7 @@ import type { EventItem, ItemType } from '../types'
 import { DEFAULT_PIXELS_PER_METER, metersToPixels } from '../utils/scale'
 import { exportPhaseToPdf } from '../utils/pdfExport'
 import { buildItemGrid, type Placement } from '../utils/placement'
-import { changedSincePhase, previousPhaseId } from '../utils/phaseDiff'
+import { changedSincePhase, previousPhaseId, sortPhases } from '../utils/phaseDiff'
 import { island, kbd } from '../utils/ui'
 
 const PPM = DEFAULT_PIXELS_PER_METER
@@ -46,6 +46,7 @@ const SHORTCUTS: [string, string][] = [
   ['Befehlszeile', '⌘K'],
   ['Auswählen / Messen / Bereich', 'V · M · B'],
   ['Objekte-Blatt', 'O'],
+  ['Vorherige / nächste Phase', '[ · ]'],
   ['Objekt drehen', 'R'],
   ['… gegen Uhrzeigersinn', '⇧R'],
   ['Duplizieren', '⌘D'],
@@ -86,6 +87,7 @@ export default function EditorView() {
   const addItem = useEventStore((s) => s.addItem)
   const addItemsBatch = useEventStore((s) => s.addItemsBatch)
   const addChairRowGroup = useEventStore((s) => s.addChairRowGroup)
+  const setCurrentPhase = useEventStore((s) => s.setCurrentPhase)
   const undo = useEventStore((s) => s.undo)
   const redo = useEventStore((s) => s.redo)
   const closeProject = useProjectsStore((s) => s.closeProject)
@@ -297,6 +299,15 @@ export default function EditorView() {
         setPickerOpen((v) => !v)
         return
       }
+      if (e.key === '[' || e.key === ']') {
+        // Phasen in Reihenfolge durchgehen, an den Enden stehen bleiben (kein Umlauf)
+        e.preventDefault()
+        const sorted = sortPhases(phases)
+        const idx = sorted.findIndex((p) => p.id === currentPhaseId)
+        const next = sorted[idx + (e.key === ']' ? 1 : -1)]
+        if (idx !== -1 && next) setCurrentPhase(next.id)
+        return
+      }
 
       if (e.key === 'Escape') {
         // Von innen nach außen schließen: Platzieren → Werkzeug → Blätter → Auswahl → Hilfe
@@ -314,6 +325,7 @@ export default function EditorView() {
   }, [
     undo, redo, rotateItem, selectedId, duplicateSelected, deleteSelected, changeTool, select,
     commandOpen, placement, tool, pickerOpen, propertiesOpen, shortcutsOpen, inventoryOpen,
+    phases, currentPhaseId, setCurrentPhase,
   ])
 
   // Kontextleiste an der Auswahl ausrichten. Über dem Objekt braucht es genug Abstand, um den
