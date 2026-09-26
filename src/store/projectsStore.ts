@@ -29,7 +29,6 @@ function emptyProjectData(): ProjectData {
     items: {},
     itemOrder: [],
     layers: { walls: true, rigging: false, power: false, simplified: false },
-    saalSplit: { saal1: true, saal2: true, saal3: true },
   }
 }
 

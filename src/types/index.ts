@@ -88,9 +88,4 @@ export interface EventState {
   items: Record<string, EventItem>
   itemOrder: string[]
   layers: LayerState
-  saalSplit: {
-    saal1: boolean
-    saal2: boolean
-    saal3: boolean
-  }
 }

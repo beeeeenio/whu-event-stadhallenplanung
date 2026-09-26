@@ -53,11 +53,9 @@ export default function CommandBar({ onClose, actions }: Props) {
   const phases = useEventStore((s) => s.phases)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const layers = useEventStore((s) => s.layers)
-  const saalSplit = useEventStore((s) => s.saalSplit)
   const setCurrentPhase = useEventStore((s) => s.setCurrentPhase)
   const addPhase = useEventStore((s) => s.addPhase)
   const toggleLayer = useEventStore((s) => s.toggleLayer)
-  const toggleSaal = useEventStore((s) => s.toggleSaal)
   const undo = useEventStore((s) => s.undo)
   const redo = useEventStore((s) => s.redo)
 
@@ -141,12 +139,6 @@ export default function CommandBar({ onClose, actions }: Props) {
         label: `Ansicht: ${LAYER_LABELS[k]} ${layers[k] ? 'ausblenden' : 'einblenden'}`,
         run: () => toggleLayer(k),
       })),
-      ...(['saal1', 'saal2', 'saal3'] as const).map((k) => ({
-        id: `saal-${k}`,
-        icon: saalSplit[k] ? '☑' : '☐',
-        label: `${k.replace('saal', 'Saal ')} ${saalSplit[k] ? 'ausblenden' : 'einblenden'}`,
-        run: () => toggleSaal(k),
-      })),
       { id: 'help', icon: '?', label: 'Tastatur-Shortcuts', hint: '?', run: actions.showShortcuts },
       { id: 'projects', icon: '←', label: 'Zurück zur Projektübersicht', run: actions.goToProjects },
     ]
@@ -154,7 +146,7 @@ export default function CommandBar({ onClose, actions }: Props) {
       if (words.length === 0 || textMatches(words, c.label)) out.push({ ...c, group: 'Befehle' })
     }
     return out
-  }, [query, phases, currentPhaseId, layers, saalSplit, actions, setCurrentPhase, addPhase, toggleLayer, toggleSaal, undo, redo])
+  }, [query, phases, currentPhaseId, layers, actions, setCurrentPhase, addPhase, toggleLayer, undo, redo])
 
   useEffect(() => setActive(0), [query])
   useEffect(() => {

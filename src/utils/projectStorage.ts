@@ -8,7 +8,6 @@ export interface ProjectData {
   items: Record<string, EventItem>
   itemOrder: string[]
   layers: LayerState
-  saalSplit: { saal1: boolean; saal2: boolean; saal3: boolean }
 }
 
 const dataKey = (id: string) => `whu-planner-project-data-${id}`

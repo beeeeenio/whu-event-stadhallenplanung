@@ -56,7 +56,6 @@ interface Store extends EventState {
 
   // Layers
   toggleLayer: (layer: keyof EventState['layers']) => void
-  toggleSaal: (saal: keyof EventState['saalSplit']) => void
 
   // NivTec import
   importNivtec: (data: NivtecData, x: number, y: number) => void
@@ -66,8 +65,8 @@ interface Store extends EventState {
   redo: () => void
 
   // Projekte: kompletten Zustand aus einem gespeicherten Projekt laden bzw. für die Speicherung exportieren
-  hydrate: (data: Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers' | 'saalSplit'>) => void
-  getSnapshot: () => Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers' | 'saalSplit'>
+  hydrate: (data: Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers'>) => void
+  getSnapshot: () => Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers'>
 }
 
 export const useEventStore = create<Store>((set, get) => {
@@ -85,7 +84,6 @@ export const useEventStore = create<Store>((set, get) => {
     items: {},
     itemOrder: [],
     layers: { walls: true, rigging: false, power: false, simplified: false },
-    saalSplit: { saal1: true, saal2: true, saal3: true },
     historyPast: [],
     historyFuture: [],
 
@@ -350,9 +348,6 @@ export const useEventStore = create<Store>((set, get) => {
     toggleLayer: (layer) =>
       set((state) => ({ layers: { ...state.layers, [layer]: !state.layers[layer] } })),
 
-    toggleSaal: (saal) =>
-      set((state) => ({ saalSplit: { ...state.saalSplit, [saal]: !state.saalSplit[saal] } })),
-
     importNivtec: (data, x, y) => {
       const id = uuid()
       const { currentPhaseId, phases } = get()
@@ -415,8 +410,8 @@ export const useEventStore = create<Store>((set, get) => {
       }),
 
     getSnapshot: () => {
-      const { eventName, currentPhaseId, phases, items, itemOrder, layers, saalSplit } = get()
-      return { eventName, currentPhaseId, phases, items, itemOrder, layers, saalSplit }
+      const { eventName, currentPhaseId, phases, items, itemOrder, layers } = get()
+      return { eventName, currentPhaseId, phases, items, itemOrder, layers }
     },
   }
 })

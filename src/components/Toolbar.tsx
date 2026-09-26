@@ -26,8 +26,6 @@ export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSk
   const setEventName = useEventStore((s) => s.setEventName)
   const layers = useEventStore((s) => s.layers)
   const toggleLayer = useEventStore((s) => s.toggleLayer)
-  const saalSplit = useEventStore((s) => s.saalSplit)
-  const toggleSaal = useEventStore((s) => s.toggleSaal)
   const undo = useEventStore((s) => s.undo)
   const redo = useEventStore((s) => s.redo)
   const canUndo = useEventStore((s) => s.historyPast.length > 0)
@@ -104,17 +102,6 @@ export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSk
                     <input type="checkbox" checked={onionSkin && hasPreviousPhase} disabled={!hasPreviousPhase} onChange={onToggleOnionSkin} className={check} />
                     Vorphase einblenden
                   </label>
-                </div>
-              </div>
-              <div className="pt-2 border-t border-chip">
-                <span className="font-semibold text-ink3 text-[10.5px] uppercase tracking-[0.1em]">Saal</span>
-                <div className="mt-2 flex gap-3 text-[13px] text-ink">
-                  {(['saal1', 'saal2', 'saal3'] as const).map((key) => (
-                    <label key={key} className="flex items-center gap-1.5 cursor-pointer select-none">
-                      <input type="checkbox" checked={saalSplit[key]} onChange={() => toggleSaal(key)} className={check} />
-                      {key.replace('saal', 'Saal ')}
-                    </label>
-                  ))}
                 </div>
               </div>
             </div>
