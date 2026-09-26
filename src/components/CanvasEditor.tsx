@@ -47,6 +47,9 @@ export interface CanvasEditorHandle {
   /** Bildschirmkoordinaten (z. B. e.clientX/Y beim Ziehen aus der Objekt-Bibliothek) in
    *  Canvas-Koordinaten umrechnen, oder null außerhalb der Plan-Fläche. */
   screenToCanvas: (clientX: number, clientY: number) => { x: number; y: number } | null
+  /** Ansicht auf den Canvas-Punkt (px) zentrieren — aber nur, wenn er außerhalb des sichtbaren
+   *  Ausschnitts (abzüglich Rand für die schwebenden Inseln) liegt. Zoom bleibt unverändert. */
+  panToItem: (x: number, y: number) => void
 }
 
 // Canvas-Grundfläche = kalibriertes Erdgeschoss (Stromplan). Bei DEFAULT_PIXELS_PER_METER=20px/m
@@ -168,6 +171,15 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       const screenY = clientY - rect.top
       if (screenX < 0 || screenY < 0 || screenX > rect.width || screenY > rect.height) return null
       return { x: (screenX - stagePos.x) / zoom, y: (screenY - stagePos.y) / zoom }
+    },
+    panToItem: (x, y) => {
+      if (!containerSize) return
+      const { width: w, height: h } = containerSize
+      const sx = x * zoom + stagePos.x
+      const sy = y * zoom + stagePos.y
+      const MARGIN = 120
+      if (sx >= MARGIN && sx <= w - MARGIN && sy >= MARGIN && sy <= h - MARGIN) return
+      setStagePos({ x: w / 2 - x * zoom, y: h / 2 - y * zoom })
     },
   }))
 

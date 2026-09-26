@@ -117,6 +117,23 @@ export default function EditorView() {
     if (!id) setPropertiesOpen(false)
   }, [])
 
+  /** Auswahl aus der Stückliste: zusätzlich sanft in den sichtbaren Ausschnitt holen (nur dort,
+   *  nicht beim normalen Klick im Plan). */
+  const selectFromInventory = useCallback(
+    (id: string) => {
+      select(id)
+      const { items: all, currentPhaseId: cur } = useEventStore.getState()
+      const item = all[id]
+      const pd = item?.phaseData[cur]
+      if (!item || !pd) return
+      const isRound = item.type === 'table_round' || item.type === 'table_high'
+      const cx = isRound ? pd.x : pd.x + metersToPixels(item.width, PPM) / 2
+      const cy = isRound ? pd.y : pd.y + metersToPixels(item.height, PPM) / 2
+      canvasRef.current?.panToItem(cx, cy)
+    },
+    [select],
+  )
+
   const changeTool = useCallback((next: ToolMode) => {
     setTool(next)
     setPlacement(null)
@@ -424,7 +441,7 @@ export default function EditorView() {
         )}
         {inventoryOpen && (
           <div className="pointer-events-auto h-full flex">
-            <InventoryPanel selectedId={selectedId} onSelect={select} onClose={() => setInventoryOpen(false)} />
+            <InventoryPanel selectedId={selectedId} onSelect={selectFromInventory} onClose={() => setInventoryOpen(false)} />
           </div>
         )}
       </div>

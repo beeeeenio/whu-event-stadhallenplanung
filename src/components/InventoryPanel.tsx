@@ -3,7 +3,7 @@ import { useEventStore } from '../store/store'
 import { countVisibleItems, visibleItemList } from '../utils/countItems'
 import { exportInventoryCsv } from '../utils/exportInventory'
 import { crossPhaseInventory, peakAsSummary, sortPhases } from '../utils/phaseDiff'
-import { btn, island, segmentedGroup, segmentedItem } from '../utils/ui'
+import { btn, input, island, segmentedGroup, segmentedItem } from '../utils/ui'
 
 interface Props {
   selectedId: string | null
@@ -19,6 +19,7 @@ type Tab = 'summary' | 'list' | 'phases'
  */
 export default function InventoryPanel({ selectedId, onSelect, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('summary')
+  const [search, setSearch] = useState('')
   const items = useEventStore((s) => s.items)
   const itemOrder = useEventStore((s) => s.itemOrder)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
@@ -29,6 +30,10 @@ export default function InventoryPanel({ selectedId, onSelect, onClose }: Props)
 
   const counts = countVisibleItems(items, currentPhaseId)
   const list = visibleItemList(items, itemOrder, currentPhaseId)
+  const q = search.trim().toLowerCase()
+  const filteredList = list
+    .map((item, i) => ({ item, n: i + 1 }))
+    .filter(({ item }) => !q || item.label.toLowerCase().includes(q))
   const hiddenHere = itemOrder
     .map((id) => items[id])
     .filter((it) => it && it.phaseData[currentPhaseId] && !it.phaseData[currentPhaseId].visible)
@@ -83,8 +88,15 @@ export default function InventoryPanel({ selectedId, onSelect, onClose }: Props)
 
         {tab === 'list' && (
           <>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setSearch('')}
+              placeholder="Suchen…"
+              className={`${input} w-full mb-2`}
+            />
             <ul className="space-y-0.5">
-              {list.map((item, i) => (
+              {filteredList.map(({ item, n }) => (
                 <li key={item.id} className="flex items-center gap-1">
                   <button
                     onClick={() => onSelect(item.id)}
@@ -92,7 +104,7 @@ export default function InventoryPanel({ selectedId, onSelect, onClose }: Props)
                       selectedId === item.id ? 'bg-accent-soft text-accent font-semibold' : 'text-ink hover:bg-chip'
                     }`}
                   >
-                    {i + 1}. {item.label}
+                    {n}. {item.label}
                   </button>
                   <button
                     onClick={() => toggleItemVisible(item.id, false)}
@@ -111,6 +123,9 @@ export default function InventoryPanel({ selectedId, onSelect, onClose }: Props)
                 </li>
               ))}
               {list.length === 0 && <li className="text-xs text-ink3 text-center py-4">Keine Objekte in dieser Phase</li>}
+              {list.length > 0 && filteredList.length === 0 && (
+                <li className="text-xs text-ink3 text-center py-4">Keine Treffer für „{search.trim()}“</li>
+              )}
             </ul>
             {hiddenHere.length > 0 && (
               <div className="mt-3 pt-2 border-t border-line">
