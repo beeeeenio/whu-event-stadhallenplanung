@@ -137,15 +137,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   // Rubberband-Mehrfachauswahl: bei gedrückter Shift-Taste zieht ein leerer Klick im Auswahl-
   // Werkzeug ein Auswahlrechteck auf statt die Ansicht zu verschieben. Erkannt wird das direkt am
   // Konva-"dragstart" der Stage (e.evt.shiftKey) statt über separat mitgeführten Tastatur-Status —
-  // robuster, weil es exakt den Zustand zum Zeitpunkt des Ziehens abfragt statt sich auf window-
-  // keydown/keyup zu verlassen. Der bereits begonnene native Stage-Drag wird dann per stopDrag()
-  // abgebrochen und stattdessen die Marquee-Verfolgung über die normalen Maus-Events gestartet.
+  // Dafür wird stage.draggable(false) direkt (imperativ, synchron) im mousedown-Handler gesetzt,
+  // BEVOR Konvas eigene Drag-Erkennung beim nächsten Mousemove greifen kann — ein Abbrechen erst im
+  // "dragstart"-Event (per stopDrag()) kam zu spät bzw. war nicht zuverlässig, weil Konva den
+  // internen Drag da schon begonnen hatte. Am Ende der Geste wird draggable wieder hergestellt.
   const [marqueeStart, setMarqueeStart] = useState<{ x: number; y: number } | null>(null)
   const [marqueeCursor, setMarqueeCursor] = useState<{ x: number; y: number } | null>(null)
-  // Shift-Status wird am mousedown erfasst (dort zuverlässig gesetzt) statt am späteren Konva-
-  // "dragstart"-Event abzulesen, dessen zugrundeliegendes Mousemove die Modifier-Taste je nach
-  // Eingabequelle nicht mehr trägt.
-  const shiftAtMouseDownRef = useRef(false)
 
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100))
 
@@ -301,7 +298,20 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage()
     if (!stage) return
-    shiftAtMouseDownRef.current = e.evt.shiftKey
+
+    // Shift+Ziehen auf leerer Fläche startet die Marquee-Mehrfachauswahl statt die Ansicht zu
+    // verschieben. draggable(false) muss HIER, synchron im mousedown, imperativ gesetzt werden —
+    // ein React-Prop-Update käme erst beim nächsten Render, zu spät für Konvas eigene
+    // Drag-Erkennung beim folgenden Mousemove.
+    if (tool === 'select' && e.evt.shiftKey && e.target === stage) {
+      stage.draggable(false)
+      const pt = stagePointerToInternal(stage)
+      if (pt) {
+        setMarqueeStart(pt)
+        setMarqueeCursor(pt)
+      }
+      return
+    }
 
     if (tool === 'measure') {
       const pt = stagePointerToInternal(stage)
@@ -320,9 +330,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
 
     if (placement) return // Klick wird von handlePlacementClick verarbeitet
 
-    // Shift-Klick/-Ziehen auf leerer Fläche soll die bestehende Auswahl nicht sofort leeren —
-    // ein Shift-Ziehen wird stattdessen gleich zur Marquee-Auswahl (siehe onDragStart der Stage).
-    if (e.target === stage && !(tool === 'select' && e.evt.shiftKey)) onSelect(null)
+    if (e.target === stage) onSelect(null)
   }
 
   const handleStageMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -350,6 +358,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
 
   const handleStageMouseUp = () => {
     if (marqueeStart && marqueeCursor) {
+      // draggable(true) wieder herstellen — wurde bei Beginn dieser Geste (Shift+Mousedown auf
+      // leerer Fläche) imperativ auf false gesetzt, um Konvas eigenes Stage-Dragging zu verhindern.
+      if (tool === 'select') stageRef.current?.draggable(true)
       const rect = {
         minX: Math.min(marqueeStart.x, marqueeCursor.x),
         maxX: Math.max(marqueeStart.x, marqueeCursor.x),
@@ -464,20 +475,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           x={stagePos.x}
           y={stagePos.y}
           draggable={tool === 'select'}
-          onDragStart={(e) => {
-            const stage = e.target.getStage()
-            if (e.target !== stage) return
-            // Shift+Ziehen: den gerade begonnenen nativen Stage-Drag abbrechen und stattdessen
-            // die Marquee-Mehrfachauswahl beginnen (siehe handleStageMouseMove/-Up).
-            if (shiftAtMouseDownRef.current) {
-              stage.stopDrag()
-              const pt = stagePointerToInternal(stage)
-              if (pt) {
-                setMarqueeStart(pt)
-                setMarqueeCursor(pt)
-              }
-            }
-          }}
           onDragEnd={(e) => {
             // Das dragend-Event von Objekten bubbelt bis zur Stage hoch — nur reagieren,
             // wenn die Stage selbst (nicht ein Kind-Objekt) gezogen wurde.
