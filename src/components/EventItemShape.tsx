@@ -11,7 +11,8 @@ interface Props {
   isSelected: boolean
   /** Callbacks erhalten die Item-ID, damit der Parent stabile (referenzgleiche) Handler
    *  übergeben kann und React.memo unveränderte Objekte beim Re-Render überspringt. */
-  onSelect: (id: string) => void
+  /** additive=true (Shift-Klick) fügt zur bestehenden Auswahl hinzu/entfernt daraus, statt zu ersetzen. */
+  onSelect: (id: string, additive: boolean) => void
   onDragEnd: (id: string, x: number, y: number) => void
   /** freie 360°-Drehung per Maus-/Touch-Ziehen am Rotationsgriff */
   onRotate?: (id: string, x: number, y: number, rotationDeg: number) => void
@@ -58,7 +59,10 @@ function EventItemShape({
     e.cancelBubble = true
   }
 
-  const handleSelect = () => onSelect(item.id)
+  const handleSelect = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    const shift = 'shiftKey' in e.evt && e.evt.shiftKey
+    onSelect(item.id, shift)
+  }
 
   const stroke = isSelected ? '#2563eb' : '#374151'
   const strokeWidth = isSelected ? 2 : 1

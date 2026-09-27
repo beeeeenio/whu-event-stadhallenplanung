@@ -63,6 +63,31 @@ export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpe
   )
 }
 
+interface MultiActionProps {
+  count: number
+  onHide: () => void
+  onDelete: () => void
+}
+
+/** Leiste für die Mehrfachauswahl: nur die gemeinsamen Aktionen (Verschieben passiert direkt per
+ *  Ziehen eines der ausgewählten Objekte, dafür braucht es keinen eigenen Button). */
+export function MultiSelectionBar({ count, onHide, onDelete }: MultiActionProps) {
+  const cell = 'h-9 px-2.5 rounded-lg text-xs font-medium text-ink hover:bg-chip inline-flex items-center gap-1 whitespace-nowrap'
+  return (
+    <div className={`flex items-center gap-0.5 p-1 rounded-xl ${island}`} onMouseDown={(e) => e.stopPropagation()}>
+      <span className="h-9 px-2.5 rounded-lg text-[11px] font-semibold font-mono bg-accent-soft text-accent inline-flex items-center whitespace-nowrap">
+        {count} Objekte ausgewählt
+      </span>
+      <button onClick={onHide} className={cell} title="Alle in dieser Phase ausblenden">
+        ◌ Ausblenden
+      </button>
+      <button onClick={onDelete} className={`${cell} text-red-700 hover:bg-red-50`} title="Alle löschen (Entf/⌫)">
+        Löschen
+      </button>
+    </div>
+  )
+}
+
 interface PanelProps {
   item: EventItem
   currentPhaseId: string

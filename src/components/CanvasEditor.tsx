@@ -6,8 +6,26 @@ import { useEventStore } from '../store/store'
 import { metersToPixels, pixelsToMeters, DEFAULT_PIXELS_PER_METER, POWER_PLAN_NATIVE_PIXELS_PER_METER } from '../utils/scale'
 import { RIGGING_BARS, STAGE_FRONT_EDGE } from '../data/rigging'
 import EventItemShape from './EventItemShape'
+import type { EventItem, PhaseData } from '../types'
 import type { Placement } from '../utils/placement'
 import { island } from '../utils/ui'
+
+/** Achsenparallele Welt-Bounding-Box eines (ggf. gedrehten) Objekts, für die Rubberband-Auswahl. */
+function itemWorldBBox(item: EventItem, pd: PhaseData, ppm: number) {
+  const w = metersToPixels(item.width, ppm)
+  const h = metersToPixels(item.height, ppm)
+  const isRound = item.type === 'table_round' || item.type === 'table_high'
+  const corners = isRound
+    ? [[-w / 2, -w / 2], [w / 2, -w / 2], [w / 2, w / 2], [-w / 2, w / 2]]
+    : [[0, 0], [w, 0], [w, h], [0, h]]
+  const rad = (pd.rotation * Math.PI) / 180
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  const pts = corners.map(([cx, cy]) => ({ x: pd.x + cx * cos - cy * sin, y: pd.y + cx * sin + cy * cos }))
+  const xs = pts.map((p) => p.x)
+  const ys = pts.map((p) => p.y)
+  return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+}
 
 export type ToolMode = 'select' | 'measure' | 'area'
 
@@ -22,8 +40,12 @@ export interface CanvasViewport {
 
 interface Props {
   pixelsPerMeter: number
-  selectedId: string | null
-  onSelect: (id: string | null) => void
+  /** Mehrfachauswahl: alle aktuell ausgewählten Objekt-IDs. */
+  selectedIds: string[]
+  /** Einzelnes Objekt (an-)wählen; additive=true (Shift-Klick) fügt hinzu/entfernt statt zu ersetzen. */
+  onSelect: (id: string | null, additive?: boolean) => void
+  /** Mehrere Objekte auf einmal wählen (Rubberband-Auswahl); additive=true erweitert die bestehende Auswahl. */
+  onSelectMany: (ids: string[], additive: boolean) => void
   /** Werkzeug von außen steuern (Werkzeug-Dock). Ohne Angabe verwaltet der Canvas es selbst. */
   tool?: ToolMode
   onToolChange?: (tool: ToolMode) => void
@@ -65,8 +87,9 @@ const noop = () => {}
 const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor(
   {
     pixelsPerMeter,
-    selectedId,
+    selectedIds,
     onSelect,
+    onSelectMany,
     tool: toolProp,
     onToolChange,
     placement = null,
@@ -82,6 +105,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const layers = useEventStore((s) => s.layers)
   const updateItemTransform = useEventStore((s) => s.updateItemTransform)
+  const moveItemsBy = useEventStore((s) => s.moveItemsBy)
   const addArea = useEventStore((s) => s.addArea)
 
   // Basis-Grundriss: kalibrierter Stromplan Erdgeschoss (enthält bereits Wände).
@@ -110,6 +134,18 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const [measureCursor, setMeasureCursor] = useState<{ x: number; y: number } | null>(null)
   const [areaStart, setAreaStart] = useState<{ x: number; y: number } | null>(null)
   const [areaCursor, setAreaCursor] = useState<{ x: number; y: number } | null>(null)
+  // Rubberband-Mehrfachauswahl: bei gedrückter Shift-Taste zieht ein leerer Klick im Auswahl-
+  // Werkzeug ein Auswahlrechteck auf statt die Ansicht zu verschieben. Erkannt wird das direkt am
+  // Konva-"dragstart" der Stage (e.evt.shiftKey) statt über separat mitgeführten Tastatur-Status —
+  // robuster, weil es exakt den Zustand zum Zeitpunkt des Ziehens abfragt statt sich auf window-
+  // keydown/keyup zu verlassen. Der bereits begonnene native Stage-Drag wird dann per stopDrag()
+  // abgebrochen und stattdessen die Marquee-Verfolgung über die normalen Maus-Events gestartet.
+  const [marqueeStart, setMarqueeStart] = useState<{ x: number; y: number } | null>(null)
+  const [marqueeCursor, setMarqueeCursor] = useState<{ x: number; y: number } | null>(null)
+  // Shift-Status wird am mousedown erfasst (dort zuverlässig gesetzt) statt am späteren Konva-
+  // "dragstart"-Event abzulesen, dessen zugrundeliegendes Mousemove die Modifier-Taste je nach
+  // Eingabequelle nicht mehr trägt.
+  const shiftAtMouseDownRef = useRef(false)
 
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100))
 
@@ -122,7 +158,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       // gesamten Erdgeschoss-Plans wechseln, Snapshot ziehen, danach Ansicht wiederherstellen.
       const prevZoom = zoom
       const prevPos = stagePos
-      const prevSelected = selectedId
+      const prevSelected = selectedIds
       const prevWidth = stage.width()
       const prevHeight = stage.height()
       onSelect(null)
@@ -153,7 +189,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       stage.height(prevHeight)
       setZoom(prevZoom)
       setStagePos(prevPos)
-      if (prevSelected) onSelect(prevSelected)
+      if (prevSelected.length > 0) onSelectMany(prevSelected, false)
 
       return dataUrl
     },
@@ -265,6 +301,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage()
     if (!stage) return
+    shiftAtMouseDownRef.current = e.evt.shiftKey
 
     if (tool === 'measure') {
       const pt = stagePointerToInternal(stage)
@@ -282,7 +319,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
 
     if (placement) return // Klick wird von handlePlacementClick verarbeitet
-    if (e.target === stage) onSelect(null)
+
+    // Shift-Klick/-Ziehen auf leerer Fläche soll die bestehende Auswahl nicht sofort leeren —
+    // ein Shift-Ziehen wird stattdessen gleich zur Marquee-Auswahl (siehe onDragStart der Stage).
+    if (e.target === stage && !(tool === 'select' && e.evt.shiftKey)) onSelect(null)
   }
 
   const handleStageMouseMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -298,10 +338,37 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       if (!stage) return
       const pt = stagePointerToInternal(stage)
       if (pt) setAreaCursor(pt)
+      return
+    }
+    if (marqueeStart) {
+      const stage = e.target.getStage()
+      if (!stage) return
+      const pt = stagePointerToInternal(stage)
+      if (pt) setMarqueeCursor(pt)
     }
   }
 
   const handleStageMouseUp = () => {
+    if (marqueeStart && marqueeCursor) {
+      const rect = {
+        minX: Math.min(marqueeStart.x, marqueeCursor.x),
+        maxX: Math.max(marqueeStart.x, marqueeCursor.x),
+        minY: Math.min(marqueeStart.y, marqueeCursor.y),
+        maxY: Math.max(marqueeStart.y, marqueeCursor.y),
+      }
+      setMarqueeStart(null)
+      setMarqueeCursor(null)
+      if (rect.maxX - rect.minX < 4 && rect.maxY - rect.minY < 4) return // zu klein, vermutlich nur ein Klick
+      const hitIds = visibleItemIds.filter((id) => {
+        const item = items[id]
+        const pd = item?.phaseData[currentPhaseId]
+        if (!item || !pd) return false
+        const b = itemWorldBBox(item, pd, pixelsPerMeter)
+        return b.minX <= rect.maxX && b.maxX >= rect.minX && b.minY <= rect.maxY && b.maxY >= rect.minY
+      })
+      onSelectMany(hitIds, true)
+      return
+    }
     if (tool !== 'area' || !areaStart || !areaCursor) return
     const x = Math.min(areaStart.x, areaCursor.x)
     const y = Math.min(areaStart.y, areaCursor.y)
@@ -337,13 +404,31 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   // Objekte neu gerendert/abgeglichen werden.
   const selectCtxRef = useRef({ tool, placement, onSelect })
   selectCtxRef.current = { tool, placement, onSelect }
-  const handleItemSelect = useCallback((id: string) => {
+  const handleItemSelect = useCallback((id: string, additive: boolean) => {
     const { tool: t, placement: p, onSelect: sel } = selectCtxRef.current
-    if (t === 'select' && !p) sel(id)
+    if (t === 'select' && !p) sel(id, additive)
   }, [])
+  // Für Mehrfachauswahl: beim Ziehen eines ausgewählten Objekts alle anderen ausgewählten
+  // Objekte um denselben Versatz mitbewegen. Über eine Ref gelesen, damit sich die Callback-
+  // Referenz nicht bei jeder Auswahländerung ändert (siehe Kommentar oben).
+  const dragCtxRef = useRef({ selectedIds, items, currentPhaseId })
+  dragCtxRef.current = { selectedIds, items, currentPhaseId }
   const handleItemDragEnd = useCallback(
-    (id: string, x: number, y: number) => updateItemTransform(id, x, y),
-    [updateItemTransform],
+    (id: string, x: number, y: number) => {
+      const { selectedIds: sel, items: curItems, currentPhaseId: cp } = dragCtxRef.current
+      if (sel.length > 1 && sel.includes(id)) {
+        const pd = curItems[id]?.phaseData[cp]
+        if (pd) {
+          const dx = x - pd.x
+          const dy = y - pd.y
+          const moveIds = sel.filter((sid) => !curItems[sid]?.locked)
+          if (dx !== 0 || dy !== 0) moveItemsBy(moveIds, dx, dy)
+          return
+        }
+      }
+      updateItemTransform(id, x, y)
+    },
+    [updateItemTransform, moveItemsBy],
   )
   const handleItemRotate = useCallback(
     (id: string, x: number, y: number, rotation: number) => updateItemTransform(id, x, y, rotation),
@@ -379,6 +464,20 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           x={stagePos.x}
           y={stagePos.y}
           draggable={tool === 'select'}
+          onDragStart={(e) => {
+            const stage = e.target.getStage()
+            if (e.target !== stage) return
+            // Shift+Ziehen: den gerade begonnenen nativen Stage-Drag abbrechen und stattdessen
+            // die Marquee-Mehrfachauswahl beginnen (siehe handleStageMouseMove/-Up).
+            if (shiftAtMouseDownRef.current) {
+              stage.stopDrag()
+              const pt = stagePointerToInternal(stage)
+              if (pt) {
+                setMarqueeStart(pt)
+                setMarqueeCursor(pt)
+              }
+            }
+          }}
           onDragEnd={(e) => {
             // Das dragend-Event von Objekten bubbelt bis zur Stage hoch — nur reagieren,
             // wenn die Stage selbst (nicht ein Kind-Objekt) gezogen wurde.
@@ -472,7 +571,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                   item={item}
                   phaseData={phaseData}
                   pixelsPerMeter={pixelsPerMeter}
-                  isSelected={selectedId === id}
+                  isSelected={selectedIds.includes(id)}
                   onSelect={handleItemSelect}
                   onDragEnd={handleItemDragEnd}
                   onRotate={handleItemRotate}
@@ -535,6 +634,22 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                 text={`${pixelsToMeters(Math.abs(areaCursor.x - areaStart.x), pixelsPerMeter).toFixed(2)} × ${pixelsToMeters(Math.abs(areaCursor.y - areaStart.y), pixelsPerMeter).toFixed(2)} m`}
                 fontSize={11 / zoom}
                 fill="#059669"
+              />
+            </Layer>
+          )}
+
+          {/* Rubberband-Mehrfachauswahl: Live-Vorschau des Auswahlrechtecks */}
+          {marqueeStart && marqueeCursor && (
+            <Layer listening={false}>
+              <Rect
+                x={Math.min(marqueeStart.x, marqueeCursor.x)}
+                y={Math.min(marqueeStart.y, marqueeCursor.y)}
+                width={Math.abs(marqueeCursor.x - marqueeStart.x)}
+                height={Math.abs(marqueeCursor.y - marqueeStart.y)}
+                fill="rgba(37,99,235,0.08)"
+                stroke="#2563eb"
+                strokeWidth={1 / zoom}
+                dash={[4 / zoom, 3 / zoom]}
               />
             </Layer>
           )}

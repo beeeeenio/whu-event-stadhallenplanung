@@ -62,6 +62,11 @@ interface Store extends EventState {
   /** Sperrt/entsperrt ein Objekt gegen Verschieben und Drehen (unabhängig von der Phase). */
   toggleItemLocked: (itemId: string, locked?: boolean) => void
 
+  // Mehrfachauswahl: dieselben Aktionen wie oben, aber für mehrere Objekte als EIN Undo-Schritt.
+  removeItems: (itemIds: string[]) => void
+  toggleItemsVisible: (itemIds: string[], visible?: boolean) => void
+  moveItemsBy: (itemIds: string[], dx: number, dy: number) => void
+
   // Bereiche (z.B. Messestände): frei gezogenes Rechteck mit individueller Größe
   addArea: (x: number, y: number, width: number, height: number, label?: string) => string
   /** Freie Text-Beschriftung an einer Stelle im Plan (z. B. "Einlass hier"). */
@@ -270,6 +275,61 @@ export const useEventStore = create<Store>((set, get) => {
             },
           },
         }
+      })
+    },
+
+    removeItems: (itemIds) => {
+      pushHistory()
+      set((state) => {
+        const items = { ...state.items }
+        let itemOrder = state.itemOrder
+        for (const itemId of itemIds) {
+          const item = items[itemId]
+          if (!item) continue
+          const phaseData = { ...item.phaseData }
+          delete phaseData[state.currentPhaseId]
+          if (Object.keys(phaseData).length === 0) {
+            delete items[itemId]
+            itemOrder = itemOrder.filter((id) => id !== itemId)
+          } else {
+            items[itemId] = { ...item, phaseData }
+          }
+        }
+        return { items, itemOrder }
+      })
+    },
+
+    toggleItemsVisible: (itemIds, visible) => {
+      pushHistory()
+      set((state) => {
+        const items = { ...state.items }
+        for (const itemId of itemIds) {
+          const item = items[itemId]
+          const current = item?.phaseData[state.currentPhaseId]
+          if (!item || !current) continue
+          items[itemId] = {
+            ...item,
+            phaseData: { ...item.phaseData, [state.currentPhaseId]: { ...current, visible: visible ?? !current.visible } },
+          }
+        }
+        return { items }
+      })
+    },
+
+    moveItemsBy: (itemIds, dx, dy) => {
+      pushHistory()
+      set((state) => {
+        const items = { ...state.items }
+        for (const itemId of itemIds) {
+          const item = items[itemId]
+          const current = item?.phaseData[state.currentPhaseId]
+          if (!item || !current) continue
+          items[itemId] = {
+            ...item,
+            phaseData: { ...item.phaseData, [state.currentPhaseId]: { ...current, x: current.x + dx, y: current.y + dy } },
+          }
+        }
+        return { items }
       })
     },
 

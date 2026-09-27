@@ -6,7 +6,7 @@ import PhaseTimeline from './PhaseTimeline'
 import PresentationMode from './PresentationMode'
 import ObjectPicker, { type PickerTab } from './ObjectPicker'
 import CommandBar, { type CommandActions } from './CommandBar'
-import { SelectionBar, PropertiesPanel } from './SelectionControls'
+import { SelectionBar, MultiSelectionBar, PropertiesPanel } from './SelectionControls'
 import { useNivtecImport } from './useNivtecImport'
 import { useEventStore } from '../store/store'
 import { useProjectsStore } from '../store/projectsStore'
@@ -50,6 +50,8 @@ const SHORTCUTS: [string, string][] = [
   ['Objekt drehen', 'R'],
   ['… gegen Uhrzeigersinn', '⇧R'],
   ['Duplizieren', '⌘D'],
+  ['Zur Auswahl hinzufügen/entfernen', '⇧Klick'],
+  ['Mehrere Objekte per Rechteck wählen', '⇧Ziehen'],
   ['Löschen', '⌫'],
   ['Abwählen / schließen', 'Esc'],
   ['Rückgängig', '⌘Z'],
@@ -58,7 +60,7 @@ const SHORTCUTS: [string, string][] = [
 ]
 
 export default function EditorView() {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [presenting, setPresenting] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [tool, setTool] = useState<ToolMode>('select')
@@ -80,10 +82,10 @@ export default function EditorView() {
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const items = useEventStore((s) => s.items)
   const itemOrder = useEventStore((s) => s.itemOrder)
-  const removeItem = useEventStore((s) => s.removeItem)
+  const removeItems = useEventStore((s) => s.removeItems)
   const rotateItem = useEventStore((s) => s.rotateItem)
   const duplicateItem = useEventStore((s) => s.duplicateItem)
-  const toggleItemVisible = useEventStore((s) => s.toggleItemVisible)
+  const toggleItemsVisible = useEventStore((s) => s.toggleItemsVisible)
   const addItem = useEventStore((s) => s.addItem)
   const addItemsBatch = useEventStore((s) => s.addItemsBatch)
   const addChairRowGroup = useEventStore((s) => s.addChairRowGroup)
@@ -93,16 +95,24 @@ export default function EditorView() {
   const redo = useEventStore((s) => s.redo)
   const closeProject = useProjectsStore((s) => s.closeProject)
 
+  // Objekt-Eigenschaften/Kontextleiste zeigen Details nur, wenn genau EIN Objekt ausgewählt ist.
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   const selectedItem = selectedId ? items[selectedId] : null
   const selectedVisible = !!selectedItem?.phaseData[currentPhaseId]?.visible
 
-  // Beim Phasenwechsel verschwindet eine Auswahl, die in der neuen Phase nicht sichtbar ist
+  // Phasenwechsel oder Ausblenden: Objekte, die in der aktuellen Phase nicht (mehr) sichtbar
+  // sind, verschwinden automatisch aus der Auswahl.
   useEffect(() => {
-    if (selectedId && !selectedVisible) {
-      setSelectedId(null)
-      setPropertiesOpen(false)
-    }
-  }, [selectedId, selectedVisible])
+    setSelectedIds((prev) => {
+      const next = prev.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible)
+      return next.length === prev.length ? prev : next
+    })
+  }, [items, currentPhaseId])
+
+  // Eigenschaften-Panel ist nur für eine Einzelauswahl sinnvoll
+  useEffect(() => {
+    if (selectedId === null) setPropertiesOpen(false)
+  }, [selectedId])
 
   const prevPhaseId = useMemo(() => previousPhaseId(phases, currentPhaseId), [phases, currentPhaseId])
   const ghostItemIds = useMemo(
@@ -113,9 +123,22 @@ export default function EditorView() {
   const viewCenter = useCallback(() => canvasRef.current?.getViewCenter() ?? { x: 200, y: 200 }, [])
   const nivtec = useNivtecImport(viewCenter)
 
-  const select = useCallback((id: string | null) => {
-    setSelectedId(id)
-    if (!id) setPropertiesOpen(false)
+  /** Einzelnes Objekt (an-)wählen. additive=true (Shift-Klick) fügt zur bestehenden Auswahl
+   *  hinzu bzw. entfernt daraus, statt sie zu ersetzen. id=null leert die Auswahl komplett. */
+  const select = useCallback((id: string | null, additive = false) => {
+    if (id === null) {
+      setSelectedIds([])
+      return
+    }
+    setSelectedIds((prev) => {
+      if (!additive) return [id]
+      return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    })
+  }, [])
+
+  /** Mehrere Objekte auf einmal wählen (Rubberband-Auswahl per Shift+Ziehen). */
+  const selectMany = useCallback((ids: string[], additive: boolean) => {
+    setSelectedIds((prev) => (additive ? Array.from(new Set([...prev, ...ids])) : ids))
   }, [])
 
   /** Auswahl aus der Stückliste: zusätzlich sanft in den sichtbaren Ausschnitt holen (nur dort,
@@ -249,14 +272,22 @@ export default function EditorView() {
   const duplicateSelected = useCallback(() => {
     if (!selectedId) return
     const newId = duplicateItem(selectedId)
-    if (newId) setSelectedId(newId)
-  }, [selectedId, duplicateItem])
+    if (newId) select(newId)
+  }, [selectedId, duplicateItem, select])
 
-  const deleteSelected = useCallback(() => {
-    if (!selectedId) return
-    removeItem(selectedId)
+  /** Löscht die komplette Auswahl (ein Objekt oder mehrere) als EIN Undo-Schritt. */
+  const deleteSelection = useCallback(() => {
+    if (selectedIds.length === 0) return
+    removeItems(selectedIds)
     select(null)
-  }, [selectedId, removeItem, select])
+  }, [selectedIds, removeItems, select])
+
+  /** Blendet die komplette Auswahl in dieser Phase aus (ein Objekt oder mehrere). */
+  const hideSelection = useCallback(() => {
+    if (selectedIds.length === 0) return
+    toggleItemsVisible(selectedIds, false)
+    select(null)
+  }, [selectedIds, toggleItemsVisible, select])
 
   const openPicker = useCallback((tab: PickerTab) => {
     setPickerTab(tab)
@@ -312,9 +343,9 @@ export default function EditorView() {
         rotateItem(selectedId, e.shiftKey ? -90 : 90)
         return
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
         e.preventDefault()
-        deleteSelected()
+        deleteSelection()
         return
       }
       if (e.key === '?') {
@@ -349,7 +380,7 @@ export default function EditorView() {
         else if (tool !== 'select') setTool('select')
         else if (pickerOpen) setPickerOpen(false)
         else if (propertiesOpen) setPropertiesOpen(false)
-        else if (selectedId) select(null)
+        else if (selectedIds.length > 0) select(null)
         else if (shortcutsOpen) setShortcutsOpen(false)
         else if (inventoryOpen) setInventoryOpen(false)
       }
@@ -357,7 +388,7 @@ export default function EditorView() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
-    undo, redo, rotateItem, selectedId, duplicateSelected, deleteSelected, changeTool, select,
+    undo, redo, rotateItem, selectedId, selectedIds, duplicateSelected, deleteSelection, changeTool, select,
     commandOpen, placement, tool, pickerOpen, propertiesOpen, shortcutsOpen, inventoryOpen,
     phases, currentPhaseId, setCurrentPhase,
   ])
@@ -375,6 +406,28 @@ export default function EditorView() {
       barStyle = above
         ? { left: cx, top: b.minY - ROTATE_HANDLE_CLEARANCE, transform: 'translate(-50%, -100%)' }
         : { left: cx, top: Math.min(b.maxY + 12, viewport.height - 220), transform: 'translate(-50%, 0)' }
+    }
+  }
+
+  // Kontextleiste für die Mehrfachauswahl: an der gemeinsamen Bounding-Box aller ausgewählten,
+  // in dieser Phase sichtbaren Objekte ausgerichtet.
+  let multiBarStyle: React.CSSProperties | null = null
+  if (selectedIds.length > 1 && viewport && !placement && tool === 'select') {
+    const boxes = selectedIds
+      .map((id) => items[id])
+      .filter((it): it is EventItem => !!it && !!it.phaseData[currentPhaseId]?.visible)
+      .map((it) => screenBounds(it, currentPhaseId, viewport))
+      .filter((b): b is NonNullable<typeof b> => !!b)
+    if (boxes.length > 0) {
+      const minX = Math.min(...boxes.map((b) => b.minX))
+      const maxX = Math.max(...boxes.map((b) => b.maxX))
+      const minY = Math.min(...boxes.map((b) => b.minY))
+      const maxY = Math.max(...boxes.map((b) => b.maxY))
+      const cx = Math.min(Math.max((minX + maxX) / 2, 230), viewport.width - 230)
+      const above = minY - 20 > 150
+      multiBarStyle = above
+        ? { left: cx, top: minY - 20, transform: 'translate(-50%, -100%)' }
+        : { left: cx, top: Math.min(maxY + 12, viewport.height - 220), transform: 'translate(-50%, 0)' }
     }
   }
 
@@ -406,8 +459,9 @@ export default function EditorView() {
       <CanvasEditor
         ref={canvasRef}
         pixelsPerMeter={PPM}
-        selectedId={selectedId}
+        selectedIds={selectedIds}
         onSelect={select}
+        onSelectMany={selectMany}
         tool={tool}
         onToolChange={changeTool}
         placement={placement}
@@ -426,20 +480,24 @@ export default function EditorView() {
         hasPreviousPhase={!!prevPhaseId}
       />
 
-      {/* Kontextleiste an der Auswahl */}
+      {/* Kontextleiste an der Auswahl (Einzelauswahl) */}
       {barStyle && selectedItem && (
         <div className="absolute z-10" style={barStyle}>
           <SelectionBar
             item={selectedItem}
             onDuplicate={duplicateSelected}
-            onDelete={deleteSelected}
-            onHideInPhase={() => {
-              toggleItemVisible(selectedItem.id, false)
-              select(null)
-            }}
+            onDelete={deleteSelection}
+            onHideInPhase={hideSelection}
             onOpenProperties={() => setPropertiesOpen((v) => !v)}
             propertiesOpen={propertiesOpen}
           />
+        </div>
+      )}
+
+      {/* Kontextleiste an der Auswahl (Mehrfachauswahl) */}
+      {multiBarStyle && (
+        <div className="absolute z-10" style={multiBarStyle}>
+          <MultiSelectionBar count={selectedIds.length} onHide={hideSelection} onDelete={deleteSelection} />
         </div>
       )}
 
@@ -452,13 +510,13 @@ export default function EditorView() {
               currentPhaseId={currentPhaseId}
               onClose={() => setPropertiesOpen(false)}
               onDuplicate={duplicateSelected}
-              onDelete={deleteSelected}
+              onDelete={deleteSelection}
             />
           </div>
         )}
         {inventoryOpen && (
           <div className="pointer-events-auto h-full flex">
-            <InventoryPanel selectedId={selectedId} onSelect={selectFromInventory} onClose={() => setInventoryOpen(false)} />
+            <InventoryPanel selectedIds={selectedIds} onSelect={selectFromInventory} onClose={() => setInventoryOpen(false)} />
           </div>
         )}
       </div>

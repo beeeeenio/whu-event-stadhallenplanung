@@ -7,7 +7,7 @@ import { btn, input, island, segmentedGroup, segmentedItem } from '../utils/ui'
 import type { EventItem, Phase } from '../types'
 
 interface Props {
-  selectedId: string | null
+  selectedIds: string[]
   onSelect: (id: string) => void
   onClose: () => void
 }
@@ -44,7 +44,7 @@ function PhaseVisibilityDots({ item, phases, currentPhaseId }: { item: EventItem
  * Inventar als schwebendes Blatt rechts (Konzept B). Übersicht/Liste beziehen sich auf die
  * aktive Phase; „Alle Phasen“ zeigt den Bedarf über den ganzen Ablauf mit Maximalbedarf (Konzept C).
  */
-export default function InventoryPanel({ selectedId, onSelect, onClose }: Props) {
+export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('summary')
   const [search, setSearch] = useState('')
   const items = useEventStore((s) => s.items)
@@ -129,7 +129,7 @@ export default function InventoryPanel({ selectedId, onSelect, onClose }: Props)
                     <button
                       onClick={() => onSelect(item.id)}
                       className={`flex-1 text-left text-xs px-2 py-1.5 rounded-lg truncate transition-colors ${
-                        selectedId === item.id ? 'bg-accent-soft text-accent font-semibold' : 'text-ink hover:bg-chip'
+                        selectedIds.includes(item.id) ? 'bg-accent-soft text-accent font-semibold' : 'text-ink hover:bg-chip'
                       }`}
                     >
                       {n}. {item.label}
