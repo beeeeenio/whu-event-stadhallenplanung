@@ -18,6 +18,7 @@ interface ActionProps {
  */
 export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpenProperties, propertiesOpen }: ActionProps) {
   const rotateItem = useEventStore((s) => s.rotateItem)
+  const toggleItemLocked = useEventStore((s) => s.toggleItemLocked)
   const cell = 'h-9 px-2.5 rounded-lg text-xs font-medium text-ink hover:bg-chip inline-flex items-center gap-1 whitespace-nowrap'
   return (
     <div
@@ -48,6 +49,13 @@ export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpe
       <button onClick={onHideInPhase} className={cell} title="Nur in dieser Phase ausblenden, andere Phasen bleiben unverändert">
         ◌ Ausblenden
       </button>
+      <button
+        onClick={() => toggleItemLocked(item.id)}
+        className={`${cell} ${item.locked ? 'text-accent bg-accent-soft hover:bg-accent-soft' : ''}`}
+        title={item.locked ? 'Entsperren (wieder verschieb-/drehbar per Maus)' : 'Sperren (gegen versehentliches Verschieben/Drehen per Maus)'}
+      >
+        {item.locked ? '🔒 Gesperrt' : '🔓 Sperren'}
+      </button>
       <button onClick={onDelete} className={`${cell} text-red-700 hover:bg-red-50`} title="Löschen (Entf/⌫)">
         Löschen
       </button>
@@ -69,6 +77,7 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
   const resizeItem = useEventStore((s) => s.resizeItem)
   const setItemColor = useEventStore((s) => s.setItemColor)
   const rotateItem = useEventStore((s) => s.rotateItem)
+  const toggleItemLocked = useEventStore((s) => s.toggleItemLocked)
 
   return (
     <div className={`p-3.5 w-64 text-xs space-y-3 ${island}`} onMouseDown={(e) => e.stopPropagation()}>
@@ -107,11 +116,11 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
             />
           </label>
         </div>
-      ) : (
+      ) : item.type !== 'text_label' ? (
         <div className="text-ink3">
           Größe: {item.width}m × {item.height}m
         </div>
-      )}
+      ) : null}
       <div className="flex items-center justify-between gap-2">
         <span className="text-ink3">Drehung: {Math.round(item.phaseData[currentPhaseId]?.rotation ?? 0)}°</span>
         <div className="flex gap-1">
@@ -131,6 +140,10 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
           </button>
         </div>
       </div>
+      <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
+        <span className="text-ink3">Gegen Verschieben/Drehen per Maus sperren</span>
+        <input type="checkbox" checked={!!item.locked} onChange={() => toggleItemLocked(item.id)} className="accent-accent w-4 h-4" />
+      </label>
       {/* key inkl. Notiz: bei Undo/Redo von außen geänderte Notiz neu übernehmen */}
       <NoteField key={`${item.id}:${item.note ?? ''}`} itemId={item.id} note={item.note ?? ''} />
       {item.type === 'area' && (

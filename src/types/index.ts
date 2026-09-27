@@ -20,6 +20,7 @@ export type ItemType =
   | 'plant'
   | 'screen'
   | 'pipe_drape'
+  | 'text_label'
 
 export interface PhaseData {
   x: number
@@ -64,6 +65,8 @@ export interface EventItem {
   grid?: { rows: number; cols: number; spacingM: number }
   /** Freitext-Notiz zum Objekt (z. B. „Kabel bis Bühne legen“). */
   note?: string
+  /** Gegen versehentliches Verschieben/Drehen gesperrt (z. B. fest stehende Bühne). */
+  locked?: boolean
 }
 
 export interface Phase {

@@ -16,7 +16,7 @@ import { DEFAULT_PIXELS_PER_METER, metersToPixels } from '../utils/scale'
 import { exportPhaseToPdf } from '../utils/pdfExport'
 import { buildItemGrid, type Placement } from '../utils/placement'
 import { changedSincePhase, previousPhaseId, sortPhases } from '../utils/phaseDiff'
-import { island, kbd } from '../utils/ui'
+import { btn, input as inputCls, island, kbd } from '../utils/ui'
 
 const PPM = DEFAULT_PIXELS_PER_METER
 
@@ -87,6 +87,7 @@ export default function EditorView() {
   const addItem = useEventStore((s) => s.addItem)
   const addItemsBatch = useEventStore((s) => s.addItemsBatch)
   const addChairRowGroup = useEventStore((s) => s.addChairRowGroup)
+  const addTextLabel = useEventStore((s) => s.addTextLabel)
   const setCurrentPhase = useEventStore((s) => s.setCurrentPhase)
   const undo = useEventStore((s) => s.undo)
   const redo = useEventStore((s) => s.redo)
@@ -187,6 +188,22 @@ export default function EditorView() {
     },
     [addChairRowGroup, viewCenter, select],
   )
+
+  /** Freie Text-Beschriftung: Text zuerst in einem kleinen Eingabefeld abfragen, dann per
+   *  Tippen in den Plan platzieren (statt eines nativen window.prompt, das nicht ins
+   *  Erscheinungsbild passt). */
+  const [textLabelDraft, setTextLabelDraft] = useState<string | null>(null)
+  const commitTextLabelDraft = useCallback(() => {
+    const text = textLabelDraft?.trim()
+    setTextLabelDraft(null)
+    if (!text) return
+    setTool('select')
+    setPlacement({
+      label: `Text „${text}“`,
+      place: (x, y) => addTextLabel(x, y, text),
+      once: true,
+    })
+  }, [textLabelDraft, addTextLabel])
 
   /** Kachel aus der Bibliothek per Zeiger gezogen: sofortige Formvorschau statt des trägen
    *  nativen HTML5-Drag-Ghosts, Objekt wird erst beim Loslassen über dem Plan angelegt. */
@@ -470,6 +487,31 @@ export default function EditorView() {
         </div>
       )}
 
+      {/* Text-Eingabe für die freie Beschriftung */}
+      {textLabelDraft !== null && (
+        <div className={`absolute left-1/2 -translate-x-1/2 bottom-[176px] z-20 p-3 w-[min(320px,calc(100vw-32px))] flex flex-col gap-2 ${island}`}>
+          <input
+            autoFocus
+            value={textLabelDraft}
+            onChange={(e) => setTextLabelDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitTextLabelDraft()
+              if (e.key === 'Escape') setTextLabelDraft(null)
+            }}
+            placeholder="z. B. „Einlass hier“…"
+            className={`w-full ${inputCls}`}
+          />
+          <div className="flex items-center gap-2">
+            <button onClick={commitTextLabelDraft} className={`flex-1 ${btn('primary', 'sm')}`}>
+              In Plan tippen zum Platzieren
+            </button>
+            <button onClick={() => setTextLabelDraft(null)} className={btn('secondary', 'sm')}>
+              Abbrechen
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Werkzeug-Dock */}
       <div className={`absolute left-1/2 -translate-x-1/2 bottom-[108px] z-20 flex items-center gap-1 p-1.5 ${island}`}>
         {dockTool('select', 'Auswahl', svg(<path d="M5 3l14 8-6 2-2 6z" />), 'V')}
@@ -508,6 +550,16 @@ export default function EditorView() {
         >
           {svg(<><path d="M12 15V4M8 8l4-4 4 4" /><path d="M4 15v4h16v-4" /></>)}
           NivTec
+        </button>
+        <button
+          onClick={() => setTextLabelDraft((v) => (v === null ? '' : null))}
+          className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
+            textLabelDraft !== null ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
+          }`}
+          title="Freie Textbeschriftung in den Plan setzen"
+        >
+          {svg(<><path d="M5 6h14M12 6v13" /></>)}
+          Text
         </button>
         {placement && (
           <>

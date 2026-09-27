@@ -45,6 +45,8 @@ function EventItemShape({
   const w = metersToPixels(item.width, pixelsPerMeter)
   const h = metersToPixels(item.height, pixelsPerMeter)
   const isRound = item.type === 'table_round' || item.type === 'table_high'
+  const isLabel = item.type === 'text_label'
+  const isLocked = !!item.locked
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     onDragEnd(item.id, e.target.x(), e.target.y())
@@ -62,10 +64,15 @@ function EventItemShape({
   const strokeWidth = isSelected ? 2 : 1
 
   const minSize = MIN_HIT_TARGET_PX / zoom
-  const hitW = Math.max(w, minSize)
-  const hitH = Math.max(h, minSize)
-  const hitX = isRound ? -hitW / 2 : -(hitW - w) / 2
-  const hitY = isRound ? -hitH / 2 : -(hitH - h) / 2
+  // Text-Labels wachsen nach rechts/unten ab dem Ursprung (Konva-Text-Standardanker), nicht
+  // zentriert wie die anderen Objekte — die Trefferfläche muss das nachbilden, sonst lässt sich
+  // nur der Anfang des Textes anklicken.
+  const labelHitW = Math.max(item.label.length * 8, minSize)
+  const labelHitH = Math.max(21, minSize)
+  const hitW = isLabel ? labelHitW : Math.max(w, minSize)
+  const hitH = isLabel ? labelHitH : Math.max(h, minSize)
+  const hitX = isLabel ? -6 / zoom : isRound ? -hitW / 2 : -(hitW - w) / 2
+  const hitY = isLabel ? -6 / zoom : isRound ? -hitH / 2 : -(hitH - h) / 2
 
   // Rotationsgriff: fester Punkt oberhalb der Objektmitte, im lokalen (ungedrehten) Koordinatensystem
   // der Gruppe. Der Griff selbst bleibt an dieser Stelle fixiert — beim Ziehen wird nur der
@@ -114,7 +121,7 @@ function EventItemShape({
       x={phaseData.x}
       y={phaseData.y}
       rotation={phaseData.rotation}
-      draggable={draggable}
+      draggable={draggable && !isLocked}
       onClick={handleSelect}
       onTap={handleSelect}
       onDragEnd={handleDragEnd}
@@ -123,7 +130,7 @@ function EventItemShape({
     >
       {/* Unsichtbare, vergrößerte Trefferfläche für zuverlässiges Greifen auch bei kleinem Zoom */}
       <Rect x={hitX} y={hitY} width={hitW} height={hitH} fill="rgba(255,255,255,0.001)" />
-      {item.type === 'table_round' || item.type === 'table_high' ? (
+      {isLabel ? null : item.type === 'table_round' || item.type === 'table_high' ? (
         <Circle radius={w / 2} fill="#fef3c7" stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
       ) : item.type === 'curtain' ? (
         <Line points={[0, 0, w, 0]} stroke="#7c3aed" strokeWidth={6} lineCap="round" perfectDrawEnabled={false} />
@@ -202,7 +209,16 @@ function EventItemShape({
       ) : (
         <Rect width={w} height={h} fill="#f3f4f6" stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
       )}
-      {item.type === 'area' ? (
+      {isLabel ? (
+        <Text
+          listening={false}
+          text={item.label}
+          fontSize={13}
+          fontStyle="600"
+          fill={isSelected ? '#2563eb' : '#1f2937'}
+          padding={4}
+        />
+      ) : item.type === 'area' ? (
         <>
           <Text
               listening={false}
@@ -250,7 +266,16 @@ function EventItemShape({
           />
         </>
       )}
-      {isSelected && onRotate && (
+      {isLocked && (
+        <Text
+          listening={false}
+          text="🔒"
+          fontSize={12 / zoom}
+          x={hitX + 2 / zoom}
+          y={hitY + 1 / zoom}
+        />
+      )}
+      {isSelected && onRotate && !isLocked && (
         <>
           <Line
             points={[centerX, topY, handleX, handleY]}

@@ -59,9 +59,13 @@ interface Store extends EventState {
   setItemNote: (itemId: string, note: string) => void
   resizeItem: (itemId: string, width: number, height: number) => void
   setItemColor: (itemId: string, color: string) => void
+  /** Sperrt/entsperrt ein Objekt gegen Verschieben und Drehen (unabhängig von der Phase). */
+  toggleItemLocked: (itemId: string, locked?: boolean) => void
 
   // Bereiche (z.B. Messestände): frei gezogenes Rechteck mit individueller Größe
   addArea: (x: number, y: number, width: number, height: number, label?: string) => string
+  /** Freie Text-Beschriftung an einer Stelle im Plan (z. B. "Einlass hier"). */
+  addTextLabel: (x: number, y: number, text: string) => string
   duplicateItem: (itemId: string, offsetX?: number, offsetY?: number) => string | null
 
   /** Stuhlreihen als EIN Objekt (Gruppe), damit sie gemeinsam verschoben werden können. */
@@ -300,6 +304,15 @@ export const useEventStore = create<Store>((set, get) => {
       }))
     },
 
+    toggleItemLocked: (itemId, locked) => {
+      pushHistory()
+      set((state) => {
+        const item = state.items[itemId]
+        if (!item) return state
+        return { items: { ...state.items, [itemId]: { ...item, locked: locked ?? !item.locked } } }
+      })
+    },
+
     addArea: (x, y, width, height, label) => {
       const id = uuid()
       const { currentPhaseId, phases, items } = get()
@@ -316,6 +329,29 @@ export const useEventStore = create<Store>((set, get) => {
         height,
         phaseData,
         color: AREA_COLORS[areaCount % AREA_COLORS.length],
+      }
+      pushHistory()
+      set((state) => ({
+        items: { ...state.items, [id]: item },
+        itemOrder: [...state.itemOrder, id],
+      }))
+      return id
+    },
+
+    addTextLabel: (x, y, text) => {
+      const id = uuid()
+      const { currentPhaseId, phases } = get()
+      const phaseData: EventItem['phaseData'] = {}
+      for (const p of phases) {
+        phaseData[p.id] = { x, y, rotation: 0, visible: p.id === currentPhaseId }
+      }
+      const item: EventItem = {
+        id,
+        type: 'text_label',
+        label: text,
+        width: 0.1,
+        height: 0.1,
+        phaseData,
       }
       pushHistory()
       set((state) => ({
