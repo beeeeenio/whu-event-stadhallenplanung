@@ -29,3 +29,10 @@ export function saveTemplates(templates: LayoutTemplate[]) {
     // localStorage voll oder nicht verfügbar – stiller Fehlschlag
   }
 }
+
+export function mergeTemplates(imported: LayoutTemplate[]): void {
+  const existing = loadTemplates()
+  const existingIds = new Set(existing.map((t) => t.id))
+  const toAdd = imported.filter((t) => !existingIds.has(t.id))
+  saveTemplates([...existing, ...toAdd])
+}

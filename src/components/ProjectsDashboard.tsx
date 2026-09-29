@@ -1,6 +1,9 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useProjectsStore } from '../store/projectsStore'
 import { btn } from '../utils/ui'
+import { exportAllProjects, generateExportFilename } from '../utils/exportProject'
+import { importAllProjects } from '../utils/importProject'
+import ExportImportDialog from './ExportImportDialog'
 
 function formatDate(ts: number) {
   return new Date(ts).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
@@ -17,6 +20,16 @@ export default function ProjectsDashboard() {
   const [renameValue, setRenameValue] = useState('')
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
 
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [exportLoading, setExportLoading] = useState(false)
+  const [importLoading, setImportLoading] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false)
+  const [mergeDuplicates, setMergeDuplicates] = useState<{ projectId: string; name: string }[]>([])
+  const [mergePendingCallback, setMergePendingCallback] = useState<
+    ((strategy: 'overwrite' | 'keepBoth' | 'cancel') => void) | null
+  >(null)
+
   const sorted = [...projects].sort((a, b) => b.updatedAt - a.updatedAt)
 
   const handleCreate = () => {
@@ -32,6 +45,64 @@ export default function ProjectsDashboard() {
   const commitRename = (id: string) => {
     if (renameValue.trim()) renameProject(id, renameValue.trim())
     setRenamingId(null)
+  }
+
+  const handleExport = async () => {
+    setExportLoading(true)
+    try {
+      const blob = await exportAllProjects()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = generateExportFilename('Kongresshalle')
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      alert('Export fehlgeschlagen: ' + (err as Error).message)
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const handleImport = async (file: File) => {
+    setImportLoading(true)
+    setImportError(null)
+    try {
+      const result = await importAllProjects(file, async (duplicates) => {
+        setMergeDuplicates(duplicates)
+        setMergeDialogOpen(true)
+
+        return new Promise((resolve) => {
+          setMergePendingCallback(() => (strategy: 'overwrite' | 'keepBoth' | 'cancel') => {
+            setMergeDialogOpen(false)
+            resolve(strategy)
+          })
+        })
+      })
+
+      if (result.imported.length > 0 || result.skipped.length > 0) {
+        const msg =
+          `Import abgeschlossen: ${result.imported.length} Projekte importiert, ` +
+          `${result.skipped.length} übersprungen, ${result.templateCount} Templates.`
+        alert(msg)
+      } else {
+        setImportError('Keine Projekte zum Importieren gefunden')
+      }
+    } catch (err) {
+      const msg = (err as Error).message
+      setImportError(msg)
+      alert('Import fehlgeschlagen: ' + msg)
+    } finally {
+      setImportLoading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleImport(file)
+    }
   }
 
   return (
@@ -116,7 +187,44 @@ export default function ProjectsDashboard() {
             ))}
           </ul>
         )}
+
+        <div className="flex gap-3 mt-8 pt-6 border-t border-gray-200">
+          <button
+            onClick={handleExport}
+            disabled={exportLoading}
+            className={btn('primary', 'md')}
+          >
+            {exportLoading ? 'Exporting...' : '⬇ Export'}
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importLoading}
+            className={btn('primary', 'md')}
+          >
+            {importLoading ? 'Importing...' : '⬆ Import'}
+          </button>
+          {importError && <div className="text-red-500 text-sm flex items-center">{importError}</div>}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".zip"
+          className="hidden"
+          onChange={handleFileSelected}
+        />
       </div>
+
+      <ExportImportDialog
+        isOpen={mergeDialogOpen}
+        duplicateCount={mergeDuplicates.length}
+        duplicateProjects={mergeDuplicates}
+        onMergeStrategy={(strategy) => {
+          if (mergePendingCallback) {
+            mergePendingCallback(strategy)
+          }
+        }}
+      />
     </div>
   )
 }

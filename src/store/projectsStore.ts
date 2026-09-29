@@ -18,6 +18,7 @@ interface ProjectsStore {
   renameProject: (id: string, name: string) => void
   deleteProject: (id: string) => void
   touchProject: (id: string) => void
+  importProjects: (meta: ProjectMeta[]) => void
 }
 
 function emptyProjectData(): ProjectData {
@@ -66,6 +67,11 @@ export const useProjectsStore = create<ProjectsStore>()(
       touchProject: (id) =>
         set((state) => ({
           projects: state.projects.map((p) => (p.id === id ? { ...p, updatedAt: Date.now() } : p)),
+        })),
+
+      importProjects: (meta) =>
+        set((state) => ({
+          projects: [...state.projects, ...meta],
         })),
     }),
     { name: 'whu-planner-projects' },

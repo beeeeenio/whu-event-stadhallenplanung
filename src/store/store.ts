@@ -89,6 +89,7 @@ interface Store extends EventState {
   redo: () => void
 
   // Projekte: kompletten Zustand aus einem gespeicherten Projekt laden bzw. für die Speicherung exportieren
+  importProject: (data: Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers'>) => void
   hydrate: (data: Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers'>) => void
   getSnapshot: () => Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers'>
 }
@@ -540,6 +541,13 @@ export const useEventStore = create<Store>((set, get) => {
         itemOrder: data.itemOrder,
       })
     },
+
+    importProject: (data) =>
+      set({
+        ...data,
+        historyPast: [],
+        historyFuture: [],
+      }),
 
     hydrate: (data) =>
       set({
