@@ -8,7 +8,9 @@ import { RIGGING_BARS, STAGE_FRONT_EDGE } from '../data/rigging'
 import EventItemShape from './EventItemShape'
 import type { EventItem, PhaseData } from '../types'
 import type { Placement } from '../utils/placement'
+import { snapToGrid } from '../utils/snapping'
 import { island } from '../utils/ui'
+import { exportCanvasAsImage } from '../utils/exportImage'
 
 /** Achsenparallele Welt-Bounding-Box eines (ggf. gedrehten) Objekts, für die Rubberband-Auswahl. */
 function itemWorldBBox(item: EventItem, pd: PhaseData, ppm: number) {
@@ -57,6 +59,13 @@ interface Props {
   /** IDs der Objekte fürs Geisterbild (vorberechnet: in der Vorphase anders/vorhanden). */
   ghostItemIds?: string[]
   onViewportChange?: (viewport: CanvasViewport) => void
+  /** Gitter-Einstellungen */
+  gridEnabled?: boolean
+  gridSize?: number
+  /** Event name for export filename. */
+  eventName?: string
+  /** Phase name for export filename. */
+  phaseName?: string
 }
 
 export interface CanvasEditorHandle {
@@ -97,6 +106,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     ghostPhaseId = null,
     ghostItemIds = [],
     onViewportChange,
+    gridEnabled = undefined,
+    gridSize = undefined,
+    eventName = 'Event',
+    phaseName = 'Phase',
   },
   ref,
 ) {
@@ -143,6 +156,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   // internen Drag da schon begonnen hatte. Am Ende der Geste wird draggable wieder hergestellt.
   const [marqueeStart, setMarqueeStart] = useState<{ x: number; y: number } | null>(null)
   const [marqueeCursor, setMarqueeCursor] = useState<{ x: number; y: number } | null>(null)
+
+  const gridEnabledInternal = gridEnabled ?? false
+  const gridSizeInternal = gridSize ?? 20
 
   const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(z * 100) / 100))
 
@@ -289,6 +305,38 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     zoomAtPoint(zoom + direction * ZOOM_STEP, pointer)
   }
 
+  const handleExportImage = async () => {
+    const stage = stageRef.current
+    if (!stage) return
+
+    // Save current state
+    const prevZoom = zoom
+    const prevPos = stagePos
+    const prevSelected = selectedIds
+
+    // Reset to full view
+    onSelect(null)
+    setZoom(1)
+    setStagePos({ x: 0, y: 0 })
+    
+    // Wait for render
+    await new Promise((resolve) => setTimeout(resolve, 60))
+
+    try {
+      // Generate filename
+      const date = new Date().toISOString().split('T')[0]
+      const filename = `${eventName.replace(/\s+/g, '_')}_${phaseName.replace(/\s+/g, '_')}_${date}`
+
+      // Export as image
+      await exportCanvasAsImage(stageRef, filename, 1.5)
+    } finally {
+      // Restore previous state
+      setZoom(prevZoom)
+      setStagePos(prevPos)
+      if (prevSelected.length > 0) onSelectMany(prevSelected, false)
+    }
+  }
+
   const stagePointerToInternal = (stage: Konva.Stage) => {
     const pos = stage.getRelativePointerPosition()
     if (!pos) return null
@@ -427,19 +475,27 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const handleItemDragEnd = useCallback(
     (id: string, x: number, y: number) => {
       const { selectedIds: sel, items: curItems, currentPhaseId: cp } = dragCtxRef.current
+      // Apply grid snapping if enabled
+      let finalX = x
+      let finalY = y
+      if (gridEnabledInternal) {
+        const snapped = snapToGrid(x, y, gridSizeInternal)
+        finalX = snapped.x
+        finalY = snapped.y
+      }
       if (sel.length > 1 && sel.includes(id)) {
         const pd = curItems[id]?.phaseData[cp]
         if (pd) {
-          const dx = x - pd.x
-          const dy = y - pd.y
+          const dx = finalX - pd.x
+          const dy = finalY - pd.y
           const moveIds = sel.filter((sid) => !curItems[sid]?.locked)
           if (dx !== 0 || dy !== 0) moveItemsBy(moveIds, dx, dy)
           return
         }
       }
-      updateItemTransform(id, x, y)
+      updateItemTransform(id, finalX, finalY)
     },
-    [updateItemTransform, moveItemsBy],
+    [updateItemTransform, moveItemsBy, gridEnabledInternal, gridSizeInternal],
   )
   const handleItemRotate = useCallback(
     (id: string, x: number, y: number, rotation: number) => updateItemTransform(id, x, y, rotation),
@@ -699,6 +755,14 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           title="Einpassen"
         >
           ⤢
+        </button>
+        <div class="w-6 h-px bg-line my-0.5" />
+        <button
+          onClick={handleExportImage}
+          className="w-9 h-9 rounded-xl text-ink hover:bg-chip text-[15px] leading-none"
+          title="Als Bild exportieren"
+        >
+          📸
         </button>
       </div>
 
