@@ -14,7 +14,7 @@ interface ActionProps {
 
 /**
  * Kontextleiste direkt an der Auswahl (Konzept B): die häufigsten Aktionen genau dort,
- * wo man gerade hinschaut. Alle Details liegen in „Objekt-Eigenschaften”.
+ * wo man gerade hinschaut. Alle Details liegen in „Objekt-Eigenschaften".
  */
 export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpenProperties, propertiesOpen }: ActionProps) {
   const rotateItem = useEventStore((s) => s.rotateItem)
@@ -30,23 +30,23 @@ export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpe
         className={`h-9 px-2.5 rounded-lg text-[11px] font-semibold font-mono max-w-[160px] truncate inline-flex items-center gap-1.5 ${
           propertiesOpen ? 'bg-accent text-white' : 'bg-accent-soft text-accent hover:bg-accent/15'
         }`}
-        title=”Objekt-Eigenschaften”
+        title="Objekt-Eigenschaften"
       >
         {item.type === 'area' && (
-          <span className=”w-2.5 h-2.5 rounded-full shrink-0” style={{ backgroundColor: item.color ?? AREA_COLORS[0] }} />
+          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color ?? AREA_COLORS[0] }} />
         )}
-        <span className=”truncate”>{item.label}</span>
+        <span className="truncate">{item.label}</span>
       </button>
-      <button onClick={() => rotateItem(item.id, -90)} className={cell} title=”90° gegen den Uhrzeigersinn drehen (Umschalt+R)”>
+      <button onClick={() => rotateItem(item.id, -90)} className={cell} title="90° gegen den Uhrzeigersinn drehen (Umschalt+R)">
         ⟲
       </button>
-      <button onClick={() => rotateItem(item.id, 90)} className={cell} title=”90° im Uhrzeigersinn drehen (R)”>
+      <button onClick={() => rotateItem(item.id, 90)} className={cell} title="90° im Uhrzeigersinn drehen (R)">
         ⟳ Drehen
       </button>
-      <button onClick={onDuplicate} className={cell} title=”Duplizieren (Strg/Cmd+D)”>
+      <button onClick={onDuplicate} className={cell} title="Duplizieren (Strg/Cmd+D)">
         ⧉ Duplizieren
       </button>
-      <button onClick={onHideInPhase} className={cell} title=”Nur in dieser Phase ausblenden, andere Phasen bleiben unverändert”>
+      <button onClick={onHideInPhase} className={cell} title="Nur in dieser Phase ausblenden, andere Phasen bleiben unverändert">
         ◌ Ausblenden
       </button>
       <button
@@ -56,7 +56,7 @@ export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpe
       >
         {item.locked ? '🔒 Gesperrt' : '🔓 Sperren'}
       </button>
-      <button onClick={onDelete} className={`${cell} text-red-700 hover:bg-red-50`} title=”Löschen (Entf/⌫)”>
+      <button onClick={onDelete} className={`${cell} text-red-700 hover:bg-red-50`} title="Löschen (Entf/⌫)">
         Löschen
       </button>
     </div>
@@ -75,13 +75,13 @@ export function MultiSelectionBar({ count, onHide, onDelete }: MultiActionProps)
   const cell = 'h-9 px-2.5 rounded-lg text-xs font-medium text-ink hover:bg-chip inline-flex items-center gap-1 whitespace-nowrap'
   return (
     <div className={`flex items-center gap-0.5 p-1 rounded-xl ${island}`} onMouseDown={(e) => e.stopPropagation()}>
-      <span className=”h-9 px-2.5 rounded-lg text-[11px] font-semibold font-mono bg-accent-soft text-accent inline-flex items-center whitespace-nowrap”>
+      <span className="h-9 px-2.5 rounded-lg text-[11px] font-semibold font-mono bg-accent-soft text-accent inline-flex items-center whitespace-nowrap">
         {count} Objekte ausgewählt
       </span>
-      <button onClick={onHide} className={cell} title=”Alle in dieser Phase ausblenden”>
+      <button onClick={onHide} className={cell} title="Alle in dieser Phase ausblenden">
         ◌ Ausblenden
       </button>
-      <button onClick={onDelete} className={`${cell} text-red-700 hover:bg-red-50`} title=”Alle löschen (Entf/⌫)”>
+      <button onClick={onDelete} className={`${cell} text-red-700 hover:bg-red-50`} title="Alle löschen (Entf/⌫)">
         Löschen
       </button>
     </div>
