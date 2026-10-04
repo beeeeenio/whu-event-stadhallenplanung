@@ -15,6 +15,7 @@ export default function ProjectsDashboard() {
   const openProject = useProjectsStore((s) => s.openProject)
   const renameProject = useProjectsStore((s) => s.renameProject)
   const deleteProject = useProjectsStore((s) => s.deleteProject)
+  const duplicateProject = useProjectsStore((s) => s.duplicateProject)
   const [newName, setNewName] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -177,6 +178,9 @@ export default function ProjectsDashboard() {
                     </button>
                     <button onClick={() => startRename(p.id, p.name)} className={btn('outline', 'sm')}>
                       Umbenennen
+                    </button>
+                    <button onClick={() => duplicateProject(p.id)} className={btn('outline', 'sm')}>
+                      Duplizieren
                     </button>
                     <button onClick={() => setConfirmingDeleteId(p.id)} className={`ml-auto ${btn('dangerOutline', 'sm')}`}>
                       Löschen

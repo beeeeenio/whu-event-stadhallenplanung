@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
-import type { EventItem, EventState, ItemType, NivtecData, Phase } from '../types'
+import type { EventItem, EventState, ItemType, ItemWithId, NivtecData, Phase } from '../types'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 
 const PHASE_1 = uuid()
@@ -38,6 +38,15 @@ interface Store extends EventState {
   historyPast: HistorySnapshot[]
   historyFuture: HistorySnapshot[]
 
+  // Grid/Snap state (Phase A)
+  gridEnabled: boolean
+  gridSize: number
+  searchQuery: string
+  setGridEnabled: (enabled: boolean) => void
+  setGridSize: (size: number) => void
+  setSearchQuery: (q: string) => void
+  filteredItems: () => ItemWithId[]
+
   setEventName: (name: string) => void
 
   // Phases
@@ -58,7 +67,7 @@ interface Store extends EventState {
   renameItem: (itemId: string, label: string) => void
   setItemNote: (itemId: string, note: string) => void
   resizeItem: (itemId: string, width: number, height: number) => void
-  setItemColor: (itemId: string, color: string) => void
+  setItemColor: (itemId: string, color: string | null) => void
   /** Sperrt/entsperrt ein Objekt gegen Verschieben und Drehen (unabhängig von der Phase). */
   toggleItemLocked: (itemId: string, locked?: boolean) => void
 
@@ -111,8 +120,28 @@ export const useEventStore = create<Store>((set, get) => {
     layers: { walls: true, rigging: false, power: false, simplified: false },
     historyPast: [],
     historyFuture: [],
+    gridEnabled: false,
+    gridSize: 20,
+    searchQuery: '',
 
     setEventName: (name) => set({ eventName: name }),
+
+    setGridEnabled: (enabled) => set({ gridEnabled: enabled }),
+
+    setGridSize: (size) => set({ gridSize: size }),
+
+    setSearchQuery: (q) => set({ searchQuery: q }),
+
+    filteredItems: () => {
+      const state = get()
+      return state.itemOrder
+        .map((id) => state.items[id])
+        .filter((item) =>
+          item.label?.toLowerCase().includes(state.searchQuery.toLowerCase()) ||
+          item.note?.toLowerCase().includes(state.searchQuery.toLowerCase())
+        )
+        .map((item) => ({ ...item, id: item.id }))
+    },
 
     addPhase: (name, empty) =>
       set((state) => {
@@ -360,9 +389,16 @@ export const useEventStore = create<Store>((set, get) => {
 
     setItemColor: (itemId, color) => {
       pushHistory()
-      set((state) => ({
-        items: { ...state.items, [itemId]: { ...state.items[itemId], color } },
-      }))
+      set((state) => {
+        const item = state.items[itemId]
+        if (!item) return state
+        return {
+          items: {
+            ...state.items,
+            [itemId]: { ...item, color: color ?? undefined },
+          },
+        }
+      })
     },
 
     toggleItemLocked: (itemId, locked) => {

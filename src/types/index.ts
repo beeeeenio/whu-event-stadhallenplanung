@@ -59,15 +59,18 @@ export interface EventItem {
   seats?: number
   phaseData: Record<string, PhaseData>
   nivtecData?: NivtecData
-  /** Hex-Farbe, aktuell nur für type 'area' genutzt (Bereiche/Stände farblich markieren) */
+  /** Hex-Farbe oder rgba, z.B. “#3B82F6”; für alle Items nutzbar */
   color?: string
   /** Nur für type 'chair_row_group': Anzahl Reihen/Stühle je Reihe und Abstand, damit die Gruppe als ein Objekt gezogen werden kann. */
   grid?: { rows: number; cols: number; spacingM: number }
-  /** Freitext-Notiz zum Objekt (z. B. „Kabel bis Bühne legen“). */
+  /** Freitext-Notiz zum Objekt (z. B. „Kabel bis Bühne legen”). */
   note?: string
   /** Gegen versehentliches Verschieben/Drehen gesperrt (z. B. fest stehende Bühne). */
   locked?: boolean
 }
+
+/** Helper type for items with id included */
+export type ItemWithId = EventItem & { id: string }
 
 export interface Phase {
   id: string

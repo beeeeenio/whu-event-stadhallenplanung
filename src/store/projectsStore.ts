@@ -1,7 +1,14 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { v4 as uuid } from 'uuid'
-import { deleteProjectData, saveProjectData, type ProjectData } from '../utils/projectStorage'
+import {
+  deleteProjectData,
+  saveProjectData,
+  loadProjectData,
+  loadProjectVersions,
+  saveProjectVersions,
+  type ProjectData,
+} from '../utils/projectStorage'
 
 export interface ProjectMeta {
   id: string
@@ -17,6 +24,7 @@ interface ProjectsStore {
   closeProject: () => void
   renameProject: (id: string, name: string) => void
   deleteProject: (id: string) => void
+  duplicateProject: (projectId: string, newName?: string) => void
   touchProject: (id: string) => void
   importProjects: (meta: ProjectMeta[]) => void
 }
@@ -62,6 +70,39 @@ export const useProjectsStore = create<ProjectsStore>()(
           projects: state.projects.filter((p) => p.id !== id),
           currentProjectId: state.currentProjectId === id ? null : state.currentProjectId,
         }))
+      },
+
+      duplicateProject: (projectId, newName) => {
+        // Load source project data and versions
+        const sourceData = loadProjectData(projectId)
+        const sourceProject = useProjectsStore.getState().projects.find((p) => p.id === projectId)
+
+        if (!sourceData || !sourceProject) return
+
+        // Generate new ID and name
+        const newId = uuid()
+        const finalName = newName || `${sourceProject.name} (Kopie)`
+
+        // Deep clone project data
+        const duplicatedData = structuredClone(sourceData)
+
+        // Save duplicated project data
+        saveProjectData(newId, duplicatedData)
+
+        // Load and duplicate versions if they exist
+        const sourceVersions = loadProjectVersions(projectId)
+        if (sourceVersions.length > 0) {
+          const duplicatedVersions = sourceVersions.map((v) => ({
+            ...v,
+            id: uuid(),
+            data: structuredClone(v.data),
+          }))
+          saveProjectVersions(newId, duplicatedVersions)
+        }
+
+        // Add to projects list
+        const meta: ProjectMeta = { id: newId, name: finalName, updatedAt: Date.now() }
+        set((state) => ({ projects: [meta, ...state.projects] }))
       },
 
       touchProject: (id) =>
