@@ -659,7 +659,7 @@ export default function EditorView() {
       <button
         onClick={() => setGridOpen((v) => !v)}
         title="Gitter-Einstellungen (📐)"
-        className={`absolute bottom-[112px] left-[60px] z-20 w-10 h-10 rounded-full text-ink2 hover:text-ink flex items-center justify-center text-sm font-semibold ${island}`}
+        className={`absolute bottom-48 left-14 z-20 w-10 h-10 rounded-full text-ink2 hover:text-ink flex items-center justify-center text-sm font-semibold ${island}`}
       >
         📐
       </button>
@@ -668,7 +668,7 @@ export default function EditorView() {
       <button
         onClick={() => setShortcutsOpen((v) => !v)}
         title="Tastatur-Shortcuts (?)"
-        className={`absolute bottom-[112px] left-4 z-20 w-10 h-10 rounded-full text-ink2 hover:text-ink flex items-center justify-center text-sm font-semibold ${island}`}
+        className={`absolute bottom-48 left-4 z-20 w-10 h-10 rounded-full text-ink2 hover:text-ink flex items-center justify-center text-sm font-semibold ${island}`}
       >
         ?
       </button>
