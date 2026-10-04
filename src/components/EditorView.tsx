@@ -690,8 +690,21 @@ export default function EditorView() {
         />
       </div>
 
-      {/* Draggable Floating Toolbar */}
-      <FloatingToolbar onGridToggle={() => togglePanel('grid')} />
+      {/* Draggable Floating Toolbars */}
+      <FloatingToolbar
+        onMeasure={() => changeTool('measure')}
+        onArea={() => changeTool('area')}
+        onDuplicate={duplicateSelected}
+        isMeasuring={tool === 'measure'}
+        isAreaMode={tool === 'area'}
+        zoom={1} // Will be updated from viewport
+        onZoomIn={() => {}} // TODO: implement
+        onZoomOut={() => {}} // TODO: implement
+        onZoomReset={() => canvasRef.current?.fitToView()}
+        onExportImage={() => void handleExportPdf()}
+        gridEnabled={gridEnabled}
+        onGridToggle={() => setGridEnabled(!gridEnabled)}
+      />
 
       {/* Tastatur-Hilfe */}
       <button

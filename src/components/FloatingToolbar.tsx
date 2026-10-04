@@ -1,72 +1,86 @@
-import { useState, useEffect } from 'react'
-import { island } from '../utils/ui'
+import { useEffect, useState } from 'react'
+import type { FloatingPosition } from '../utils/floatingPosition'
+import { loadSavedPositions, savePositions } from '../utils/floatingPosition'
+import { ToolsToolbar } from './ToolsToolbar'
+import { SettingsToolbar } from './SettingsToolbar'
 
 interface FloatingToolbarProps {
+  // Tools toolbar
+  onMeasure: () => void
+  onArea: () => void
+  onDuplicate: () => void
+  isMeasuring: boolean
+  isAreaMode: boolean
+
+  // Settings toolbar
+  zoom: number
+  onZoomIn: () => void
+  onZoomOut: () => void
+  onZoomReset: () => void
+  onExportImage: () => void
+  gridEnabled: boolean
   onGridToggle: () => void
 }
 
-export default function FloatingToolbar({ onGridToggle }: FloatingToolbarProps) {
-  const [position, setPosition] = useState<{ x: number; y: number }>(() => {
-    const saved = localStorage.getItem('floatingToolbarPosition')
-    return saved ? JSON.parse(saved) : { x: 20, y: 200 }
+export default function FloatingToolbar({
+  onMeasure,
+  onArea,
+  onDuplicate,
+  isMeasuring,
+  isAreaMode,
+  zoom,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
+  onExportImage,
+  gridEnabled,
+  onGridToggle,
+}: FloatingToolbarProps) {
+  const [savedPositions, setSavedPositions] = useState<{
+    tools: FloatingPosition
+    settings: FloatingPosition
+  }>(() => {
+    const saved = loadSavedPositions()
+    return {
+      tools: saved.toolsToolbar || { x: 20, y: 80, anchor: 'top-left' },
+      settings: saved.settingsToolbar || { x: 20, y: 320, anchor: 'top-left' },
+    }
   })
 
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true)
-    setDragOffset({ x: e.clientX - position.x, y: e.clientY - position.y })
-  }
-
+  // Save positions whenever they change
   useEffect(() => {
-    if (!isDragging) return
-
-    const onMouseMove = (e: MouseEvent) => {
-      const newX = Math.max(0, Math.min(e.clientX - dragOffset.x, window.innerWidth - 100))
-      const newY = Math.max(0, Math.min(e.clientY - dragOffset.y, window.innerHeight - 60))
-      setPosition({ x: newX, y: newY })
-    }
-
-    const onMouseUp = () => {
-      setIsDragging(false)
-      localStorage.setItem('floatingToolbarPosition', JSON.stringify(position))
-    }
-
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-  }, [isDragging, dragOffset, position])
+    savePositions({
+      toolsToolbar: savedPositions.tools,
+      settingsToolbar: savedPositions.settings,
+    })
+  }, [savedPositions])
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        zIndex: 45,
-      }}
-      className={`flex flex-col gap-1 p-1.5 rounded-xl cursor-move select-none ${island}`}
-      onMouseDown={handleMouseDown}
-    >
-      {/* Drag-Handle */}
-      <div className="w-10 h-1 bg-line rounded-full mx-auto mb-1" />
-
-      {/* Grid-Button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation() // Prevent drag when clicking
-          onGridToggle()
-        }}
-        className="w-10 h-10 rounded-lg text-ink2 hover:text-ink flex items-center justify-center text-sm font-semibold border border-line hover:bg-chip"
-        title="Gitter-Einstellungen (📐)"
-      >
-        📐
-      </button>
-    </div>
+    <>
+      <ToolsToolbar
+        onMeasure={onMeasure}
+        onArea={onArea}
+        onDuplicate={onDuplicate}
+        isMeasuring={isMeasuring}
+        isAreaMode={isAreaMode}
+        position={savedPositions.tools}
+        onPositionChange={(pos) =>
+          setSavedPositions((prev) => ({ ...prev, tools: pos }))
+        }
+      />
+      <SettingsToolbar
+        zoom={zoom}
+        onZoomIn={onZoomIn}
+        onZoomOut={onZoomOut}
+        onZoomReset={onZoomReset}
+        onExportImage={onExportImage}
+        gridEnabled={gridEnabled}
+        onGridToggle={onGridToggle}
+        position={savedPositions.settings}
+        onPositionChange={(pos) =>
+          setSavedPositions((prev) => ({ ...prev, settings: pos }))
+        }
+      />
+    </>
   )
 }

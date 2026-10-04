@@ -5,6 +5,17 @@
  * Farben kommen aus den Design-Tokens in index.css (@theme).
  */
 
+/** Z-Index scale for stacked floating elements. */
+export const Z = {
+  canvas: 0,           // Canvas-Basis
+  selection: 10,       // Selection-Bars
+  panels: 20,          // Property panels
+  toolbars: 25,        // Floating toolbars
+  popovers: 30,        // Dropdowns, color pickers
+  modals: 40,          // Modal dialogs
+  notifications: 50,   // Toasts/alerts
+} as const
+
 const base =
   'inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors select-none ' +
   'disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1'
