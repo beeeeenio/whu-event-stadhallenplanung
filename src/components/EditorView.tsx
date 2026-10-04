@@ -561,8 +561,8 @@ export default function EditorView() {
         </div>
       )}
 
-      {/* Text-Eingabe für die freie Beschriftung */}
-      {textLabelDraft !== null && (
+      {/* Text-Eingabe für die freie Beschriftung — über CommandBar gesteuert */}
+      {activePanel === 'command' && textLabelDraft !== null && (
         <div className={`absolute left-1/2 -translate-x-1/2 bottom-[176px] z-20 p-3 w-[min(320px,calc(100vw-32px))] flex flex-col gap-2 ${island}`}>
           <input
             autoFocus
@@ -570,12 +570,15 @@ export default function EditorView() {
             onChange={(e) => setTextLabelDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') commitTextLabelDraft()
-              if (e.key === 'Escape') setTextLabelDraft(null)
+              if (e.key === 'Escape') {
+                setTextLabelDraft(null)
+                setActivePanel(null)
+              }
             }}
-            placeholder="z. B. „Einlass hier“…"
+            placeholder=”z. B. „Einlass hier”…”
             className={`w-full ${inputCls}`}
           />
-          <div className="flex items-center gap-2">
+          <div className=”flex items-center gap-2”>
             <button onClick={commitTextLabelDraft} className={`flex-1 ${btn('primary', 'sm')}`}>
               In Plan tippen zum Platzieren
             </button>

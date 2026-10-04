@@ -171,17 +171,39 @@ function EventItemShape({
         <Rect width={w} height={h} fill={item.color || getDefaultColor(item.type)} stroke={stroke} strokeWidth={strokeWidth} dash={[4, 4]} perfectDrawEnabled={false} />
       ) : item.type === 'nivtec_group' ? (
         <>
-          {/* Nur die tatsächlichen NivTec-Systempodeste zeichnen — kein Umriss-Rechteck über die
-              gesamte Bounding-Box, da L-/T-förmige Aufbauten sonst eine falsche Fläche vortäuschen. */}
           {item.nivtecData?.pieces.map((piece, i) => {
             const px = metersToPixels(piece.x, pixelsPerMeter)
             const py = metersToPixels(piece.y, pixelsPerMeter)
             const pw = metersToPixels(piece.w, pixelsPerMeter)
             const pd = metersToPixels(piece.d, pixelsPerMeter)
+            const isCorner = !!piece.corner
 
-            // TODO: Dreiecke mit Polygon rendern (react-konva unterstützt Polygon nicht direkt)
-            // Momentan: alle Pieces als Rectangles, corner-pieces mit anderem Farbton
+            if (isCorner) {
+              // Dreiecke für Corner-Pieces (tl, tr, bl, br) mit Line-basiertem Path
+              const corners: Record<string, number[][]> = {
+                tl: [[px, py], [px + pw, py], [px, py + pd]],      // top-left triangle
+                tr: [[px + pw, py], [px + pw, py + pd], [px, py]], // top-right triangle
+                bl: [[px, py], [px + pw, py + pd], [px, py + pd]], // bottom-left triangle
+                br: [[px + pw, py], [px + pw, py + pd], [px, py + pd]], // bottom-right triangle
+              }
+              const trianglePoints = corners[piece.corner as string] || corners.tl
+              const points = trianglePoints.flat()
 
+              return (
+                <Line
+                  key={i}
+                  points={points}
+                  fill="#e0e7ff"
+                  stroke={isSelected ? '#2563eb' : '#818cf8'}
+                  strokeWidth={isSelected ? 2 : 1}
+                  closed
+                  perfectDrawEnabled={false}
+                  listening={false}
+                />
+              )
+            }
+
+            // Regular rectangular pieces
             return (
               <Rect
                 key={i}

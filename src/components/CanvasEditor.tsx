@@ -591,7 +591,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
 
           {/* Gitter-Visualisierung */}
           {gridEnabledInternal && (
-            <Layer listening={false} opacity={0.2}>
+            <Layer listening={false} opacity={0.35}>
               {(() => {
                 const lines: { key: string; points: number[] }[] = []
                 // Vertical grid lines
@@ -603,7 +603,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                   lines.push({ key: `h-${y}`, points: [0, y, STAGE_WIDTH, y] })
                 }
                 return lines.map((line) => (
-                  <Line key={line.key} points={line.points} stroke="#d1d5db" strokeWidth={1} />
+                  <Line key={line.key} points={line.points} stroke="#94a3b8" strokeWidth={1.5} perfectDrawEnabled={false} />
                 ))
               })()}
             </Layer>
