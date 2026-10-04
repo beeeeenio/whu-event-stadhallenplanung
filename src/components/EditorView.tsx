@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Toolbar from './Toolbar'
 import CanvasEditor, { type CanvasEditorHandle, type CanvasViewport, type ToolMode } from './CanvasEditor'
 import InventoryPanel from './InventoryPanel'
+import GridSettingsDialog from './GridSettingsDialog'
 import PhaseTimeline from './PhaseTimeline'
 import PresentationMode from './PresentationMode'
 import ObjectPicker, { type PickerTab } from './ObjectPicker'
@@ -71,6 +72,11 @@ export default function EditorView() {
   const [commandOpen, setCommandOpen] = useState(false)
   const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [onionSkin, setOnionSkin] = useState(false)
+  const [gridOpen, setGridOpen] = useState(false)
+  const gridEnabled = useEventStore((s) => s.gridEnabled)
+  const gridSize = useEventStore((s) => s.gridSize)
+  const setGridEnabled = useEventStore((s) => s.setGridEnabled)
+  const setGridSize = useEventStore((s) => s.setGridSize)
   const [viewport, setViewport] = useState<CanvasViewport | null>(null)
   const canvasRef = useRef<CanvasEditorHandle>(null)
 
@@ -470,6 +476,8 @@ export default function EditorView() {
         ghostPhaseId={onionSkin ? prevPhaseId : null}
         ghostItemIds={ghostItemIds}
         onViewportChange={setViewport}
+        gridEnabled={gridEnabled}
+        gridSize={gridSize}
         eventName={eventName}
         phaseName={phases.find((p) => p.id === currentPhaseId)?.name || 'Phase'}
       />
@@ -647,6 +655,15 @@ export default function EditorView() {
         />
       </div>
 
+      {/* Grid-Einstellungen */}
+      <button
+        onClick={() => setGridOpen((v) => !v)}
+        title="Gitter-Einstellungen (📐)"
+        className={`absolute bottom-[112px] left-[60px] z-20 w-10 h-10 rounded-full text-ink2 hover:text-ink flex items-center justify-center text-sm font-semibold ${island}`}
+      >
+        📐
+      </button>
+
       {/* Tastatur-Hilfe */}
       <button
         onClick={() => setShortcutsOpen((v) => !v)}
@@ -675,6 +692,16 @@ export default function EditorView() {
       )}
 
       {commandOpen && <CommandBar onClose={() => setCommandOpen(false)} actions={commandActions} />}
+      {gridOpen && (
+        <GridSettingsDialog
+          isOpen={gridOpen}
+          gridEnabled={gridEnabled}
+          gridSize={gridSize}
+          onGridEnabledChange={setGridEnabled}
+          onGridSizeChange={setGridSize}
+          onClose={() => setGridOpen(false)}
+        />
+      )}
       {nivtec.inputElement}
 
       {/* Formvorschau beim Ziehen einer Kachel aus der Objekt-Bibliothek: nimmt sofort die
