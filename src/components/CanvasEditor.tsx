@@ -8,7 +8,6 @@ import { RIGGING_BARS, STAGE_FRONT_EDGE } from '../data/rigging'
 import EventItemShape from './EventItemShape'
 import type { EventItem, PhaseData } from '../types'
 import type { Placement } from '../utils/placement'
-import { snapToGrid } from '../utils/snapping'
 import { island } from '../utils/ui'
 import { exportCanvasAsImage } from '../utils/exportImage'
 
@@ -475,27 +474,20 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const handleItemDragEnd = useCallback(
     (id: string, x: number, y: number) => {
       const { selectedIds: sel, items: curItems, currentPhaseId: cp } = dragCtxRef.current
-      // Apply grid snapping if enabled
-      let finalX = x
-      let finalY = y
-      if (gridEnabledInternal) {
-        const snapped = snapToGrid(x, y, gridSizeInternal)
-        finalX = snapped.x
-        finalY = snapped.y
-      }
+      // Grid snapping is already applied in EventItemShape
       if (sel.length > 1 && sel.includes(id)) {
         const pd = curItems[id]?.phaseData[cp]
         if (pd) {
-          const dx = finalX - pd.x
-          const dy = finalY - pd.y
+          const dx = x - pd.x
+          const dy = y - pd.y
           const moveIds = sel.filter((sid) => !curItems[sid]?.locked)
           if (dx !== 0 || dy !== 0) moveItemsBy(moveIds, dx, dy)
           return
         }
       }
-      updateItemTransform(id, finalX, finalY)
+      updateItemTransform(id, x, y)
     },
-    [updateItemTransform, moveItemsBy, gridEnabledInternal, gridSizeInternal],
+    [updateItemTransform, moveItemsBy],
   )
   const handleItemRotate = useCallback(
     (id: string, x: number, y: number, rotation: number) => updateItemTransform(id, x, y, rotation),
@@ -650,6 +642,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                   onRotate={handleItemRotate}
                   draggable={tool === 'select' && !placement}
                   zoom={zoom}
+                  gridEnabled={gridEnabledInternal}
+                  gridSize={gridSizeInternal}
                 />
               )
             })}

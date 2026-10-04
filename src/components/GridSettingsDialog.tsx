@@ -23,7 +23,7 @@ export default function GridSettingsDialog({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={onClose}>
       <div
         className={`${island} max-w-sm w-full mx-4 p-6 flex flex-col gap-4`}
         onClick={(e) => e.stopPropagation()}

@@ -50,7 +50,7 @@ const SHORTCUTS: [string, string][] = [
   ['Objekte-Blatt', 'O'],
   ['Vorherige / nächste Phase', '[ · ]'],
   ['Objekt drehen', 'R'],
-  ['… gegen Uhrzeigersinn', '⇧R'],
+  ['... gegen Uhrzeigersinn', '⇧R'],
   ['Duplizieren', '⌘D'],
   ['Zur Auswahl hinzufügen/entfernen', '⇧Klick'],
   ['Mehrere Objekte per Rechteck wählen', '⇧Ziehen'],
@@ -61,7 +61,7 @@ const SHORTCUTS: [string, string][] = [
   ['Diese Hilfe', '?'],
 ]
 
-type ActivePanel = 'picker' | 'inventory' | 'properties' | 'grid' | 'command' | 'shortcuts' | null
+type ActivePanel = 'picker' | 'inventory' | 'properties' | 'grid' | 'command' | 'text' | 'shortcuts' | null
 
 export default function EditorView() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -71,10 +71,28 @@ export default function EditorView() {
   const [placement, setPlacement] = useState<(Placement & { type?: ItemType }) | null>(null)
   const [pickerTab, setPickerTab] = useState<PickerTab>('furniture')
   const [onionSkin, setOnionSkin] = useState(false)
+  const [textLabelDraft, setTextLabelDraft] = useState<string | null>(null)
   const gridEnabled = useEventStore((s) => s.gridEnabled)
   const gridSize = useEventStore((s) => s.gridSize)
   const setGridEnabled = useEventStore((s) => s.setGridEnabled)
   const setGridSize = useEventStore((s) => s.setGridSize)
+
+  // Restore grid settings from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('gridSettings')
+    if (saved) {
+      try {
+        const { enabled, size } = JSON.parse(saved)
+        if (typeof enabled === 'boolean') setGridEnabled(enabled)
+        if (typeof size === 'number') setGridSize(size)
+      } catch {}
+    }
+  }, [setGridEnabled, setGridSize])
+
+  // Save grid settings to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('gridSettings', JSON.stringify({ enabled: gridEnabled, size: gridSize }))
+  }, [gridEnabled, gridSize])
   const [viewport, setViewport] = useState<CanvasViewport | null>(null)
   const canvasRef = useRef<CanvasEditorHandle>(null)
 
@@ -119,16 +137,19 @@ export default function EditorView() {
     setActivePanel((current) => (current === panel ? null : panel))
   }, [])
 
-  const closeAllPanels = useCallback(() => {
-    setActivePanel(null)
-  }, [])
-
   // Eigenschaften-Panel ist nur für eine Einzelauswahl sinnvoll
   useEffect(() => {
     if (selectedId === null && activePanel === 'properties') {
       setActivePanel(null)
     }
   }, [selectedId, activePanel])
+
+  // Draft löschen wenn Text-Panel geschlossen wird
+  useEffect(() => {
+    if (activePanel !== 'text' && textLabelDraft !== null) {
+      setTextLabelDraft(null)
+    }
+  }, [activePanel, textLabelDraft])
 
   const prevPhaseId = useMemo(() => previousPhaseId(phases, currentPhaseId), [phases, currentPhaseId])
   const ghostItemIds = useMemo(
@@ -231,14 +252,14 @@ export default function EditorView() {
   /** Freie Text-Beschriftung: Text zuerst in einem kleinen Eingabefeld abfragen, dann per
    *  Tippen in den Plan platzieren (statt eines nativen window.prompt, das nicht ins
    *  Erscheinungsbild passt). */
-  const [textLabelDraft, setTextLabelDraft] = useState<string | null>(null)
   const commitTextLabelDraft = useCallback(() => {
     const text = textLabelDraft?.trim()
     setTextLabelDraft(null)
+    setActivePanel(null)
     if (!text) return
     setTool('select')
     setPlacement({
-      label: `Text „${text}“`,
+      label: `Text „${text}"`,
       place: (x, y) => addTextLabel(x, y, text),
       once: true,
     })
@@ -561,12 +582,12 @@ export default function EditorView() {
         </div>
       )}
 
-      {/* Text-Eingabe für die freie Beschriftung — über CommandBar gesteuert */}
-      {activePanel === 'command' && textLabelDraft !== null && (
+      {/* Text-Eingabe für die freie Beschriftung */}
+      {activePanel === 'text' && (
         <div className={`absolute left-1/2 -translate-x-1/2 bottom-[176px] z-20 p-3 w-[min(320px,calc(100vw-32px))] flex flex-col gap-2 ${island}`}>
           <input
             autoFocus
-            value={textLabelDraft}
+            value={textLabelDraft ?? ''}
             onChange={(e) => setTextLabelDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') commitTextLabelDraft()
@@ -575,10 +596,10 @@ export default function EditorView() {
                 setActivePanel(null)
               }
             }}
-            placeholder=”z. B. „Einlass hier”…”
+            placeholder='z. B. "Einlass hier"...'
             className={`w-full ${inputCls}`}
           />
-          <div className=”flex items-center gap-2”>
+          <div className="flex items-center gap-2">
             <button onClick={commitTextLabelDraft} className={`flex-1 ${btn('primary', 'sm')}`}>
               In Plan tippen zum Platzieren
             </button>
@@ -611,7 +632,7 @@ export default function EditorView() {
         <button
           onClick={() => {
             setPickerTab('rows')
-            togglePanel('picker')
+            setActivePanel(activePanel === 'picker' ? null : 'picker')
           }}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
             activePanel === 'picker' && pickerTab === 'rows' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
@@ -624,7 +645,7 @@ export default function EditorView() {
         <button
           onClick={() => {
             setPickerTab('nivtec')
-            togglePanel('picker')
+            setActivePanel(activePanel === 'picker' ? null : 'picker')
           }}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
             activePanel === 'picker' && pickerTab === 'nivtec' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
@@ -635,9 +656,9 @@ export default function EditorView() {
           NivTec
         </button>
         <button
-          onClick={() => togglePanel('command')}
+          onClick={() => setActivePanel(activePanel === 'text' ? null : 'text')}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'command' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
+            activePanel === 'text' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
           }`}
           title="Freie Textbeschriftung in den Plan setzen"
         >
@@ -670,7 +691,7 @@ export default function EditorView() {
       </div>
 
       {/* Draggable Floating Toolbar */}
-      <FloatingToolbar onGridToggle={() => togglePanel('grid')} gridOpen={activePanel === 'grid'} />
+      <FloatingToolbar onGridToggle={() => togglePanel('grid')} />
 
       {/* Tastatur-Hilfe */}
       <button

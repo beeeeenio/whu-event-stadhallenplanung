@@ -2,6 +2,7 @@ import { memo, useRef } from 'react'
 import { Group, Rect, Circle, Line, Text } from 'react-konva'
 import type { EventItem, ItemType, PhaseData } from '../types'
 import { metersToPixels } from '../utils/scale'
+import { snapToGrid } from '../utils/snapping'
 import type Konva from 'konva'
 
 /** Default colors for each item type */
@@ -48,6 +49,8 @@ interface Props {
   draggable?: boolean
   /** aktueller Canvas-Zoom, um eine konstante Mindest-Klickfläche auf dem Bildschirm sicherzustellen */
   zoom?: number
+  gridEnabled?: boolean
+  gridSize?: number
 }
 
 /** Mindestgröße der (unsichtbaren) Klick-/Greiffläche in Bildschirm-Pixeln, unabhängig vom Zoom. */
@@ -71,6 +74,8 @@ function EventItemShape({
   onRotate,
   draggable = true,
   zoom = 1,
+  gridEnabled = false,
+  gridSize = 20,
 }: Props) {
   const w = metersToPixels(item.width, pixelsPerMeter)
   const h = metersToPixels(item.height, pixelsPerMeter)
@@ -79,7 +84,16 @@ function EventItemShape({
   const isLocked = !!item.locked
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    onDragEnd(item.id, e.target.x(), e.target.y())
+    let x = e.target.x()
+    let y = e.target.y()
+    // Apply grid snapping if enabled
+    if (gridEnabled) {
+      const snapped = snapToGrid(x, y, gridSize)
+      x = snapped.x
+      y = snapped.y
+      e.target.position({ x, y })
+    }
+    onDragEnd(item.id, x, y)
   }
 
   // Stage ist ebenfalls draggable (zum Verschieben der Ansicht). Ohne cancelBubble würde ein

@@ -3,10 +3,9 @@ import { island } from '../utils/ui'
 
 interface FloatingToolbarProps {
   onGridToggle: () => void
-  gridOpen: boolean
 }
 
-export default function FloatingToolbar({ onGridToggle, gridOpen }: FloatingToolbarProps) {
+export default function FloatingToolbar({ onGridToggle }: FloatingToolbarProps) {
   const [position, setPosition] = useState<{ x: number; y: number }>(() => {
     const saved = localStorage.getItem('floatingToolbarPosition')
     return saved ? JSON.parse(saved) : { x: 20, y: 200 }
@@ -24,7 +23,9 @@ export default function FloatingToolbar({ onGridToggle, gridOpen }: FloatingTool
     if (!isDragging) return
 
     const onMouseMove = (e: MouseEvent) => {
-      setPosition({ x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y })
+      const newX = Math.max(0, Math.min(e.clientX - dragOffset.x, window.innerWidth - 100))
+      const newY = Math.max(0, Math.min(e.clientY - dragOffset.y, window.innerHeight - 60))
+      setPosition({ x: newX, y: newY })
     }
 
     const onMouseUp = () => {
