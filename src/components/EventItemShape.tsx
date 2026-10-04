@@ -181,17 +181,18 @@ function EventItemShape({
 
             if (piece.corner) {
               // Dreiecke: Hypotenuse verbindet zwei Nachbarecken, leere Ecke hat kein Material
+              // Points müssen flach sein für Konva: [x1, y1, x2, y2, x3, y3]
               const points =
-                piece.corner === 'tl' ? [[px, py], [px + pw, py], [px, py + pd]] :
-                piece.corner === 'tr' ? [[px, py], [px + pw, py], [px + pw, py + pd]] :
-                piece.corner === 'bl' ? [[px, py], [px, py + pd], [px + pw, py + pd]] :
-                /* br */ [[px + pw, py], [px, py + pd], [px + pw, py + pd]]
+                piece.corner === 'tl' ? [px, py, px + pw, py, px, py + pd] :
+                piece.corner === 'tr' ? [px, py, px + pw, py, px + pw, py + pd] :
+                piece.corner === 'bl' ? [px, py, px, py + pd, px + pw, py + pd] :
+                /* br */ [px + pw, py, px, py + pd, px + pw, py + pd]
 
               return (
                 <Polygon
                   key={i}
                   points={points}
-                  fill={piece.corner ? '#bfdbfe' : '#dbeafe'}
+                  fill="#bfdbfe"
                   stroke={isSelected ? '#2563eb' : '#1d4ed8'}
                   strokeWidth={isSelected ? 2 : 1}
                   perfectDrawEnabled={false}

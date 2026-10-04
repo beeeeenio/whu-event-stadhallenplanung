@@ -36,7 +36,7 @@ export interface Piece2D {
   y: number
   w: number
   d: number
-  corner?: boolean
+  corner?: 'tl' | 'tr' | 'bl' | 'br'
   /** von NivTec vergebene Stück-ID, nur informativ */
   id?: string
 }

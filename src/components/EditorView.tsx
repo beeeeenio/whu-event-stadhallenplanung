@@ -60,19 +60,16 @@ const SHORTCUTS: [string, string][] = [
   ['Diese Hilfe', '?'],
 ]
 
+type ActivePanel = 'picker' | 'inventory' | 'properties' | 'grid' | 'command' | 'shortcuts' | null
+
 export default function EditorView() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [presenting, setPresenting] = useState(false)
-  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null)
   const [tool, setTool] = useState<ToolMode>('select')
   const [placement, setPlacement] = useState<(Placement & { type?: ItemType }) | null>(null)
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerTab, setPickerTab] = useState<PickerTab>('furniture')
-  const [inventoryOpen, setInventoryOpen] = useState(false)
-  const [commandOpen, setCommandOpen] = useState(false)
-  const [propertiesOpen, setPropertiesOpen] = useState(false)
   const [onionSkin, setOnionSkin] = useState(false)
-  const [gridOpen, setGridOpen] = useState(false)
   const gridEnabled = useEventStore((s) => s.gridEnabled)
   const gridSize = useEventStore((s) => s.gridSize)
   const setGridEnabled = useEventStore((s) => s.setGridEnabled)
@@ -116,10 +113,21 @@ export default function EditorView() {
     })
   }, [items, currentPhaseId])
 
+  // Panel-Toggle-Helper
+  const togglePanel = useCallback((panel: ActivePanel) => {
+    setActivePanel((current) => (current === panel ? null : panel))
+  }, [])
+
+  const closeAllPanels = useCallback(() => {
+    setActivePanel(null)
+  }, [])
+
   // Eigenschaften-Panel ist nur für eine Einzelauswahl sinnvoll
   useEffect(() => {
-    if (selectedId === null) setPropertiesOpen(false)
-  }, [selectedId])
+    if (selectedId === null && activePanel === 'properties') {
+      setActivePanel(null)
+    }
+  }, [selectedId, activePanel])
 
   const prevPhaseId = useMemo(() => previousPhaseId(phases, currentPhaseId), [phases, currentPhaseId])
   const ghostItemIds = useMemo(
