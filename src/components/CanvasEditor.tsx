@@ -533,6 +533,26 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
             </Layer>
           )}
 
+          {/* Gitter-Visualisierung */}
+          {gridEnabledInternal && (
+            <Layer listening={false} opacity={0.2}>
+              {(() => {
+                const lines: { key: string; points: number[] }[] = []
+                // Vertical grid lines
+                for (let x = 0; x <= STAGE_WIDTH; x += gridSizeInternal) {
+                  lines.push({ key: `v-${x}`, points: [x, 0, x, STAGE_HEIGHT] })
+                }
+                // Horizontal grid lines
+                for (let y = 0; y <= STAGE_HEIGHT; y += gridSizeInternal) {
+                  lines.push({ key: `h-${y}`, points: [0, y, STAGE_WIDTH, y] })
+                }
+                return lines.map((line) => (
+                  <Line key={line.key} points={line.points} stroke="#d1d5db" strokeWidth={1} />
+                ))
+              })()}
+            </Layer>
+          )}
+
           {/* Geisterbild der Vorphase (Konzept C): nur, was dort anders stand oder inzwischen weg ist */}
           {ghostPhaseId && ghostItemIds.length > 0 && (
             <Layer listening={false} opacity={0.3}>

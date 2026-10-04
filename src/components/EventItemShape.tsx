@@ -1,8 +1,37 @@
 import { memo, useRef } from 'react'
 import { Group, Rect, Circle, Line, Text } from 'react-konva'
-import type { EventItem, PhaseData } from '../types'
+import type { EventItem, ItemType, PhaseData } from '../types'
 import { metersToPixels } from '../utils/scale'
 import type Konva from 'konva'
+
+/** Default colors for each item type */
+function getDefaultColor(type: ItemType): string {
+  const defaults: Record<ItemType, string> = {
+    table_round: '#FCD34D',      // yellow
+    table_rect: '#FCD34D',       // yellow
+    table_high: '#FCD34D',       // yellow
+    table_low_round: '#FCD34D',  // yellow
+    chair: '#F87171',            // red
+    chair_row_group: '#F87171',  // red
+    bar: '#A78BFA',              // purple
+    truss: '#D1D5DB',            // grey
+    curtain: '#7c3aed',          // purple (keep existing)
+    podium: '#A78BFA',           // purple
+    nivtec_group: '#A78BFA',     // purple
+    area: '#60A5FA',             // blue
+    exhibition_stand: '#F87171', // red
+    sofa_3: '#F87171',           // red
+    sofa_2: '#F87171',           // red
+    sofa_corner: '#F87171',      // red
+    armchair: '#F87171',         // red
+    coat_rack: '#D1D5DB',        // grey
+    plant: '#10b981',            // green
+    screen: '#D1D5DB',           // grey
+    pipe_drape: '#7c3aed',       // purple
+    text_label: '#1f2937',       // dark grey
+  }
+  return defaults[type]
+}
 
 interface Props {
   item: EventItem
@@ -135,11 +164,11 @@ function EventItemShape({
       {/* Unsichtbare, vergrößerte Trefferfläche für zuverlässiges Greifen auch bei kleinem Zoom */}
       <Rect x={hitX} y={hitY} width={hitW} height={hitH} fill="rgba(255,255,255,0.001)" />
       {isLabel ? null : item.type === 'table_round' || item.type === 'table_high' ? (
-        <Circle radius={w / 2} fill="#fef3c7" stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
+        <Circle radius={w / 2} fill={item.color || getDefaultColor(item.type)} stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
       ) : item.type === 'curtain' ? (
-        <Line points={[0, 0, w, 0]} stroke="#7c3aed" strokeWidth={6} lineCap="round" perfectDrawEnabled={false} />
+        <Line points={[0, 0, w, 0]} stroke={item.color || getDefaultColor(item.type)} strokeWidth={6} lineCap="round" perfectDrawEnabled={false} />
       ) : item.type === 'truss' ? (
-        <Rect width={w} height={h} fill="#e5e7eb" stroke={stroke} strokeWidth={strokeWidth} dash={[4, 4]} perfectDrawEnabled={false} />
+        <Rect width={w} height={h} fill={item.color || getDefaultColor(item.type)} stroke={stroke} strokeWidth={strokeWidth} dash={[4, 4]} perfectDrawEnabled={false} />
       ) : item.type === 'nivtec_group' ? (
         <>
           {/* Nur die tatsächlichen NivTec-Systempodeste zeichnen — kein Umriss-Rechteck über die
@@ -200,7 +229,7 @@ function EventItemShape({
                   y={cy - seatSize / 2}
                   width={seatSize}
                   height={seatSize}
-                  fill="#f3f4f6"
+                  fill={item.color || getDefaultColor(item.type)}
                   stroke="#9ca3af"
                   strokeWidth={0.5}
                   perfectDrawEnabled={false}
@@ -211,7 +240,7 @@ function EventItemShape({
           )}
         </>
       ) : (
-        <Rect width={w} height={h} fill="#f3f4f6" stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
+        <Rect width={w} height={h} fill={item.color || getDefaultColor(item.type)} stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
       )}
       {isLabel ? (
         <Text

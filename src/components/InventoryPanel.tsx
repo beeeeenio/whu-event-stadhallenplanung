@@ -5,6 +5,36 @@ import { exportInventoryCsv } from '../utils/exportInventory'
 import { crossPhaseInventory, peakAsSummary, sortPhases } from '../utils/phaseDiff'
 import { btn, input, island, segmentedGroup, segmentedItem } from '../utils/ui'
 import type { EventItem, Phase } from '../types'
+import ColorPickerDialog from './ColorPickerDialog'
+
+/** Default colors for each item type */
+function getDefaultColor(type: EventItem['type']): string {
+  const defaults: Record<EventItem['type'], string> = {
+    table_round: '#FCD34D',      // yellow
+    table_rect: '#FCD34D',       // yellow
+    table_high: '#FCD34D',       // yellow
+    table_low_round: '#FCD34D',  // yellow
+    chair: '#F87171',            // red
+    chair_row_group: '#F87171',  // red
+    bar: '#A78BFA',              // purple
+    truss: '#D1D5DB',            // grey
+    curtain: '#7c3aed',          // purple
+    podium: '#A78BFA',           // purple
+    nivtec_group: '#A78BFA',     // purple
+    area: '#60A5FA',             // blue
+    exhibition_stand: '#F87171', // red
+    sofa_3: '#F87171',           // red
+    sofa_2: '#F87171',           // red
+    sofa_corner: '#F87171',      // red
+    armchair: '#F87171',         // red
+    coat_rack: '#D1D5DB',        // grey
+    plant: '#10b981',            // green
+    screen: '#D1D5DB',           // grey
+    pipe_drape: '#7c3aed',       // purple
+    text_label: '#1f2937',       // dark grey
+  }
+  return defaults[type]
+}
 
 interface Props {
   selectedIds: string[]
@@ -47,6 +77,8 @@ function PhaseVisibilityDots({ item, phases, currentPhaseId }: { item: EventItem
 export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props) {
   const [tab, setTab] = useState<Tab>('summary')
   const [search, setSearch] = useState('')
+  const [colorPickerOpen, setColorPickerOpen] = useState(false)
+  const [colorPickerItemId, setColorPickerItemId] = useState<string | null>(null)
   const items = useEventStore((s) => s.items)
   const itemOrder = useEventStore((s) => s.itemOrder)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
@@ -54,6 +86,7 @@ export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props
   const phases = useEventStore((s) => s.phases)
   const removeItem = useEventStore((s) => s.removeItem)
   const toggleItemVisible = useEventStore((s) => s.toggleItemVisible)
+  const setItemColor = useEventStore((s) => s.setItemColor)
 
   const counts = countVisibleItems(items, currentPhaseId)
   const list = visibleItemList(items, itemOrder, currentPhaseId)
@@ -134,6 +167,15 @@ export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props
                     >
                       {n}. {item.label}
                     </button>
+                    <button
+                      onClick={() => {
+                        setColorPickerItemId(item.id)
+                        setColorPickerOpen(true)
+                      }}
+                      title="Farbe wählen"
+                      className="flex items-center justify-center w-6 h-6 rounded-lg border border-gray-300 flex-shrink-0 hover:ring-2 hover:ring-offset-1 hover:ring-gray-300 transition-all"
+                      style={{ backgroundColor: item.color || getDefaultColor(item.type) }}
+                    />
                     <button
                       onClick={() => toggleItemVisible(item.id, false)}
                       title="Nur in dieser Phase ausblenden"
@@ -254,6 +296,23 @@ export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props
           </button>
         </div>
       )}
+
+      {/* Color Picker Dialog */}
+      <ColorPickerDialog
+        isOpen={colorPickerOpen}
+        currentColor={colorPickerItemId ? (items[colorPickerItemId]?.color || getDefaultColor(items[colorPickerItemId]?.type || 'table_round')) : '#FCD34D'}
+        onApply={(color) => {
+          if (colorPickerItemId) {
+            setItemColor(colorPickerItemId, color)
+          }
+          setColorPickerOpen(false)
+          setColorPickerItemId(null)
+        }}
+        onCancel={() => {
+          setColorPickerOpen(false)
+          setColorPickerItemId(null)
+        }}
+      />
     </aside>
   )
 }
