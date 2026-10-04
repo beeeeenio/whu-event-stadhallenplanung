@@ -7,6 +7,7 @@ import PhaseTimeline from './PhaseTimeline'
 import PresentationMode from './PresentationMode'
 import ObjectPicker, { type PickerTab } from './ObjectPicker'
 import CommandBar, { type CommandActions } from './CommandBar'
+import FloatingToolbar from './FloatingToolbar'
 import { SelectionBar, MultiSelectionBar, PropertiesPanel } from './SelectionControls'
 import { useNivtecImport } from './useNivtecImport'
 import { useEventStore } from '../store/store'
@@ -214,7 +215,7 @@ export default function EditorView() {
         const c = viewCenter()
         select(addChairRowGroup(c.x, c.y, rows, cols))
         setPlacement(null)
-        setPickerOpen(false)
+        setActivePanel((p) => (p === 'picker' ? null : p))
         return
       }
       setPlacement({
@@ -222,7 +223,7 @@ export default function EditorView() {
         place: (x, y) => addChairRowGroup(x, y, rows, cols),
         once: true,
       })
-      setPickerOpen(false)
+      setActivePanel((p) => (p === 'picker' ? null : p))
     },
     [addChairRowGroup, viewCenter, select],
   )
@@ -269,7 +270,7 @@ export default function EditorView() {
         if (!pos) return
         const id = addItem(st.type, pos.x, pos.y)
         select(id)
-        setPickerOpen(false)
+        setActivePanel((p) => (p === 'picker' ? null : p))
       }
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp, { once: true })
@@ -306,7 +307,7 @@ export default function EditorView() {
 
   const openPicker = useCallback((tab: PickerTab) => {
     setPickerTab(tab)
-    setPickerOpen(true)
+    setActivePanel('picker')
   }, [])
 
   const commandActions = useMemo<CommandActions>(
@@ -319,12 +320,12 @@ export default function EditorView() {
       exportPdf: () => void handleExportPdf(),
       present: () => setPresenting(true),
       toggleOnionSkin: () => setOnionSkin((v) => !v),
-      toggleInventory: () => setInventoryOpen((v) => !v),
+      toggleInventory: () => togglePanel('inventory'),
       fitToView: () => canvasRef.current?.fitToView(),
-      showShortcuts: () => setShortcutsOpen(true),
+      showShortcuts: () => setActivePanel('shortcuts'),
       goToProjects: closeProject,
     }),
-    [placeType, placeChairRows, changeTool, openPicker, nivtec.open, handleExportPdf, closeProject],
+    [placeType, placeChairRows, changeTool, openPicker, nivtec.open, handleExportPdf, closeProject, togglePanel],
   )
 
   useEffect(() => {
@@ -332,12 +333,12 @@ export default function EditorView() {
       const isMod = e.ctrlKey || e.metaKey
       if (isMod && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        setCommandOpen((v) => !v)
+        togglePanel('command')
         return
       }
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
-      if (commandOpen) return
+      if (activePanel === 'command') return
 
       if (isMod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
@@ -364,19 +365,19 @@ export default function EditorView() {
         return
       }
       if (e.key === '?') {
-        setShortcutsOpen((v) => !v)
+        togglePanel('shortcuts')
         return
       }
       if (e.key === '/') {
         e.preventDefault()
-        setCommandOpen(true)
+        setActivePanel('command')
         return
       }
       if (key === 'v') return changeTool('select')
       if (key === 'm') return changeTool('measure')
       if (key === 'b') return changeTool('area')
       if (key === 'o') {
-        setPickerOpen((v) => !v)
+        togglePanel('picker')
         return
       }
       if (e.key === '[' || e.key === ']') {
@@ -390,22 +391,18 @@ export default function EditorView() {
       }
 
       if (e.key === 'Escape') {
-        // Von innen nach außen schließen: Platzieren → Werkzeug → Blätter → Auswahl → Hilfe
+        // Von innen nach außen schließen: Platzieren → Werkzeug → Panels → Auswahl
         if (placement) setPlacement(null)
         else if (tool !== 'select') setTool('select')
-        else if (pickerOpen) setPickerOpen(false)
-        else if (propertiesOpen) setPropertiesOpen(false)
+        else if (activePanel) setActivePanel(null)
         else if (selectedIds.length > 0) select(null)
-        else if (shortcutsOpen) setShortcutsOpen(false)
-        else if (inventoryOpen) setInventoryOpen(false)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
     undo, redo, rotateItem, selectedId, selectedIds, duplicateSelected, deleteSelection, changeTool, select,
-    commandOpen, placement, tool, pickerOpen, propertiesOpen, shortcutsOpen, inventoryOpen,
-    phases, currentPhaseId, setCurrentPhase,
+    activePanel, placement, tool, phases, currentPhaseId, setCurrentPhase, togglePanel,
   ])
 
   // Kontextleiste an der Auswahl ausrichten. Über dem Objekt braucht es genug Abstand, um den
@@ -493,7 +490,7 @@ export default function EditorView() {
       <Toolbar
         onExportPdf={handleExportPdf}
         onPresent={() => setPresenting(true)}
-        onOpenCommand={() => setCommandOpen(true)}
+        onOpenCommand={() => setActivePanel('command')}
         onionSkin={onionSkin}
         onToggleOnionSkin={() => setOnionSkin((v) => !v)}
         hasPreviousPhase={!!prevPhaseId}
@@ -507,8 +504,8 @@ export default function EditorView() {
             onDuplicate={duplicateSelected}
             onDelete={deleteSelection}
             onHideInPhase={hideSelection}
-            onOpenProperties={() => setPropertiesOpen((v) => !v)}
-            propertiesOpen={propertiesOpen}
+            onOpenProperties={() => togglePanel('properties')}
+            propertiesOpen={activePanel === 'properties'}
           />
         </div>
       )}
@@ -522,26 +519,26 @@ export default function EditorView() {
 
       {/* Rechte Seite: Inventar-Blatt und Objekt-Eigenschaften */}
       <div className="absolute right-4 top-[84px] bottom-[112px] z-20 flex gap-3 items-start pointer-events-none">
-        {propertiesOpen && selectedItem && selectedVisible && (
+        {activePanel === 'properties' && selectedItem && selectedVisible && (
           <div className="pointer-events-auto">
             <PropertiesPanel
               item={selectedItem}
               currentPhaseId={currentPhaseId}
-              onClose={() => setPropertiesOpen(false)}
+              onClose={() => setActivePanel(null)}
               onDuplicate={duplicateSelected}
               onDelete={deleteSelection}
             />
           </div>
         )}
-        {inventoryOpen && (
+        {activePanel === 'inventory' && (
           <div className="pointer-events-auto h-full flex">
-            <InventoryPanel selectedIds={selectedIds} onSelect={selectFromInventory} onClose={() => setInventoryOpen(false)} />
+            <InventoryPanel selectedIds={selectedIds} onSelect={selectFromInventory} onClose={() => setActivePanel(null)} />
           </div>
         )}
       </div>
 
       {/* Objekt-Blatt über dem Dock */}
-      {pickerOpen && (
+      {activePanel === 'picker' && (
         <div className="absolute left-1/2 -translate-x-1/2 bottom-[176px] z-20">
           <ObjectPicker
             tab={pickerTab}
@@ -552,13 +549,13 @@ export default function EditorView() {
               else {
                 placeType(type, 1, 'tap')
                 // Blatt einklappen, damit der Plan zum Hineintippen frei ist (O öffnet es wieder)
-                setPickerOpen(false)
+                setActivePanel(null)
               }
             }}
             onInsertCenter={(type) => placeType(type, 1, 'center')}
             onCreateChairRows={placeChairRows}
             onImportNivtec={nivtec.open}
-            onClose={() => setPickerOpen(false)}
+            onClose={() => setActivePanel(null)}
             onTileDragStart={handleTileDragStart}
           />
         </div>
@@ -597,11 +594,11 @@ export default function EditorView() {
         <div className="w-px h-8 bg-line mx-1" />
         <button
           onClick={() => {
-            if (pickerOpen && (pickerTab === 'furniture' || pickerTab === 'infrastructure')) setPickerOpen(false)
+            if (activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure')) setActivePanel(null)
             else openPicker(pickerTab === 'rows' || pickerTab === 'nivtec' ? 'furniture' : pickerTab)
           }}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            pickerOpen && (pickerTab === 'furniture' || pickerTab === 'infrastructure') ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
+            activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure') ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
           }`}
           title="Objekt-Bibliothek (O)"
         >
@@ -609,9 +606,9 @@ export default function EditorView() {
           Objekte
         </button>
         <button
-          onClick={() => (pickerOpen && pickerTab === 'rows' ? setPickerOpen(false) : openPicker('rows'))}
+          onClick={() => (activePanel === 'picker' && pickerTab === 'rows' ? setActivePanel(null) : openPicker('rows'))}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            pickerOpen && pickerTab === 'rows' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
+            activePanel === 'picker' && pickerTab === 'rows' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
           }`}
           title="Stuhlreihen-Generator"
         >
@@ -619,9 +616,9 @@ export default function EditorView() {
           Reihen
         </button>
         <button
-          onClick={() => (pickerOpen && pickerTab === 'nivtec' ? setPickerOpen(false) : openPicker('nivtec'))}
+          onClick={() => (activePanel === 'picker' && pickerTab === 'nivtec' ? setActivePanel(null) : openPicker('nivtec'))}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            pickerOpen && pickerTab === 'nivtec' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
+            activePanel === 'picker' && pickerTab === 'nivtec' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
           }`}
           title="NivTec Import"
         >
@@ -658,33 +655,27 @@ export default function EditorView() {
           onPresent={() => setPresenting(true)}
           onionSkin={onionSkin}
           onToggleOnionSkin={() => setOnionSkin((v) => !v)}
-          inventoryOpen={inventoryOpen}
-          onToggleInventory={() => setInventoryOpen((v) => !v)}
+          inventoryOpen={activePanel === 'inventory'}
+          onToggleInventory={() => togglePanel('inventory')}
         />
       </div>
 
-      {/* Grid-Einstellungen */}
-      <button
-        onClick={() => setGridOpen((v) => !v)}
-        title="Gitter-Einstellungen (📐)"
-        className={`absolute bottom-48 left-14 z-20 w-10 h-10 rounded-full text-ink2 hover:text-ink flex items-center justify-center text-sm font-semibold ${island}`}
-      >
-        📐
-      </button>
+      {/* Draggable Floating Toolbar */}
+      <FloatingToolbar onGridToggle={() => togglePanel('grid')} gridOpen={activePanel === 'grid'} />
 
       {/* Tastatur-Hilfe */}
       <button
-        onClick={() => setShortcutsOpen((v) => !v)}
+        onClick={() => togglePanel('shortcuts')}
         title="Tastatur-Shortcuts (?)"
         className={`absolute bottom-48 left-4 z-20 w-10 h-10 rounded-full text-ink2 hover:text-ink flex items-center justify-center text-sm font-semibold ${island}`}
       >
         ?
       </button>
-      {shortcutsOpen && (
+      {activePanel === 'shortcuts' && (
         <div className={`absolute bottom-[160px] left-4 z-30 p-3.5 w-72 text-xs space-y-2 ${island}`}>
           <div className="flex items-center justify-between gap-2 pb-1 border-b border-chip">
             <span className="font-bold text-ink text-sm">Tastatur-Shortcuts</span>
-            <button onClick={() => setShortcutsOpen(false)} className="text-ink3 hover:text-ink leading-none text-base px-1 -mr-1">
+            <button onClick={() => setActivePanel(null)} className="text-ink3 hover:text-ink leading-none text-base px-1 -mr-1">
               ×
             </button>
           </div>
@@ -699,15 +690,15 @@ export default function EditorView() {
         </div>
       )}
 
-      {commandOpen && <CommandBar onClose={() => setCommandOpen(false)} actions={commandActions} />}
-      {gridOpen && (
+      {activePanel === 'command' && <CommandBar onClose={() => setActivePanel(null)} actions={commandActions} />}
+      {activePanel === 'grid' && (
         <GridSettingsDialog
-          isOpen={gridOpen}
+          isOpen={true}
           gridEnabled={gridEnabled}
           gridSize={gridSize}
           onGridEnabledChange={setGridEnabled}
           onGridSizeChange={setGridSize}
-          onClose={() => setGridOpen(false)}
+          onClose={() => setActivePanel(null)}
         />
       )}
       {nivtec.inputElement}
