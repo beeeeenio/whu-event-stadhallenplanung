@@ -606,7 +606,10 @@ export default function EditorView() {
           Objekte
         </button>
         <button
-          onClick={() => (activePanel === 'picker' && pickerTab === 'rows' ? setActivePanel(null) : openPicker('rows'))}
+          onClick={() => {
+            setPickerTab('rows')
+            togglePanel('picker')
+          }}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
             activePanel === 'picker' && pickerTab === 'rows' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
           }`}
@@ -616,7 +619,10 @@ export default function EditorView() {
           Reihen
         </button>
         <button
-          onClick={() => (activePanel === 'picker' && pickerTab === 'nivtec' ? setActivePanel(null) : openPicker('nivtec'))}
+          onClick={() => {
+            setPickerTab('nivtec')
+            togglePanel('picker')
+          }}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
             activePanel === 'picker' && pickerTab === 'nivtec' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
           }`}
@@ -626,9 +632,9 @@ export default function EditorView() {
           NivTec
         </button>
         <button
-          onClick={() => setTextLabelDraft((v) => (v === null ? '' : null))}
+          onClick={() => togglePanel('command')}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            textLabelDraft !== null ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
+            activePanel === 'command' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
           }`}
           title="Freie Textbeschriftung in den Plan setzen"
         >
