@@ -1,5 +1,5 @@
 import { memo, useRef } from 'react'
-import { Group, Rect, Circle, Line, Text, Polygon } from 'react-konva'
+import { Group, Rect, Circle, Line, Text } from 'react-konva'
 import type { EventItem, ItemType, PhaseData } from '../types'
 import { metersToPixels } from '../utils/scale'
 import type Konva from 'konva'
@@ -179,27 +179,8 @@ function EventItemShape({
             const pw = metersToPixels(piece.w, pixelsPerMeter)
             const pd = metersToPixels(piece.d, pixelsPerMeter)
 
-            if (piece.corner) {
-              // Dreiecke: Hypotenuse verbindet zwei Nachbarecken, leere Ecke hat kein Material
-              // Points müssen flach sein für Konva: [x1, y1, x2, y2, x3, y3]
-              const points =
-                piece.corner === 'tl' ? [px, py, px + pw, py, px, py + pd] :
-                piece.corner === 'tr' ? [px, py, px + pw, py, px + pw, py + pd] :
-                piece.corner === 'bl' ? [px, py, px, py + pd, px + pw, py + pd] :
-                /* br */ [px + pw, py, px, py + pd, px + pw, py + pd]
-
-              return (
-                <Polygon
-                  key={i}
-                  points={points}
-                  fill="#bfdbfe"
-                  stroke={isSelected ? '#2563eb' : '#1d4ed8'}
-                  strokeWidth={isSelected ? 2 : 1}
-                  perfectDrawEnabled={false}
-                  listening={false}
-                />
-              )
-            }
+            // TODO: Dreiecke mit Polygon rendern (react-konva unterstützt Polygon nicht direkt)
+            // Momentan: alle Pieces als Rectangles, corner-pieces mit anderem Farbton
 
             return (
               <Rect
