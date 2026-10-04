@@ -80,6 +80,12 @@ export interface CanvasEditorHandle {
   /** Ansicht auf den Canvas-Punkt (px) zentrieren — aber nur, wenn er außerhalb des sichtbaren
    *  Ausschnitts (abzüglich Rand für die schwebenden Inseln) liegt. Zoom bleibt unverändert. */
   panToItem: (x: number, y: number) => void
+  /** Aktuellen Zoom-Level abrufen (0.25 - 6). */
+  getCurrentZoom: () => number
+  /** Zoom vergrößern. */
+  zoomIn: () => void
+  /** Zoom verkleinern. */
+  zoomOut: () => void
 }
 
 // Canvas-Grundfläche = kalibriertes Erdgeschoss (Stromplan). Bei DEFAULT_PIXELS_PER_METER=20px/m
@@ -228,6 +234,19 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       const MARGIN = 120
       if (sx >= MARGIN && sx <= w - MARGIN && sy >= MARGIN && sy <= h - MARGIN) return
       setStagePos({ x: w / 2 - x * zoom, y: h / 2 - y * zoom })
+    },
+    getCurrentZoom: () => zoom,
+    zoomIn: () => {
+      if (!containerSize) return
+      const newZoom = Math.min(zoom + ZOOM_STEP, MAX_ZOOM)
+      const point = { x: containerSize.width / 2, y: containerSize.height / 2 }
+      zoomAtPoint(newZoom, point)
+    },
+    zoomOut: () => {
+      if (!containerSize) return
+      const newZoom = Math.max(zoom - ZOOM_STEP, MIN_ZOOM)
+      const point = { x: containerSize.width / 2, y: containerSize.height / 2 }
+      zoomAtPoint(newZoom, point)
     },
   }))
 

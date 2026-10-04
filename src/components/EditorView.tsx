@@ -697,9 +697,9 @@ export default function EditorView() {
         onDuplicate={duplicateSelected}
         isMeasuring={tool === 'measure'}
         isAreaMode={tool === 'area'}
-        zoom={1} // Will be updated from viewport
-        onZoomIn={() => {}} // TODO: implement
-        onZoomOut={() => {}} // TODO: implement
+        zoom={viewport?.zoom ?? 1}
+        onZoomIn={() => canvasRef.current?.zoomIn()}
+        onZoomOut={() => canvasRef.current?.zoomOut()}
         onZoomReset={() => canvasRef.current?.fitToView()}
         onExportImage={() => void handleExportPdf()}
         gridEnabled={gridEnabled}
