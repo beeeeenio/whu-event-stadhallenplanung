@@ -7,13 +7,13 @@ import type Konva from 'konva'
  * @param scale Optional pixel ratio for the export (default: 1.5)
  */
 export async function exportCanvasAsImage(
-  stageRef: React.RefObject<Konva.Stage>,
+  stageRef: React.RefObject<Konva.Stage | null>,
   filename: string,
   scale: number = 1.5,
 ): Promise<void> {
   const stage = stageRef.current
   if (!stage) {
-    throw new Error('Stage ref is not available')
+    return
   }
 
   // Export as PNG with high quality

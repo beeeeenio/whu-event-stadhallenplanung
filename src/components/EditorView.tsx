@@ -83,6 +83,7 @@ export default function EditorView() {
   const items = useEventStore((s) => s.items)
   const itemOrder = useEventStore((s) => s.itemOrder)
   const removeItems = useEventStore((s) => s.removeItems)
+  const eventName = useEventStore((s) => s.eventName)
   const rotateItem = useEventStore((s) => s.rotateItem)
   const duplicateItem = useEventStore((s) => s.duplicateItem)
   const toggleItemsVisible = useEventStore((s) => s.toggleItemsVisible)
@@ -469,6 +470,8 @@ export default function EditorView() {
         ghostPhaseId={onionSkin ? prevPhaseId : null}
         ghostItemIds={ghostItemIds}
         onViewportChange={setViewport}
+        eventName={eventName}
+        phaseName={phases.find((p) => p.id === currentPhaseId)?.name || 'Phase'}
       />
 
       <Toolbar

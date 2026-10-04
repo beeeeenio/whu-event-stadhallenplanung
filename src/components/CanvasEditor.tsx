@@ -756,7 +756,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
         >
           ⤢
         </button>
-        <div class="w-6 h-px bg-line my-0.5" />
+        <div className="w-6 h-px bg-line my-0.5" />
         <button
           onClick={handleExportImage}
           className="w-9 h-9 rounded-xl text-ink hover:bg-chip text-[15px] leading-none"
