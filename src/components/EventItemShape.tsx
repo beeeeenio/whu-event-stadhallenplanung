@@ -18,7 +18,7 @@ function getDefaultColor(type: ItemType): string {
     truss: '#D1D5DB',            // grey
     curtain: '#7c3aed',          // purple (keep existing)
     podium: '#A78BFA',           // purple
-    nivtec_group: '#A78BFA',     // purple
+    nivtec_group: '#1d4ed8',     // blue
     area: '#60A5FA',             // blue
     exhibition_stand: '#F87171', // red
     sofa_3: '#F87171',           // red
@@ -191,6 +191,8 @@ function EventItemShape({
             const pw = metersToPixels(piece.w, pixelsPerMeter)
             const pd = metersToPixels(piece.d, pixelsPerMeter)
             const isCorner = !!piece.corner
+            const baseColor = item.color ?? '#1d4ed8'
+            const lightColor = hexToRgba(baseColor, 0.2)
 
             if (isCorner) {
               // Dreiecke für Corner-Pieces (tl, tr, bl, br) mit Line-basiertem Path
@@ -207,8 +209,8 @@ function EventItemShape({
                 <Line
                   key={i}
                   points={points}
-                  fill="#e0e7ff"
-                  stroke={isSelected ? '#2563eb' : '#818cf8'}
+                  fill={lightColor}
+                  stroke={isSelected ? '#2563eb' : baseColor}
                   strokeWidth={isSelected ? 2 : 1}
                   closed
                   perfectDrawEnabled={false}
@@ -225,8 +227,8 @@ function EventItemShape({
                 y={py}
                 width={pw}
                 height={pd}
-                fill="#dbeafe"
-                stroke={isSelected ? '#2563eb' : '#1d4ed8'}
+                fill={lightColor}
+                stroke={isSelected ? '#2563eb' : baseColor}
                 strokeWidth={isSelected ? 2 : 1}
                 perfectDrawEnabled={false}
                 listening={false}

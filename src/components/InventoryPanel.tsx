@@ -20,7 +20,7 @@ function getDefaultColor(type: EventItem['type']): string {
     truss: '#D1D5DB',            // grey
     curtain: '#7c3aed',          // purple
     podium: '#A78BFA',           // purple
-    nivtec_group: '#A78BFA',     // purple
+    nivtec_group: '#1d4ed8',     // blue
     area: '#60A5FA',             // blue
     exhibition_stand: '#F87171', // red
     sofa_3: '#F87171',           // red

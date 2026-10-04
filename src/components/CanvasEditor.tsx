@@ -513,6 +513,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
         className={`absolute inset-0 overflow-hidden bg-ground ${
           placement || tool !== 'select' ? 'cursor-crosshair' : ''
         }`}
+        onPointerDownCapture={() => {
+          const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null
+          if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+            active.blur()
+          }
+        }}
       >
         <Stage
           ref={stageRef}

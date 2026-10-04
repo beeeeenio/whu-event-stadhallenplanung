@@ -18,6 +18,15 @@ export const AREA_COLORS = [
   '#84cc16', // limette
 ]
 
+/** Vordefinierte Farben für NivTec-Gruppen. */
+export const NIVTEC_COLORS = [
+  '#111827', // schwarz
+  '#6b7280', // grau
+  '#dc2626', // rot
+  '#059669', // grün
+  '#7c3aed', // violett
+]
+
 interface HistorySnapshot {
   items: Record<string, EventItem>
   itemOrder: string[]
@@ -63,6 +72,8 @@ interface Store extends EventState {
   removeItem: (itemId: string) => void
   updateItemTransform: (itemId: string, x: number, y: number, rotation?: number) => void
   rotateItem: (itemId: string, deltaDeg: number) => void
+  /** Setzt die Rotation auf einen festen Wert in Grad (0-359). */
+  setItemRotation: (itemId: string, deg: number) => void
   toggleItemVisible: (itemId: string, visible?: boolean) => void
   renameItem: (itemId: string, label: string) => void
   setItemNote: (itemId: string, note: string) => void
@@ -286,6 +297,31 @@ export const useEventStore = create<Store>((set, get) => {
       })
     },
 
+    setItemRotation: (itemId, deg) => {
+      const normalized = (((deg % 360) + 360) % 360)
+      set((state) => {
+        const item = state.items[itemId]
+        if (!item) return state
+        const current = item.phaseData[state.currentPhaseId]
+        if (!current) return state
+        // Nur Undo-Schritt, wenn sich die Rotation tatsächlich ändert
+        if (current.rotation === normalized) return state
+        pushHistory()
+        return {
+          items: {
+            ...state.items,
+            [itemId]: {
+              ...item,
+              phaseData: {
+                ...item.phaseData,
+                [state.currentPhaseId]: { ...current, rotation: normalized },
+              },
+            },
+          },
+        }
+      })
+    },
+
     toggleItemVisible: (itemId, visible) => {
       pushHistory()
       set((state) => {
@@ -364,10 +400,14 @@ export const useEventStore = create<Store>((set, get) => {
     },
 
     renameItem: (itemId, label) => {
-      pushHistory()
-      set((state) => ({
-        items: { ...state.items, [itemId]: { ...state.items[itemId], label } },
-      }))
+      set((state) => {
+        const item = state.items[itemId]
+        if (!item || item.label === label) return state
+        pushHistory()
+        return {
+          items: { ...state.items, [itemId]: { ...item, label } },
+        }
+      })
     },
 
     setItemNote: (itemId, note) => {
@@ -388,14 +428,16 @@ export const useEventStore = create<Store>((set, get) => {
     },
 
     setItemColor: (itemId, color) => {
-      pushHistory()
       set((state) => {
         const item = state.items[itemId]
         if (!item) return state
+        const newColor = color ?? undefined
+        if (item.color === newColor) return state
+        pushHistory()
         return {
           items: {
             ...state.items,
-            [itemId]: { ...item, color: color ?? undefined },
+            [itemId]: { ...item, color: newColor },
           },
         }
       })

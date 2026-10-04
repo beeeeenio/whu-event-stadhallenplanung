@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useEventStore, AREA_COLORS } from '../store/store'
+import { useEventStore, AREA_COLORS, NIVTEC_COLORS } from '../store/store'
 import type { EventItem } from '../types'
 import { btn, input as inputCls, island } from '../utils/ui'
 
@@ -98,10 +98,7 @@ interface PanelProps {
 
 /** Vollständige Objekt-Eigenschaften (Bezeichnung, Größe, Drehung, Farbe). */
 export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, onDelete }: PanelProps) {
-  const renameItem = useEventStore((s) => s.renameItem)
   const resizeItem = useEventStore((s) => s.resizeItem)
-  const setItemColor = useEventStore((s) => s.setItemColor)
-  const rotateItem = useEventStore((s) => s.rotateItem)
   const toggleItemLocked = useEventStore((s) => s.toggleItemLocked)
 
   return (
@@ -112,10 +109,8 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
           ×
         </button>
       </div>
-      <label className="block space-y-1">
-        <span className="text-ink3">Bezeichnung</span>
-        <input className={`w-full ${inputCls}`} value={item.label} onChange={(e) => renameItem(item.id, e.target.value)} />
-      </label>
+      <LabelField item={item} />
+
       {item.type === 'area' ? (
         <div className="flex gap-2">
           <label className="flex-1 space-y-1">
@@ -146,55 +141,15 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
           Größe: {item.width}m × {item.height}m
         </div>
       ) : null}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-ink3">Drehung: {Math.round(item.phaseData[currentPhaseId]?.rotation ?? 0)}°</span>
-        <div className="flex gap-1">
-          <button
-            onClick={() => rotateItem(item.id, -90)}
-            title="90° gegen den Uhrzeigersinn drehen (Umschalt+R)"
-            className="w-7 h-7 flex items-center justify-center border border-line rounded-md hover:bg-chip"
-          >
-            ⟲
-          </button>
-          <button
-            onClick={() => rotateItem(item.id, 90)}
-            title="90° im Uhrzeigersinn drehen (R)"
-            className="w-7 h-7 flex items-center justify-center border border-line rounded-md hover:bg-chip"
-          >
-            ⟳
-          </button>
-        </div>
-      </div>
+      <RotationField item={item} currentPhaseId={currentPhaseId} />
       <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
         <span className="text-ink3">Gegen Verschieben/Drehen per Maus sperren</span>
         <input type="checkbox" checked={!!item.locked} onChange={() => toggleItemLocked(item.id)} className="accent-accent w-4 h-4" />
       </label>
       {/* key inkl. Notiz: bei Undo/Redo von außen geänderte Notiz neu übernehmen */}
       <NoteField key={`${item.id}:${item.note ?? ''}`} itemId={item.id} note={item.note ?? ''} />
-      {item.type === 'area' && (
-        <div>
-          <div className="text-ink3 mb-1.5">Farbe</div>
-          <div className="flex flex-wrap gap-1.5">
-            {AREA_COLORS.map((color) => (
-              <button
-                key={color}
-                onClick={() => setItemColor(item.id, color)}
-                style={{ backgroundColor: color }}
-                className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${
-                  (item.color ?? AREA_COLORS[0]) === color ? 'border-ink' : 'border-transparent'
-                }`}
-                title={color}
-              />
-            ))}
-            <input
-              type="color"
-              value={item.color ?? AREA_COLORS[0]}
-              onChange={(e) => setItemColor(item.id, e.target.value)}
-              className="w-6 h-6 rounded-full overflow-hidden border-2 border-transparent cursor-pointer"
-              title="Eigene Farbe"
-            />
-          </div>
-        </div>
+      {(item.type === 'area' || item.type === 'nivtec_group') && (
+        <ColorSwatches item={item} />
       )}
       <div className="flex flex-col gap-1.5 pt-1">
         <button onClick={onDuplicate} className={`w-full ${btn('primaryOutline', 'sm')}`} title="Strg/Cmd+D">
@@ -203,6 +158,148 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
         <button onClick={onDelete} className={`w-full ${btn('dangerOutline', 'sm')}`}>
           Objekt löschen
         </button>
+      </div>
+    </div>
+  )
+}
+
+/** Bezeichnung/Name-Feld: lokal editiert, beim Verlassen gespeichert (ein Undo-Schritt). */
+function LabelField({ item }: { item: EventItem }) {
+  const renameItem = useEventStore((s) => s.renameItem)
+  const [value, setValue] = useState(item.label)
+  const commit = () => {
+    if (value !== item.label) renameItem(item.id, value)
+  }
+  const labelText = item.type === 'nivtec_group' ? 'Name der Bühne/Theke' : 'Bezeichnung'
+  const hint = item.type === 'nivtec_group' && item.nivtecData ? `Import: ${item.nivtecData.name}` : undefined
+  return (
+    <label className="block space-y-1">
+      <span className="text-ink3">{labelText}</span>
+      <input
+        className={`w-full ${inputCls}`}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setValue(item.label)
+        }}
+      />
+      {hint && <span className="text-ink4 text-xs">{hint}</span>}
+    </label>
+  )
+}
+
+/** Drehungs-Eingabefeld: Grad direkt eingeben oder mit ±90° Buttons. */
+function RotationField({ item, currentPhaseId }: { item: EventItem; currentPhaseId: string }) {
+  const setItemRotation = useEventStore((s) => s.setItemRotation)
+  const rotateItem = useEventStore((s) => s.rotateItem)
+  const currentRotation = Math.round(item.phaseData[currentPhaseId]?.rotation ?? 0)
+  const [value, setValue] = useState(currentRotation.toString())
+  const commit = () => {
+    const deg = parseInt(value, 10)
+    if (!isNaN(deg)) setItemRotation(item.id, deg)
+  }
+  return (
+    <label className="block space-y-1">
+      <span className="text-ink3">Drehung (Grad)</span>
+      <div className="flex gap-1.5 items-center">
+        <button
+          onClick={() => rotateItem(item.id, -90)}
+          title="90° gegen Uhrzeiger"
+          className="w-7 h-7 flex items-center justify-center border border-line rounded-md hover:bg-chip text-xs font-medium"
+        >
+          ⟲
+        </button>
+        <input
+          type="number"
+          min="0"
+          max="359"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setValue(currentRotation.toString())
+            if (e.key === 'Enter') commit()
+          }}
+          className={`flex-1 ${inputCls}`}
+        />
+        <span className="text-ink3 text-xs">°</span>
+        <button
+          onClick={() => rotateItem(item.id, 90)}
+          title="90° im Uhrzeiger"
+          className="w-7 h-7 flex items-center justify-center border border-line rounded-md hover:bg-chip text-xs font-medium"
+        >
+          ⟳
+        </button>
+      </div>
+    </label>
+  )
+}
+
+/** Farb-Swatches für area und nivtec_group: vordefinierte + freie Farbe. */
+function ColorSwatches({ item }: { item: EventItem }) {
+  const setItemColor = useEventStore((s) => s.setItemColor)
+  const isNivTec = item.type === 'nivtec_group'
+  const colors = isNivTec ? NIVTEC_COLORS : AREA_COLORS
+  const defaultColor = colors[0]
+  const [customColor, setCustomColor] = useState(item.color ?? defaultColor)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+
+  const handleColorSelect = (color: string) => {
+    setCustomColor(color)
+    setItemColor(item.id, color)
+  }
+
+  const handleCustomColor = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newColor = e.target.value
+    setCustomColor(newColor)
+    // Speichern beim Schließen des Pickers, nicht bei jeder Bewegung
+  }
+
+  const closeColorPicker = () => {
+    setShowColorPicker(false)
+    setItemColor(item.id, customColor)
+  }
+
+  return (
+    <div>
+      <div className="text-ink3 mb-1.5">{isNivTec ? 'Farbe' : 'Farbe'}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {colors.map((color) => (
+          <button
+            key={color}
+            onClick={() => handleColorSelect(color)}
+            style={{ backgroundColor: color }}
+            className={`w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 ${
+              (item.color ?? defaultColor) === color ? 'border-ink' : 'border-transparent'
+            }`}
+            title={color}
+          />
+        ))}
+        <div className="relative">
+          <button
+            onClick={() => setShowColorPicker(!showColorPicker)}
+            style={{ backgroundColor: customColor }}
+            className="w-6 h-6 rounded-full overflow-hidden border-2 border-line cursor-pointer hover:scale-110 transition-transform"
+            title="Eigene Farbe"
+          />
+          {showColorPicker && (
+            <div className="absolute top-8 left-0 bg-white rounded-lg shadow-lg p-2 z-50">
+              <input
+                type="color"
+                value={customColor}
+                onChange={handleCustomColor}
+                autoFocus
+              />
+              <button
+                onClick={closeColorPicker}
+                className="mt-1 w-full text-xs px-2 py-1 rounded bg-accent text-white hover:bg-accent-dark"
+              >
+                Fertig
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
