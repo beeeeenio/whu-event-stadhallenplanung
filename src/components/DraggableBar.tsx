@@ -49,7 +49,7 @@ export default function DraggableBar({
   const gripRef = useRef<HTMLDivElement>(null)
   const dirSnapRef = useRef<DirectionalSnapState>({ side: null, turn: 0 })
 
-  const shouldRotate = barKey === 'toolsBar' && dirSnapRef.current?.side === 'bottom'
+  const shouldRotate = barKey === 'toolsBar' && snapInfo.y === 'bottom'
   const dragStateRef = useRef<DragState>({
     isDragging: false,
     position: { x: defaultPosition.x, y: defaultPosition.y },
