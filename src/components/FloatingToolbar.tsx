@@ -18,7 +18,6 @@ interface FloatingToolbarProps {
   onPanelChange: (panel: ActivePanel) => void
   pickerTab: PickerTab
   onPickerTabChange: (tab: PickerTab) => void
-  onOpenPicker: (tab: PickerTab) => void
 
   // Settings toolbar
   zoom: number
@@ -75,7 +74,6 @@ export default function FloatingToolbar({
   onPanelChange,
   pickerTab,
   onPickerTabChange,
-  onOpenPicker,
   zoom,
   onZoomIn,
   onZoomOut,
@@ -105,8 +103,8 @@ export default function FloatingToolbar({
         <button
           onClick={(e) => {
             e.stopPropagation()
-            if (activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure')) onPanelChange(null)
-            else onOpenPicker(pickerTab === 'rows' || pickerTab === 'nivtec' ? 'furniture' : pickerTab)
+            onPickerTabChange('furniture')
+            if (activePanel !== 'picker') onPanelChange('picker')
           }}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
             activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure') ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
@@ -122,7 +120,7 @@ export default function FloatingToolbar({
           onClick={(e) => {
             e.stopPropagation()
             onPickerTabChange('rows')
-            onPanelChange(activePanel === 'picker' ? null : 'picker')
+            if (activePanel !== 'picker') onPanelChange('picker')
           }}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
             activePanel === 'picker' && pickerTab === 'rows' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
@@ -138,7 +136,7 @@ export default function FloatingToolbar({
           onClick={(e) => {
             e.stopPropagation()
             onPickerTabChange('nivtec')
-            onPanelChange(activePanel === 'picker' ? null : 'picker')
+            if (activePanel !== 'picker') onPanelChange('picker')
           }}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
             activePanel === 'picker' && pickerTab === 'nivtec' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'

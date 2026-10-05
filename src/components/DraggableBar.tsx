@@ -48,6 +48,8 @@ export default function DraggableBar({
   const containerRef = useRef<HTMLDivElement>(null)
   const gripRef = useRef<HTMLDivElement>(null)
   const dirSnapRef = useRef<DirectionalSnapState>({ side: null, turn: 0 })
+
+  const shouldRotate = barKey === 'toolsBar' && dirSnapRef.current?.side === 'bottom'
   const dragStateRef = useRef<DragState>({
     isDragging: false,
     position: { x: defaultPosition.x, y: defaultPosition.y },
@@ -291,6 +293,9 @@ export default function DraggableBar({
         ...displayStyle,
         zIndex: isDragging ? Z.toolbarDragging : Z.toolbars,
         cursor: isDragging ? 'grabbing' : 'grab',
+        transform: shouldRotate ? 'rotate(90deg)' : 'rotate(0deg)',
+        transformOrigin: 'center center',
+        transition: isDragging ? 'none' : 'transform 0.2s ease-in-out',
       }}
       className={`flex flex-col ${isSettingsBar ? 'gap-0.5 p-1' : 'gap-1.5 p-2'} select-none touch-none transition-[box-shadow,ring-color] duration-120 ${island} ${
         isDragging ? 'shadow-[0_20px_40px_-8px_rgba(20,30,35,0.4)]' : ''

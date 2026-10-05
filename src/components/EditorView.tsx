@@ -605,7 +605,6 @@ export default function EditorView() {
         onPanelChange={setActivePanel}
         pickerTab={pickerTab}
         onPickerTabChange={setPickerTab}
-        onOpenPicker={openPicker}
         zoom={viewport?.zoom ?? 1}
         onZoomIn={() => canvasRef.current?.zoomIn()}
         onZoomOut={() => canvasRef.current?.zoomOut()}
