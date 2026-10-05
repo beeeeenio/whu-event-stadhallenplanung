@@ -42,42 +42,45 @@ export const DIRECTIONAL_SNAP = {
   hysteresis: 35, // pixels to release snap (2.33x threshold)
 } as const
 
-interface StoredPositionsV3 {
+interface StoredPositionsV4 {
   toolsBar?: FloatingPosition
   settingsBar?: FloatingPosition
 }
 
+const STORAGE_KEY_V4 = 'stadthalle.toolbar-positions.v4'
 const STORAGE_KEY_V3 = 'stadthalle.toolbar-positions.v3'
 const STORAGE_KEY_V2 = 'stadthalle.toolbar-positions.v2'
 const OLD_STORAGE_KEY = 'stadthalle.floating-positions'
 
-/** Load saved positions from localStorage (v3), migrate from v2 or old keys if needed. */
-export function loadSavedPositions(): StoredPositionsV3 {
+/** Load saved positions from localStorage (v4), migrate from v3/v2 or old keys if needed. */
+export function loadSavedPositions(): StoredPositionsV4 {
   try {
-    // Try v3 first
-    const stored = localStorage.getItem(STORAGE_KEY_V3)
+    // Try v4 first
+    const stored = localStorage.getItem(STORAGE_KEY_V4)
     if (stored) return JSON.parse(stored)
+
+    // Migrate from v3 if exists (discard old positions, reset to defaults)
+    const storedV3 = localStorage.getItem(STORAGE_KEY_V3)
+    if (storedV3) {
+      localStorage.removeItem(STORAGE_KEY_V3)
+      // Don't migrate v3 data, let defaults take over
+      return {}
+    }
 
     // Migrate from v2 if exists
     const storedV2 = localStorage.getItem(STORAGE_KEY_V2)
     if (storedV2) {
-      const v2Data = JSON.parse(storedV2)
-      localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(v2Data))
       localStorage.removeItem(STORAGE_KEY_V2)
-      return v2Data
+      // Don't migrate v2 data, let defaults take over
+      return {}
     }
 
     // Migrate from old key if exists
     const oldStored = localStorage.getItem(OLD_STORAGE_KEY)
     if (oldStored) {
-      const oldData = JSON.parse(oldStored)
-      const migrated: StoredPositionsV3 = {
-        toolsBar: oldData.toolsToolbar,
-        settingsBar: oldData.settingsToolbar,
-      }
-      localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(migrated))
       localStorage.removeItem(OLD_STORAGE_KEY)
-      return migrated
+      // Don't migrate old data, let defaults take over
+      return {}
     }
   } catch (e) {
     console.error('Failed to load floating positions:', e)
@@ -85,10 +88,10 @@ export function loadSavedPositions(): StoredPositionsV3 {
   return {}
 }
 
-/** Save positions to localStorage (v3). */
-export function savePositions(positions: StoredPositionsV3): void {
+/** Save positions to localStorage (v4). */
+export function savePositions(positions: StoredPositionsV4): void {
   try {
-    localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(positions))
+    localStorage.setItem(STORAGE_KEY_V4, JSON.stringify(positions))
   } catch (e) {
     console.error('Failed to save floating positions:', e)
   }

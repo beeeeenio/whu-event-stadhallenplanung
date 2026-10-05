@@ -21,6 +21,14 @@ interface DraggableBarProps {
 const DRAG_THRESHOLD_MOUSE = 3 // pixels
 const DRAG_THRESHOLD_TOUCH = 6 // pixels
 
+interface DragState {
+  isDragging: boolean
+  position: { x: number; y: number }
+  dragOffset: { x: number; y: number }
+  startPointer: { x: number; y: number }
+  pointerId: number
+}
+
 /**
  * Draggable floating toolbar container with pointer events.
  * Supports mouse, touch, and pen input with proper drag detection.
@@ -34,13 +42,19 @@ export default function DraggableBar({
   children,
 }: DraggableBarProps) {
   const [position, setPosition] = useState(defaultPosition)
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [size, setSize] = useState({ width: 200, height: 200 })
   const [snapInfo, setSnapInfo] = useState<SnapInfo>({})
+  const [isDragging, setIsDragging] = useState(false) // For UI only (cursor, z-index)
   const containerRef = useRef<HTMLDivElement>(null)
-  const pointerStartRef = useRef({ x: 0, y: 0, pointerId: -1 })
+  const gripRef = useRef<HTMLDivElement>(null)
   const dirSnapRef = useRef<DirectionalSnapState>({ side: null, turn: 0 })
+  const dragStateRef = useRef<DragState>({
+    isDragging: false,
+    position: { x: defaultPosition.x, y: defaultPosition.y },
+    dragOffset: { x: 0, y: 0 },
+    startPointer: { x: 0, y: 0 },
+    pointerId: -1,
+  })
 
   // Measure size with ResizeObserver
   useEffect(() => {
@@ -54,7 +68,7 @@ export default function DraggableBar({
     })
     if (containerRef.current) observer.observe(containerRef.current)
     return () => observer.disconnect()
-  }, [])
+  }, [barKey, defaultPosition])
 
   // Detect if touch/pen input
   const isTouchInput = useCallback((e: PointerEvent): boolean => {
@@ -80,49 +94,62 @@ export default function DraggableBar({
     const rect = containerRef.current?.getBoundingClientRect()
     if (!rect || !containerRef.current) return
 
-    pointerStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
+    // Get current position from displayStyle or dragStateRef
+    const currentX = dragStateRef.current.position.x
+    const currentY = dragStateRef.current.position.y
+
+    // Initialize drag state in ref
+    dragStateRef.current = {
+      isDragging: false,
+      position: { x: currentX, y: currentY },
+      dragOffset: {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      },
+      startPointer: { x: e.clientX, y: e.clientY },
       pointerId: e.pointerId,
     }
 
     // Initialize directional snap state
     dirSnapRef.current = { side: null, turn: 0 }
 
-    // Try to capture pointer for smooth drag
-    try {
-      containerRef.current.setPointerCapture(e.pointerId)
-      // eslint-disable-next-line no-unused-vars
-    } catch (_) {
-      // Ignore if setPointerCapture fails
-    }
-
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    })
-  }, [])
+    // NOTE: setPointerCapture will be called AFTER threshold is exceeded in handlePointerMove
+  }, [barKey])
 
   const handlePointerMove = useCallback(
     (e: PointerEvent) => {
-      if (pointerStartRef.current.pointerId === -1 || !containerRef.current) return
+      const dragState = dragStateRef.current
+      if (dragState.pointerId === -1 || !containerRef.current) return
 
       const threshold = getDragThreshold(e as PointerEvent)
-      const dx = e.clientX - pointerStartRef.current.x
-      const dy = e.clientY - pointerStartRef.current.y
+      const dx = e.clientX - dragState.startPointer.x
+      const dy = e.clientY - dragState.startPointer.y
       const distance = Math.sqrt(dx * dx + dy * dy)
 
       // Start drag if threshold exceeded
-      if (distance > threshold && !isDragging) {
+      if (distance > threshold && !dragState.isDragging) {
+        dragStateRef.current.isDragging = true
         setIsDragging(true)
+        // NOW capture pointer after threshold is exceeded
+        try {
+          containerRef.current.setPointerCapture(dragState.pointerId)
+          // eslint-disable-next-line no-unused-vars
+        } catch (_) {
+          // Ignore if setPointerCapture fails
+        }
+        // Continue without return
       }
 
-      if (!isDragging) return
+      if (!dragState.isDragging) return
 
-      const newX = e.clientX - dragOffset.x
-      const newY = e.clientY - dragOffset.y
+      // Calculate new position based on pointer movement
+      const newX = e.clientX - dragState.dragOffset.x
+      const newY = e.clientY - dragState.dragOffset.y
 
       const clamped = clampPosition(newX, newY, size.width, size.height)
+
+      // Store position in ref immediately (for pointerUp to read)
+      dragStateRef.current.position = { x: clamped.x, y: clamped.y }
 
       // Apply directional snap (unless alt-key is pressed)
       let snapResult
@@ -133,7 +160,7 @@ export default function DraggableBar({
       } else {
         snapResult = applyDirectionalSnap(
           clamped,
-          pointerStartRef.current,
+          dragState.startPointer,
           { x: e.clientX, y: e.clientY },
           dirSnapRef.current,
           size,
@@ -144,19 +171,20 @@ export default function DraggableBar({
         dirSnapRef.current = snapResult.state
       }
 
+      // Update state for rendering
       setPosition({
-        ...position,
         x: snapResult.position.x,
         y: snapResult.position.y,
       })
       setSnapInfo(snapResult.snap)
     },
-    [isDragging, dragOffset, size, position, getDragThreshold, isTouchInput]
+    [size, getDragThreshold, isTouchInput]
   )
 
   const handlePointerUp = useCallback(
     (e: PointerEvent) => {
-      if (pointerStartRef.current.pointerId !== e.pointerId) return
+      const dragState = dragStateRef.current
+      if (dragState.pointerId !== e.pointerId) return
 
       // Release pointer capture
       try {
@@ -168,11 +196,13 @@ export default function DraggableBar({
         // Ignore if releasePointerCapture fails
       }
 
-      if (isDragging) {
-        // Read directional snap state from ref (not from closure)
+      if (dragState.isDragging) {
+        // Read final position from dragStateRef (not from state closure)
+        const newX = dragState.position.x
+        const newY = dragState.position.y
+
+        // Read directional snap state from ref
         const snapState = dirSnapRef.current
-        const newX = position.x
-        const newY = position.y
 
         // Detect anchor based on current position
         let anchor = detectAnchor(newX, newY, size.width, size.height)
@@ -206,18 +236,21 @@ export default function DraggableBar({
 
         // Update component position to match saved state
         setPosition(newPosition)
-        setIsDragging(false)
         setSnapInfo({})
       }
 
-      pointerStartRef.current = { x: 0, y: 0, pointerId: -1 }
+      // Always reset drag state
+      dragStateRef.current.isDragging = false
+      dragStateRef.current.pointerId = -1
+      setIsDragging(false)
       dirSnapRef.current = { side: null, turn: 0 }
     },
-    [isDragging, position, size, barKey]
+    [size, barKey]
   )
 
   const handleGripDoubleClick = useCallback(() => {
     // Reset to default position on double-click
+    dragStateRef.current.position = { x: defaultPosition.x, y: defaultPosition.y }
     setPosition(defaultPosition)
     const saved = loadSavedPositions()
     savePositions({
@@ -234,7 +267,7 @@ export default function DraggableBar({
       document.removeEventListener('pointermove', handlePointerMove)
       document.removeEventListener('pointerup', handlePointerUp)
     }
-  }, [handlePointerMove, handlePointerUp])
+  }, [handlePointerMove, handlePointerUp, barKey, defaultPosition])
 
   // During drag, use hardcoded 'top-left' anchor for positioning
   const displayStyle = isDragging
@@ -261,9 +294,10 @@ export default function DraggableBar({
     >
       {/* Drag handle / grip */}
       <div
+        ref={gripRef}
         data-grip
         onDoubleClick={handleGripDoubleClick}
-        className={`${isSettingsBar ? 'w-8 h-0.5' : 'w-12 h-1'} bg-line rounded-full mx-auto mb-0.5 touch:${isSettingsBar ? 'h-5' : 'h-5'} cursor-grab active:cursor-grabbing hover:bg-ink3`}
+        className={`${isSettingsBar ? 'w-8 h-1.5' : 'w-12 h-1.5'} bg-line rounded-full mx-auto mb-0.5 touch:${isSettingsBar ? 'h-2' : 'h-2'} cursor-grab active:cursor-grabbing hover:bg-ink3`}
         title={`${label} - Doppelklick zum Zurücksetzen`}
       />
 
