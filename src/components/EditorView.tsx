@@ -110,6 +110,11 @@ export default function EditorView() {
   const eventName = useEventStore((s) => s.eventName)
   const rotateItem = useEventStore((s) => s.rotateItem)
   const duplicateItem = useEventStore((s) => s.duplicateItem)
+  const copyItemsToLaterPhases = useEventStore((s) => s.copyItemsToLaterPhases)
+  const hasLaterPhases = useEventStore((s) => {
+    const sorted = sortPhases(s.phases)
+    return sorted[sorted.length - 1]?.id !== s.currentPhaseId
+  })
   const toggleItemsVisible = useEventStore((s) => s.toggleItemsVisible)
   const addItem = useEventStore((s) => s.addItem)
   const addItemsBatch = useEventStore((s) => s.addItemsBatch)
@@ -527,7 +532,10 @@ export default function EditorView() {
       {/* Kontextleiste an der Auswahl (Mehrfachauswahl) */}
       {multiBarStyle && (
         <div className="absolute z-10" style={multiBarStyle}>
-          <MultiSelectionBar count={selectedIds.length} onHide={hideSelection} onDelete={deleteSelection} />
+          <MultiSelectionBar
+            count={selectedIds.length}
+            onCopyToLaterPhases={hasLaterPhases ? () => copyItemsToLaterPhases(selectedIds) : undefined}
+            onHide={hideSelection} onDelete={deleteSelection} />
         </div>
       )}
 
