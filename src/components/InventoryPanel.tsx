@@ -32,6 +32,8 @@ function getDefaultColor(type: EventItem['type']): string {
     screen: '#D1D5DB',           // grey
     pipe_drape: '#7c3aed',       // purple
     text_label: '#1f2937',       // dark grey
+    custom_rect: '#94a3b8',
+    custom_round: '#94a3b8',
   }
   return defaults[type]
 }

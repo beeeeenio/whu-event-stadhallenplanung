@@ -21,6 +21,8 @@ export type ItemType =
   | 'screen'
   | 'pipe_drape'
   | 'text_label'
+  | 'custom_rect'
+  | 'custom_round'
 
 export interface PhaseData {
   x: number
@@ -89,6 +91,8 @@ export interface LayerState {
   power: boolean
   /** Vereinfachter (entrümpelter/aufgehellter) statt des detaillierten Original-Scans. */
   simplified: boolean
+  /** Steckdosen-/Anschluss-Codes (z. B. 3F9) im Grundriss ausblenden. */
+  hideCodes?: boolean
 }
 
 export interface EventState {

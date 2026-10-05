@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useEventStore } from '../store/store'
 import { useProjectsStore } from '../store/projectsStore'
-import type { LayerState } from '../types'
 import { island, islandBtn, kbd } from '../utils/ui'
 import TemplatesMenu from './TemplatesMenu'
 import VersionsMenu from './VersionsMenu'
@@ -9,28 +8,14 @@ import ShareDialog from './ShareDialog'
 import { SyncStatusLine } from './SyncStatus'
 import { useSyncStore } from '../backend/projectSync'
 
-const LAYER_LABELS: Record<keyof LayerState, string> = {
-  walls: 'Grundriss',
-  rigging: 'Bühnenzüge',
-  power: '⚡ Strom/CEE',
-  simplified: 'Vereinfacht',
-}
-
 interface Props {
-  onExportPdf: () => Promise<void>
-  onPresent: () => void
   onOpenCommand: () => void
-  onionSkin: boolean
-  onToggleOnionSkin: () => void
-  hasPreviousPhase: boolean
 }
 
-/** Schwebende Kopf-Inseln: Projekt links, Befehlszeile mittig, Verlauf/Ansicht/Export rechts. */
-export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSkin, onToggleOnionSkin, hasPreviousPhase }: Props) {
+/** Schwebende Kopf-Inseln: Projekt links, Befehlszeile mittig, Undo/Redo rechts. */
+export default function Toolbar({ onOpenCommand }: Props) {
   const eventName = useEventStore((s) => s.eventName)
   const setEventName = useEventStore((s) => s.setEventName)
-  const layers = useEventStore((s) => s.layers)
-  const toggleLayer = useEventStore((s) => s.toggleLayer)
   const undo = useEventStore((s) => s.undo)
   const redo = useEventStore((s) => s.redo)
   const canUndo = useEventStore((s) => s.historyPast.length > 0)
@@ -39,20 +24,6 @@ export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSk
   const projectId = useSyncStore((s) => s.projectId)
   const role = useSyncStore((s) => s.role)
   const [sharing, setSharing] = useState(false)
-  const [exporting, setExporting] = useState(false)
-  const [viewMenuOpen, setViewMenuOpen] = useState(false)
-  const viewMenuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!viewMenuOpen) return
-    function onClickOutside(e: MouseEvent) {
-      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) setViewMenuOpen(false)
-    }
-    window.addEventListener('mousedown', onClickOutside)
-    return () => window.removeEventListener('mousedown', onClickOutside)
-  }, [viewMenuOpen])
-
-  const check = 'accent-[#1e5e7a] w-4 h-4'
 
   return (
     <>
@@ -105,49 +76,7 @@ export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSk
           ↻
         </button>
         <VersionsMenu />
-        <div className="relative" ref={viewMenuRef}>
-          <button onClick={() => setViewMenuOpen((v) => !v)} className={islandBtn(viewMenuOpen ? 'chip' : 'plain')}>
-            Ansicht ▾
-          </button>
-          {viewMenuOpen && (
-            <div className={`absolute right-0 top-full mt-2 z-30 w-60 p-3 space-y-3 ${island}`} onMouseDown={(e) => e.stopPropagation()}>
-              <div>
-                <span className="font-semibold text-ink3 text-[10.5px] uppercase tracking-[0.1em]">Ansicht</span>
-                <div className="mt-2 flex flex-col gap-2 text-[13px] text-ink">
-                  {(Object.keys(LAYER_LABELS) as (keyof LayerState)[]).map((key) => (
-                    <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
-                      <input type="checkbox" checked={layers[key]} onChange={() => toggleLayer(key)} className={check} />
-                      {LAYER_LABELS[key]}
-                    </label>
-                  ))}
-                  <label className={`flex items-center gap-2 select-none ${hasPreviousPhase ? 'cursor-pointer' : 'opacity-40'}`}>
-                    <input type="checkbox" checked={onionSkin && hasPreviousPhase} disabled={!hasPreviousPhase} onChange={onToggleOnionSkin} className={check} />
-                    Vorphase einblenden
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
         <TemplatesMenu />
-        <button
-          onClick={async () => {
-            setExporting(true)
-            try {
-              await onExportPdf()
-            } finally {
-              setExporting(false)
-            }
-          }}
-          disabled={exporting}
-          className={islandBtn('chip')}
-          title="PDF exportieren (aktuelle Phase)"
-        >
-          {exporting ? 'Exportiere…' : 'PDF'}
-        </button>
-        <button onClick={onPresent} title="Phasen im Vollbild durchgehen" className={islandBtn('dark')}>
-          ▶ <span className="hidden sm:inline">Präsentation</span>
-        </button>
       </div>
     </>
   )

@@ -30,6 +30,8 @@ function getDefaultColor(type: ItemType): string {
     screen: '#D1D5DB',           // grey
     pipe_drape: '#7c3aed',       // purple
     text_label: '#1f2937',       // dark grey
+    custom_rect: '#94a3b8',
+    custom_round: '#94a3b8',
   }
   return defaults[type]
 }
@@ -79,7 +81,7 @@ function EventItemShape({
 }: Props) {
   const w = metersToPixels(item.width, pixelsPerMeter)
   const h = metersToPixels(item.height, pixelsPerMeter)
-  const isRound = item.type === 'table_round' || item.type === 'table_high'
+  const isRound = item.type === 'table_round' || item.type === 'table_high' || item.type === 'custom_round'
   const isLabel = item.type === 'text_label'
   const isLocked = !!item.locked
 
@@ -177,7 +179,7 @@ function EventItemShape({
     >
       {/* Unsichtbare, vergrößerte Trefferfläche für zuverlässiges Greifen auch bei kleinem Zoom */}
       <Rect x={hitX} y={hitY} width={hitW} height={hitH} fill="rgba(255,255,255,0.001)" />
-      {isLabel ? null : item.type === 'table_round' || item.type === 'table_high' ? (
+      {isLabel ? null : isRound ? (
         <Circle radius={w / 2} fill={item.color || getDefaultColor(item.type)} stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
       ) : item.type === 'curtain' ? (
         <Line points={[0, 0, w, 0]} stroke={item.color || getDefaultColor(item.type)} strokeWidth={6} lineCap="round" perfectDrawEnabled={false} />

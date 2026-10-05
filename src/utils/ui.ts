@@ -10,7 +10,9 @@ export const Z = {
   canvas: 0,           // Canvas-Basis
   selection: 10,       // Selection-Bars
   panels: 20,          // Property panels
+  snapGuides: 24,      // Snap guides for dragging
   toolbars: 25,        // Floating toolbars
+  toolbarDragging: 26, // Toolbar while dragging
   popovers: 30,        // Dropdowns, color pickers
   modals: 40,          // Modal dialogs
   notifications: 50,   // Toasts/alerts
@@ -65,6 +67,26 @@ export function islandBtn(tone: 'chip' | 'plain' | 'dark' | 'accent' = 'plain', 
     'h-10 min-w-10 px-3 rounded-xl inline-flex items-center justify-center gap-1.5 text-[13px] font-semibold',
     'transition-colors select-none disabled:opacity-35 disabled:cursor-not-allowed',
     'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
+    tones[tone],
+    extra,
+  ].join(' ')
+}
+
+/**
+ * Kompakte Icon-Schaltfläche für vertikale Toolbars (36px Desktop, 40px Touch).
+ * Verwendet ein data-grip Attribut für den Drag-Bereich.
+ */
+export function islandIconBtn(tone: 'chip' | 'plain' | 'dark' = 'plain', extra = ''): string {
+  const tones = {
+    chip: 'bg-chip text-ink hover:bg-chip-hover',
+    plain: 'bg-transparent text-ink hover:bg-chip',
+    dark: 'bg-ink text-white hover:bg-ink2',
+  }
+  return [
+    'h-9 w-9 p-0 rounded-lg inline-flex items-center justify-center gap-0',
+    'transition-colors select-none disabled:opacity-35 disabled:cursor-not-allowed',
+    'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
+    'touch:h-10 touch:w-10', // 40px on touch devices
     tones[tone],
     extra,
   ].join(' ')

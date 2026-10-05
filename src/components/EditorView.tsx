@@ -10,7 +10,7 @@ import CommandBar, { type CommandActions } from './CommandBar'
 import FloatingToolbar from './FloatingToolbar'
 import { SelectionBar, MultiSelectionBar, PropertiesPanel } from './SelectionControls'
 import { useNivtecImport } from './useNivtecImport'
-import { useEventStore } from '../store/store'
+import { useEventStore, type CustomItemSpec } from '../store/store'
 import { useProjectsStore } from '../store/projectsStore'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import type { EventItem, ItemType } from '../types'
@@ -76,6 +76,8 @@ export default function EditorView() {
   const gridSize = useEventStore((s) => s.gridSize)
   const setGridEnabled = useEventStore((s) => s.setGridEnabled)
   const setGridSize = useEventStore((s) => s.setGridSize)
+  const codesHidden = useEventStore((s) => !!s.layers.hideCodes)
+  const toggleLayer = useEventStore((s) => s.toggleLayer)
 
   // Restore grid settings from localStorage on mount
   useEffect(() => {
@@ -112,6 +114,7 @@ export default function EditorView() {
   const addItem = useEventStore((s) => s.addItem)
   const addItemsBatch = useEventStore((s) => s.addItemsBatch)
   const addChairRowGroup = useEventStore((s) => s.addChairRowGroup)
+  const addCustomItem = useEventStore((s) => s.addCustomItem)
   const addTextLabel = useEventStore((s) => s.addTextLabel)
   const setCurrentPhase = useEventStore((s) => s.setCurrentPhase)
   const undo = useEventStore((s) => s.undo)
@@ -227,6 +230,22 @@ export default function EditorView() {
       })
     },
     [addItem, addItemsBatch, viewCenter, select],
+  )
+
+  const placeCustom = useCallback(
+    (spec: CustomItemSpec, mode: 'tap' | 'center') => {
+      setTool('select')
+      if (mode === 'center') {
+        const c = viewCenter()
+        select(addCustomItem(c.x, c.y, spec))
+        setPlacement(null)
+        setActivePanel(null)
+        return
+      }
+      setPlacement({ label: spec.label, place: (x, y) => addCustomItem(x, y, spec) })
+      setActivePanel(null)
+    },
+    [addCustomItem, viewCenter, select],
   )
 
   const placeChairRows = useCallback(
@@ -466,27 +485,6 @@ export default function EditorView() {
 
   if (presenting) return <PresentationMode startPhaseId={currentPhaseId} onClose={() => setPresenting(false)} />
 
-  const dockTool = (key: ToolMode, label: string, icon: React.ReactNode, shortcut: string) => {
-    const active = tool === key && !placement
-    return (
-      <button
-        onClick={() => changeTool(key)}
-        className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-          active ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-        }`}
-        title={`${label} (${shortcut})`}
-      >
-        {icon}
-        {label}
-      </button>
-    )
-  }
-  const svg = (d: React.ReactNode) => (
-    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      {d}
-    </svg>
-  )
-
   return (
     <div className="h-screen w-screen relative overflow-hidden bg-ground select-none">
       <CanvasEditor
@@ -509,12 +507,7 @@ export default function EditorView() {
       />
 
       <Toolbar
-        onExportPdf={handleExportPdf}
-        onPresent={() => setPresenting(true)}
         onOpenCommand={() => setActivePanel('command')}
-        onionSkin={onionSkin}
-        onToggleOnionSkin={() => setOnionSkin((v) => !v)}
-        hasPreviousPhase={!!prevPhaseId}
       />
 
       {/* Kontextleiste an der Auswahl (Einzelauswahl) */}
@@ -576,6 +569,7 @@ export default function EditorView() {
             onInsertCenter={(type) => placeType(type, 1, 'center')}
             onCreateChairRows={placeChairRows}
             onImportNivtec={nivtec.open}
+            onCreateCustom={placeCustom}
             onClose={() => setActivePanel(null)}
             onTileDragStart={handleTileDragStart}
           />
@@ -610,75 +604,6 @@ export default function EditorView() {
         </div>
       )}
 
-      {/* Werkzeug-Dock */}
-      <div className={`absolute left-1/2 -translate-x-1/2 bottom-[108px] z-20 flex items-center gap-1 p-1.5 ${island}`}>
-        {dockTool('select', 'Auswahl', svg(<path d="M5 3l14 8-6 2-2 6z" />), 'V')}
-        {dockTool('area', 'Bereich', svg(<rect x="4" y="6" width="16" height="12" strokeDasharray="3 2" />), 'B')}
-        {dockTool('measure', 'Messen', svg(<><path d="M3 17L17 3l4 4L7 21z" /><path d="M8 8l2 2M11 5l2 2M5 11l2 2" /></>), 'M')}
-        <div className="w-px h-8 bg-line mx-1" />
-        <button
-          onClick={() => {
-            if (activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure')) setActivePanel(null)
-            else openPicker(pickerTab === 'rows' || pickerTab === 'nivtec' ? 'furniture' : pickerTab)
-          }}
-          className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure') ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-          }`}
-          title="Objekt-Bibliothek (O)"
-        >
-          {svg(<path d="M12 5v14M5 12h14" />)}
-          Objekte
-        </button>
-        <button
-          onClick={() => {
-            setPickerTab('rows')
-            setActivePanel(activePanel === 'picker' ? null : 'picker')
-          }}
-          className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'picker' && pickerTab === 'rows' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-          }`}
-          title="Stuhlreihen-Generator"
-        >
-          {svg(<>{[6, 12, 18].flatMap((x) => [8, 16].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r={1.5} />))}</>)}
-          Reihen
-        </button>
-        <button
-          onClick={() => {
-            setPickerTab('nivtec')
-            setActivePanel(activePanel === 'picker' ? null : 'picker')
-          }}
-          className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'picker' && pickerTab === 'nivtec' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-          }`}
-          title="NivTec Import"
-        >
-          {svg(<><path d="M12 15V4M8 8l4-4 4 4" /><path d="M4 15v4h16v-4" /></>)}
-          NivTec
-        </button>
-        <button
-          onClick={() => setActivePanel(activePanel === 'text' ? null : 'text')}
-          className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'text' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-          }`}
-          title="Freie Textbeschriftung in den Plan setzen"
-        >
-          {svg(<><path d="M5 6h14M12 6v13" /></>)}
-          Text
-        </button>
-        {placement && (
-          <>
-            <div className="w-px h-8 bg-line mx-1" />
-            <button
-              onClick={() => setPlacement(null)}
-              className="h-12 px-3 rounded-xl bg-accent text-white text-xs font-semibold hover:bg-accent-hover"
-              title="Platzieren beenden (Esc)"
-            >
-              Fertig
-            </button>
-          </>
-        )}
-      </div>
-
       {/* Phasen-Zeitleiste */}
       <div className="absolute left-4 right-4 bottom-4 z-20">
         <PhaseTimeline
@@ -690,20 +615,26 @@ export default function EditorView() {
         />
       </div>
 
-      {/* Draggable Floating Toolbars */}
+      {/* Werkzeug-Dock */}
       <FloatingToolbar
-        onMeasure={() => changeTool('measure')}
-        onArea={() => changeTool('area')}
-        onDuplicate={duplicateSelected}
-        isMeasuring={tool === 'measure'}
-        isAreaMode={tool === 'area'}
+        tool={tool}
+        onToolChange={changeTool}
+        placement={placement}
+        onPlacementDone={() => setPlacement(null)}
+        activePanel={activePanel}
+        onPanelChange={setActivePanel}
+        pickerTab={pickerTab}
+        onPickerTabChange={setPickerTab}
         zoom={viewport?.zoom ?? 1}
         onZoomIn={() => canvasRef.current?.zoomIn()}
         onZoomOut={() => canvasRef.current?.zoomOut()}
         onZoomReset={() => canvasRef.current?.fitToView()}
+        onZoomSet={(percent) => canvasRef.current?.setZoomPercent(percent)}
         onExportImage={() => void handleExportPdf()}
         gridEnabled={gridEnabled}
         onGridToggle={() => setGridEnabled(!gridEnabled)}
+        codesHidden={codesHidden}
+        onCodesToggle={() => toggleLayer('hideCodes')}
       />
 
       {/* Tastatur-Hilfe */}
