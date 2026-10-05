@@ -164,15 +164,19 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
         <ColorSwatches item={item} />
       )}
       <div className="flex flex-col gap-1.5 pt-1">
-        {laterPhaseCount > 0 && (
-          <button
-            onClick={() => copyItemsToLaterPhases([item.id])}
-            className={`w-full ${btn('primaryOutline', 'sm')}`}
-            title="Objekt so, wie es hier ist, als eigenständige Kopie in alle folgenden Phasen übernehmen"
-          >
-            ⇥ In folgende Phasen übernehmen ({laterPhaseCount})
-          </button>
-        )}
+        <button
+          onClick={() => copyItemsToLaterPhases([item.id])}
+          disabled={laterPhaseCount <= 0}
+          className={`w-full ${btn('primaryOutline', 'sm')} disabled:opacity-40 disabled:cursor-not-allowed`}
+          title={
+            laterPhaseCount > 0
+              ? 'Objekt so, wie es hier ist, als eigenständige Kopie in alle folgenden Phasen übernehmen'
+              : 'Keine folgende Phase vorhanden – wechsle in eine frühere Phase oder lege eine neue an'
+          }
+        >
+          ⇥ In folgende Phasen übernehmen ({Math.max(laterPhaseCount, 0)})
+        </button>
+        {laterPhaseCount <= 0 && <div className="text-[11px] text-ink3 -mt-0.5">Dies ist die letzte Phase.</div>}
         <button onClick={onDuplicate} className={`w-full ${btn('primaryOutline', 'sm')}`} title="Strg/Cmd+D">
           ⧉ Duplizieren
         </button>
