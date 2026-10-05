@@ -125,6 +125,41 @@ export interface CustomItemSpec {
   color: string
 }
 
+/**
+ * Eigenschaften (Name, Größe, Farbe, Notiz) nur in der aktuellen Phase ändern.
+ * Ist das Objekt auch in anderen Phasen sichtbar (z. B. nach "Phase übernehmen"), wird es
+ * aufgeteilt: Die anderen Phasen behalten eine Kopie mit den alten Eigenschaften, das
+ * Objekt selbst (gleiche ID, Auswahl bleibt erhalten) gilt danach nur noch für diese Phase.
+ */
+function patchItemInCurrentPhase(
+  state: EventState,
+  itemId: string,
+  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color'>>,
+): Pick<EventState, 'items' | 'itemOrder'> {
+  const item = state.items[itemId]
+  const current = item.phaseData[state.currentPhaseId]
+  const sharedElsewhere = Object.entries(item.phaseData).some(
+    ([phaseId, pd]) => phaseId !== state.currentPhaseId && pd.visible,
+  )
+  if (!current || !sharedElsewhere) {
+    return { items: { ...state.items, [itemId]: { ...item, ...patch } }, itemOrder: state.itemOrder }
+  }
+  const otherPhaseData = { ...item.phaseData }
+  delete otherPhaseData[state.currentPhaseId]
+  const copyId = uuid()
+  const idx = state.itemOrder.indexOf(itemId)
+  const itemOrder = [...state.itemOrder]
+  itemOrder.splice(idx < 0 ? itemOrder.length : idx + 1, 0, copyId)
+  return {
+    items: {
+      ...state.items,
+      [copyId]: { ...item, id: copyId, phaseData: otherPhaseData },
+      [itemId]: { ...item, ...patch, phaseData: { [state.currentPhaseId]: current } },
+    },
+    itemOrder,
+  }
+}
+
 export const useEventStore = create<Store>((set, get) => {
   /** Snapshot des Objekt-Zustands vor einer mutierenden Aktion auf den Undo-Stack legen. */
   const pushHistory = () => {
@@ -415,27 +450,24 @@ export const useEventStore = create<Store>((set, get) => {
         const item = state.items[itemId]
         if (!item || item.label === label) return state
         pushHistory()
-        return {
-          items: { ...state.items, [itemId]: { ...item, label } },
-        }
+        return patchItemInCurrentPhase(state, itemId, { label })
       })
     },
 
     setItemNote: (itemId, note) => {
-      pushHistory()
-      set((state) => ({
-        items: { ...state.items, [itemId]: { ...state.items[itemId], note } },
-      }))
+      set((state) => {
+        if (!state.items[itemId]) return state
+        pushHistory()
+        return patchItemInCurrentPhase(state, itemId, { note })
+      })
     },
 
     resizeItem: (itemId, width, height) => {
-      pushHistory()
-      set((state) => ({
-        items: {
-          ...state.items,
-          [itemId]: { ...state.items[itemId], width, height },
-        },
-      }))
+      set((state) => {
+        if (!state.items[itemId]) return state
+        pushHistory()
+        return patchItemInCurrentPhase(state, itemId, { width, height })
+      })
     },
 
     setItemColor: (itemId, color) => {
@@ -445,12 +477,7 @@ export const useEventStore = create<Store>((set, get) => {
         const newColor = color ?? undefined
         if (item.color === newColor) return state
         pushHistory()
-        return {
-          items: {
-            ...state.items,
-            [itemId]: { ...item, color: newColor },
-          },
-        }
+        return patchItemInCurrentPhase(state, itemId, { color: newColor })
       })
     },
 
