@@ -148,9 +148,6 @@ export default function DraggableBar({
 
       const clamped = clampPosition(newX, newY, size.width, size.height)
 
-      // Store position in ref immediately (for pointerUp to read)
-      dragStateRef.current.position = { x: clamped.x, y: clamped.y }
-
       // Apply directional snap (unless alt-key is pressed)
       let snapResult
       if (e.altKey) {
@@ -170,6 +167,10 @@ export default function DraggableBar({
         )
         dirSnapRef.current = snapResult.state
       }
+
+      // Store SNAPPED position in ref immediately (for pointerUp to read)
+      // This is critical: we must save the snapped position, not the clamped one
+      dragStateRef.current.position = { x: snapResult.position.x, y: snapResult.position.y }
 
       // Update state for rendering
       setPosition({
@@ -207,15 +208,19 @@ export default function DraggableBar({
         // Detect anchor based on current position
         let anchor = detectAnchor(newX, newY, size.width, size.height)
 
-        // Override anchor with snap side if applicable
-        if (snapState.side === 'left') {
-          anchor = 'top-left'
-        } else if (snapState.side === 'right') {
-          anchor = 'top-right'
-        } else if (snapState.side === 'bottom') {
-          anchor = 'bottom-left'
-        } else if (snapState.side === 'top') {
-          anchor = 'top-left'
+        // Override anchor only for the snapped axis, preserve the other axis
+        if (snapState.side === 'left' || snapState.side === 'right') {
+          // Horizontal snap: override left/right part of anchor, keep top/bottom
+          const isTop = anchor === 'top-left' || anchor === 'top-right'
+          anchor = isTop
+            ? (`top-${snapState.side}` as AnchorPosition)
+            : (`bottom-${snapState.side}` as AnchorPosition)
+        } else if (snapState.side === 'top' || snapState.side === 'bottom') {
+          // Vertical snap: override top/bottom part of anchor, keep left/right
+          const isLeft = anchor === 'top-left' || anchor === 'bottom-left'
+          anchor = isLeft
+            ? (`${snapState.side}-left` as AnchorPosition)
+            : (`${snapState.side}-right` as AnchorPosition)
         }
 
         // Calculate offset from anchor for storage

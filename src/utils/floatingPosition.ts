@@ -97,16 +97,25 @@ export function savePositions(positions: StoredPositionsV4): void {
   }
 }
 
-/** Clamp position to screen bounds. */
+/** Clamp position to screen bounds, respecting safe insets. */
 export function clampPosition(
   x: number,
   y: number,
   width: number,
   height: number
 ): { x: number; y: number } {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  // Calculate safe bounds, but allow larger toolbars to exceed them
+  const minX = SAFE_INSETS.left
+  const maxX = vw - SAFE_INSETS.right - width
+  const minY = SAFE_INSETS.top
+  const maxY = vh - SAFE_INSETS.bottom - height
+
   return {
-    x: Math.max(0, Math.min(x, window.innerWidth - width)),
-    y: Math.max(0, Math.min(y, window.innerHeight - height)),
+    x: Math.max(Math.min(minX, maxX), Math.min(x, maxX)),
+    y: Math.max(Math.min(minY, maxY), Math.min(y, maxY)),
   }
 }
 
@@ -286,11 +295,12 @@ export function applyDirectionalSnap(
   const absDy = Math.abs(dy)
   const isDominantHorizontal = absDx > absDy
 
-  // Calculate distances to edges
-  const distFromLeft = position.x
-  const distFromRight = vw - (position.x + toolbarWidth)
-  const distFromTop = position.y
-  const distFromBottom = vh - (position.y + toolbarHeight)
+  // Calculate distances to edges (relative to safe insets, not screen edge)
+  // Negative = beyond the safe-area line (snapable)
+  const distFromLeft = position.x - SAFE_INSETS.left
+  const distFromRight = (vw - SAFE_INSETS.right) - (position.x + toolbarWidth)
+  const distFromTop = position.y - SAFE_INSETS.top
+  const distFromBottom = (vh - SAFE_INSETS.bottom) - (position.y + toolbarHeight)
 
   let newX = position.x
   let newY = position.y
