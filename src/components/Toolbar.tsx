@@ -5,6 +5,9 @@ import type { LayerState } from '../types'
 import { island, islandBtn, kbd } from '../utils/ui'
 import TemplatesMenu from './TemplatesMenu'
 import VersionsMenu from './VersionsMenu'
+import ShareDialog from './ShareDialog'
+import { SyncStatusLine } from './SyncStatus'
+import { useSyncStore } from '../backend/projectSync'
 
 const LAYER_LABELS: Record<keyof LayerState, string> = {
   walls: 'Grundriss',
@@ -33,6 +36,9 @@ export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSk
   const canUndo = useEventStore((s) => s.historyPast.length > 0)
   const canRedo = useEventStore((s) => s.historyFuture.length > 0)
   const closeProject = useProjectsStore((s) => s.closeProject)
+  const projectId = useSyncStore((s) => s.projectId)
+  const role = useSyncStore((s) => s.role)
+  const [sharing, setSharing] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [viewMenuOpen, setViewMenuOpen] = useState(false)
   const viewMenuRef = useRef<HTMLDivElement>(null)
@@ -61,9 +67,22 @@ export default function Toolbar({ onExportPdf, onPresent, onOpenCommand, onionSk
             className="text-[15px] font-bold text-ink bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-accent/30 rounded px-1 w-[min(220px,40vw)]"
             title="Projektname"
           />
-          <span className="text-[11px] text-ink3 px-1 leading-tight">Kongresshalle Vallendar · Projekte</span>
+          <SyncStatusLine />
         </div>
+        <button onClick={() => setSharing(true)} title="Wer hat Zugriff auf dieses Projekt?" className={islandBtn('chip', 'ml-1')}>
+          {role === 'owner' ? 'Teilen' : 'Mitglieder'}
+        </button>
       </div>
+
+      {sharing && projectId && role && (
+        <ShareDialog
+          projectId={projectId}
+          projectName={eventName}
+          myRole={role}
+          onClose={() => setSharing(false)}
+          onLeft={() => useProjectsStore.setState({ currentProjectId: null })}
+        />
+      )}
 
       <button
         onClick={onOpenCommand}

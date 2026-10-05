@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { v4 as uuid } from 'uuid'
 import { useEventStore } from '../store/store'
 import type { EventItem } from '../types'
-import { loadTemplates, saveTemplates, type LayoutTemplate, type TemplateItem } from '../utils/templateStorage'
+import type { LayoutTemplate, TemplateItem } from '../utils/templateStorage'
+import { createTemplate, deleteTemplate, listTemplates } from '../backend/api'
+import { errorMessage } from '../backend/pb'
 import { island, islandBtn } from '../utils/ui'
 
 /** „Vorlagen“-Dropdown: sichtbaren Aufbau der aktuellen Phase speichern bzw. als Vorlage einfügen. */
@@ -13,11 +15,17 @@ export default function TemplatesMenu() {
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
-    setTemplates(loadTemplates())
+    setLoading(true)
+    setError(null)
+    listTemplates()
+      .then(setTemplates, (err) => setError(errorMessage(err)))
+      .finally(() => setLoading(false))
     function onClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
@@ -25,9 +33,14 @@ export default function TemplatesMenu() {
     return () => window.removeEventListener('mousedown', onClickOutside)
   }, [open])
 
-  const update = (next: LayoutTemplate[]) => {
-    saveTemplates(next)
-    setTemplates(next)
+  const run = async (action: () => Promise<void>, next: LayoutTemplate[]) => {
+    setError(null)
+    try {
+      await action()
+      setTemplates(next)
+    } catch (err) {
+      setError(errorMessage(err))
+    }
   }
 
   const commitSave = () => {
@@ -42,7 +55,7 @@ export default function TemplatesMenu() {
     }
     if (captured.length > 0) {
       const tpl: LayoutTemplate = { id: uuid(), name: name.trim() || 'Vorlage', createdAt: Date.now(), items: captured }
-      update([tpl, ...loadTemplates()])
+      void run(() => createTemplate(tpl), [tpl, ...templates])
     }
     setName('')
     setNaming(false)
@@ -95,7 +108,7 @@ export default function TemplatesMenu() {
                       <span className="flex-1 truncate text-xs text-ink2 px-2">„{t.name}“ löschen?</span>
                       <button
                         onClick={() => {
-                          update(templates.filter((x) => x.id !== t.id))
+                          void run(() => deleteTemplate(t.id), templates.filter((x) => x.id !== t.id))
                           setConfirmDeleteId(null)
                         }}
                         className="px-2 py-1 rounded-md bg-red-600 text-white text-xs font-semibold"
@@ -127,7 +140,11 @@ export default function TemplatesMenu() {
                   )}
                 </li>
               ))}
-              {templates.length === 0 && <li className="text-xs text-ink3 text-center py-3">Noch keine Vorlagen gespeichert</li>}
+              {error && <li className="text-xs text-red-700 text-center py-2">{error}</li>}
+              {loading && templates.length === 0 && <li className="text-xs text-ink3 text-center py-3">Lade Vorlagen…</li>}
+              {!loading && !error && templates.length === 0 && (
+                <li className="text-xs text-ink3 text-center py-3">Noch keine Vorlagen gespeichert</li>
+              )}
             </ul>
           </div>
         </div>

@@ -1,8 +1,9 @@
-import { unpackZip, calculateSha256 } from './zipHelper'
-import { saveProjectData, saveProjectVersions, type ProjectVersion } from './projectStorage'
-import { mergeTemplates, type LayoutTemplate } from './templateStorage'
-import type { ProjectMeta } from '../store/projectsStore'
+import { v4 as uuid } from 'uuid'
+import { unpackZip } from './zipHelper'
+import type { ProjectData, ProjectVersion } from './projectStorage'
+import type { LayoutTemplate } from './templateStorage'
 import type { ExportManifest } from './exportProject'
+import * as api from '../backend/api'
 
 export interface ImportResult {
   imported: { projectId: string; name: string }[]
@@ -10,11 +11,16 @@ export interface ImportResult {
   templateCount: number
 }
 
+interface ExportedMeta {
+  id: string
+  name: string
+}
+
 export interface ImportData {
   manifest: ExportManifest
-  projects: ProjectMeta[]
+  projects: ExportedMeta[]
   templates: LayoutTemplate[]
-  projectData: Record<string, { data: any; versions?: ProjectVersion[] }>
+  projectData: Record<string, { data: ProjectData; versions?: ProjectVersion[] }>
 }
 
 export async function parseExportZip(blob: Blob): Promise<ImportData> {
@@ -24,51 +30,25 @@ export async function parseExportZip(blob: Blob): Promise<ImportData> {
   if (!manifestJson) throw new Error('manifest.json not found in ZIP')
   const manifest: ExportManifest = JSON.parse(manifestJson)
 
-  const projectsJson = files['projects.json'] || '[]'
-  const projects: ProjectMeta[] = JSON.parse(projectsJson)
+  const projects: ExportedMeta[] = JSON.parse(files['projects.json'] || '[]')
+  const templates: LayoutTemplate[] = JSON.parse(files['templates.json'] || '[]')
 
-  const templatesJson = files['templates.json'] || '[]'
-  const templates: LayoutTemplate[] = JSON.parse(templatesJson)
-
-  const projectData: Record<string, { data: any; versions?: ProjectVersion[] }> = {}
-
+  const projectData: ImportData['projectData'] = {}
   for (const projectId of manifest.projectIds) {
     const dataJson = files[`projects/${projectId}/data.json`]
     if (!dataJson) continue
-
-    const data = JSON.parse(dataJson)
     const versionsJson = files[`projects/${projectId}/versions.json`]
-    const versions = versionsJson ? JSON.parse(versionsJson) : undefined
-
-    projectData[projectId] = { data, versions }
+    projectData[projectId] = { data: JSON.parse(dataJson), versions: versionsJson ? JSON.parse(versionsJson) : undefined }
   }
 
   return { manifest, projects, templates, projectData }
 }
 
-export async function validateImportData(data: ImportData): Promise<string[]> {
-  const errors: string[] = []
-
-  if (data.manifest.version !== 1) {
-    errors.push('Unsupported manifest version')
-  }
-
-  for (const [path, hash] of Object.entries(data.manifest.checksums)) {
-    const files = await unpackZip(
-      await fetch('blob:' + (typeof window !== 'undefined' ? window.location.href : '')).then((r) => r.blob()),
-    )
-    const content = files[path]
-    if (content) {
-      const calculatedHash = await calculateSha256(content)
-      if (calculatedHash !== hash) {
-        errors.push(`Checksum mismatch for ${path}`)
-      }
-    }
-  }
-
-  return errors
-}
-
+/**
+ * ZIP-Export auf den Server einspielen. Projekte, die es schon gibt, werden je nach Wahl
+ * überschrieben (nur mit Schreibrecht) oder als Kopie angelegt. Versionen bekommen immer
+ * neue IDs; Vorlagen kommen zu den eigenen dazu, sofern noch nicht vorhanden.
+ */
 export async function importAllProjects(
   file: File,
   onMergeDuplicates: (
@@ -76,90 +56,65 @@ export async function importAllProjects(
   ) => Promise<'overwrite' | 'keepBoth' | 'cancel'>,
 ): Promise<ImportResult> {
   const data = await parseExportZip(file)
-  const imported: { projectId: string; name: string }[] = []
-  const skipped: { projectId: string; reason: string }[] = []
+  const imported: ImportResult['imported'] = []
+  const skipped: ImportResult['skipped'] = []
 
-  const projectsMetaJson = localStorage.getItem('whu-planner-projects')
-  const projectsData = projectsMetaJson ? JSON.parse(projectsMetaJson) : {}
-  const existingProjects: ProjectMeta[] = projectsData.state?.projects || []
-  const existingIds = new Set(existingProjects.map((p) => p.id))
+  const existing = new Map((await api.listProjects()).map((p) => [p.id, p]))
+  const duplicates = data.projects.filter((p) => existing.has(p.id))
 
-  const duplicates = data.projects.filter((p) => existingIds.has(p.id))
-
-  let mergeStrategy: 'overwrite' | 'keepBoth' | 'cancel' = 'keepBoth'
+  let strategy: 'overwrite' | 'keepBoth' | 'cancel' = 'keepBoth'
   if (duplicates.length > 0) {
-    mergeStrategy = await onMergeDuplicates(duplicates.map((p) => ({ projectId: p.id, name: p.name })))
+    strategy = await onMergeDuplicates(duplicates.map((p) => ({ projectId: p.id, name: p.name })))
   }
+  if (strategy === 'cancel') return { imported, skipped, templateCount: 0 }
 
-  if (mergeStrategy === 'cancel') {
-    return { imported, skipped, templateCount: 0 }
-  }
-
-  const newProjects: ProjectMeta[] = []
-  for (const projectMeta of data.projects) {
-    let finalId = projectMeta.id
-
-    if (existingIds.has(projectMeta.id)) {
-      if (mergeStrategy === 'keepBoth') {
-        finalId = `${projectMeta.id}_imported`
-        while (existingIds.has(finalId)) {
-          finalId = `${finalId}_2`
-        }
-      }
-    }
-
-    const projectContent = data.projectData[projectMeta.id]
-    if (!projectContent) {
-      skipped.push({ projectId: projectMeta.id, reason: 'No data.json found' })
+  for (const meta of data.projects) {
+    const content = data.projectData[meta.id]
+    if (!content) {
+      skipped.push({ projectId: meta.id, reason: 'No data.json found' })
       continue
     }
-
     try {
-      const finalMeta: ProjectMeta = {
-        id: finalId,
-        name: projectMeta.name,
-        updatedAt: Date.now(),
+      let projectId: string
+      const current = existing.get(meta.id)
+      if (current && strategy === 'overwrite') {
+        if (current.role === 'viewer') {
+          skipped.push({ projectId: meta.id, reason: 'Nur Leserechte' })
+          continue
+        }
+        const { version } = await api.loadProject(meta.id)
+        await api.saveProjectData(meta.id, content.data, version + 1)
+        await api.renameProject(meta.id, meta.name)
+        projectId = meta.id
+      } else {
+        // Neue ID, wenn sie hier schon existiert oder (für uns unsichtbar) anderweitig vergeben ist.
+        projectId = current ? uuid() : meta.id
+        try {
+          await api.createProject(meta.name, content.data, projectId)
+        } catch {
+          projectId = await api.createProject(meta.name, content.data)
+        }
       }
-
-      saveProjectData(finalId, projectContent.data)
-      if (projectContent.versions) {
-        saveProjectVersions(finalId, projectContent.versions)
+      for (const v of content.versions ?? []) {
+        await api.createVersion(projectId, { ...v, id: uuid() })
       }
-
-      newProjects.push(finalMeta)
-      imported.push({ projectId: finalId, name: projectMeta.name })
-      existingIds.add(finalId)
+      imported.push({ projectId, name: meta.name })
     } catch (err) {
-      skipped.push({ projectId: projectMeta.id, reason: (err as Error).message })
+      skipped.push({ projectId: meta.id, reason: (err as Error).message })
     }
   }
 
-  const mergedProjects =
-    mergeStrategy === 'overwrite'
-      ? [
-          ...existingProjects.filter((p) => !duplicates.map((d) => d.id).includes(p.id)),
-          ...newProjects,
-        ]
-      : [...existingProjects, ...newProjects]
-
+  let templateCount = 0
   try {
-    const projectsMetaJson = localStorage.getItem('whu-planner-projects')
-    const projectsData = projectsMetaJson ? JSON.parse(projectsMetaJson) : { state: {} }
-    projectsData.state.projects = mergedProjects
-    localStorage.setItem('whu-planner-projects', JSON.stringify(projectsData))
-  } catch (err) {
-    throw new Error(`Failed to update projects metadata: ${(err as Error).message}`)
-  }
-
-  try {
-    mergeTemplates(data.templates)
+    const own = new Set((await api.listTemplates()).map((t) => t.id))
+    for (const t of data.templates) {
+      if (own.has(t.id)) continue
+      await api.createTemplate(t).catch(() => api.createTemplate({ ...t, id: uuid() }))
+      templateCount++
+    }
   } catch (err) {
     console.warn('Failed to import templates:', err)
   }
 
-  return {
-    imported,
-    skipped,
-    templateCount: data.templates.length,
-  }
+  return { imported, skipped, templateCount }
 }

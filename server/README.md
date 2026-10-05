@@ -56,6 +56,35 @@ Admin-Oberfläche ohne Domain (SSH-Tunnel), dann `http://localhost:8090/_/` öff
 ssh -N -L 8090:127.0.0.1:8090 root@SERVER
 ```
 
+## Frontend ausrollen
+
+PocketBase liefert die gebaute App aus `pb_public/` aus – App und API laufen
+unter derselben Adresse.
+
+```sh
+npm run build
+rsync -a --delete --chown=root:root dist/ root@SERVER:/opt/stadthalle/pb_public/
+```
+
+Vor der Domain-Umstellung über den SSH-Tunnel (s. o.) unter
+`http://localhost:8090/` erreichbar.
+
+## Lokal entwickeln
+
+`npm run dev` leitet `/api` und `/_` an PocketBase weiter (`vite.config.ts`),
+standardmäßig an `127.0.0.1:8090`:
+
+- **Mit eigener Test-Datenbank** (empfohlen): PocketBase-Binary herunterladen
+  und im Repo-Ordner starten, dann einen Admin anlegen und unter
+  `http://localhost:8090/_/` Test-Accounts:
+  ```sh
+  ./pocketbase serve --dir server/pb_data --migrationsDir server/pb_migrations --hooksDir server/pb_hooks
+  ```
+- **Gegen den echten Server**: SSH-Tunnel öffnen (s. o.) – dann arbeitet man
+  aber mit den echten Daten.
+
+Anderer Port: `PB_URL=http://127.0.0.1:18091 npm run dev`.
+
 ## Domain umstellen
 
 1. Caddy-Eintrag einbinden. Auf `apptool-dev` gehört die Caddy-Konfiguration

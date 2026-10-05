@@ -1,120 +1,94 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { v4 as uuid } from 'uuid'
-import {
-  deleteProjectData,
-  saveProjectData,
-  loadProjectData,
-  loadProjectVersions,
-  saveProjectVersions,
-  type ProjectData,
-} from '../utils/projectStorage'
+import * as api from '../backend/api'
+import { errorMessage, pb } from '../backend/pb'
+import { canLeaveProject } from '../backend/projectSync'
+import { emptyProjectData } from '../utils/projectStorage'
 
-export interface ProjectMeta {
-  id: string
-  name: string
-  updatedAt: number
-}
+export type { ProjectMeta } from '../backend/api'
 
 interface ProjectsStore {
-  projects: ProjectMeta[]
+  projects: api.ProjectMeta[]
+  loading: boolean
+  /** Letzter Fehler einer Aktion in der Projektübersicht. */
+  error: string | null
   currentProjectId: string | null
-  createProject: (name: string) => string
+  refresh: () => Promise<void>
+  createProject: (name: string) => Promise<void>
   openProject: (id: string) => void
   closeProject: () => void
-  renameProject: (id: string, name: string) => void
-  deleteProject: (id: string) => void
-  duplicateProject: (projectId: string, newName?: string) => void
-  touchProject: (id: string) => void
-  importProjects: (meta: ProjectMeta[]) => void
-}
-
-function emptyProjectData(): ProjectData {
-  const phaseId = uuid()
-  return {
-    eventName: 'Neues Event',
-    currentPhaseId: phaseId,
-    phases: [{ id: phaseId, name: 'Phase 1', order: 0 }],
-    items: {},
-    itemOrder: [],
-    layers: { walls: true, rigging: false, power: false, simplified: false },
-  }
+  renameProject: (id: string, name: string) => Promise<void>
+  deleteProject: (id: string) => Promise<void>
+  /** Aus einem geteilten Projekt austragen. */
+  leaveProject: (id: string) => Promise<void>
+  duplicateProject: (projectId: string, newName?: string) => Promise<void>
+  logout: () => void
+  clearError: () => void
 }
 
 export const useProjectsStore = create<ProjectsStore>()(
   persist(
-    (set) => ({
-      projects: [],
-      currentProjectId: null,
-
-      createProject: (name) => {
-        const id = uuid()
-        const meta: ProjectMeta = { id, name: name || 'Neues Projekt', updatedAt: Date.now() }
-        saveProjectData(id, emptyProjectData())
-        set((state) => ({ projects: [meta, ...state.projects], currentProjectId: id }))
-        return id
-      },
-
-      openProject: (id) => set({ currentProjectId: id }),
-
-      closeProject: () => set({ currentProjectId: null }),
-
-      renameProject: (id, name) =>
-        set((state) => ({
-          projects: state.projects.map((p) => (p.id === id ? { ...p, name } : p)),
-        })),
-
-      deleteProject: (id) => {
-        deleteProjectData(id)
-        set((state) => ({
-          projects: state.projects.filter((p) => p.id !== id),
-          currentProjectId: state.currentProjectId === id ? null : state.currentProjectId,
-        }))
-      },
-
-      duplicateProject: (projectId, newName) => {
-        // Load source project data and versions
-        const sourceData = loadProjectData(projectId)
-        const sourceProject = useProjectsStore.getState().projects.find((p) => p.id === projectId)
-
-        if (!sourceData || !sourceProject) return
-
-        // Generate new ID and name
-        const newId = uuid()
-        const finalName = newName || `${sourceProject.name} (Kopie)`
-
-        // Deep clone project data
-        const duplicatedData = structuredClone(sourceData)
-
-        // Save duplicated project data
-        saveProjectData(newId, duplicatedData)
-
-        // Load and duplicate versions if they exist
-        const sourceVersions = loadProjectVersions(projectId)
-        if (sourceVersions.length > 0) {
-          const duplicatedVersions = sourceVersions.map((v) => ({
-            ...v,
-            id: uuid(),
-            data: structuredClone(v.data),
-          }))
-          saveProjectVersions(newId, duplicatedVersions)
+    (set, get) => {
+      /** Aktion ausführen, danach Liste neu laden; Fehler landen in `error`. */
+      const run = async (action: () => Promise<unknown>) => {
+        try {
+          await action()
+          await get().refresh()
+        } catch (err) {
+          set({ error: errorMessage(err) })
         }
+      }
 
-        // Add to projects list
-        const meta: ProjectMeta = { id: newId, name: finalName, updatedAt: Date.now() }
-        set((state) => ({ projects: [meta, ...state.projects] }))
-      },
+      return {
+        projects: [],
+        loading: true,
+        error: null,
+        currentProjectId: null,
 
-      touchProject: (id) =>
-        set((state) => ({
-          projects: state.projects.map((p) => (p.id === id ? { ...p, updatedAt: Date.now() } : p)),
-        })),
+        refresh: async () => {
+          try {
+            const projects = await api.listProjects()
+            set({ projects, loading: false })
+          } catch (err) {
+            set({ loading: false, error: errorMessage(err) })
+          }
+        },
 
-      importProjects: (meta) =>
-        set((state) => ({
-          projects: [...state.projects, ...meta],
-        })),
-    }),
-    { name: 'whu-planner-projects' },
+        createProject: (name) =>
+          run(async () => {
+            const id = await api.createProject(name || 'Neues Projekt', emptyProjectData())
+            set({ currentProjectId: id })
+          }),
+
+        openProject: (id) => set({ currentProjectId: id, error: null }),
+
+        closeProject: () => {
+          if (canLeaveProject()) set({ currentProjectId: null })
+        },
+
+        renameProject: (id, name) => run(() => api.renameProject(id, name)),
+
+        deleteProject: (id) => run(() => api.deleteProject(id)),
+
+        leaveProject: (id) => run(() => api.removeMember(id, pb.authStore.record!.id)),
+
+        duplicateProject: (projectId, newName) =>
+          run(() => {
+            const source = get().projects.find((p) => p.id === projectId)
+            return api.duplicateProject(projectId, newName || `${source?.name ?? 'Projekt'} (Kopie)`)
+          }),
+
+        logout: () => {
+          pb.authStore.clear()
+          set({ projects: [], loading: true, currentProjectId: null, error: null })
+        },
+
+        clearError: () => set({ error: null }),
+      }
+    },
+    // Nur das offene Projekt merken (zum Wiederöffnen nach Neuladen) – die Liste kommt vom Server.
+    // Eigener Schlüssel: unter „whu-planner-projects“ liegen noch die Projekte von vor dem
+    // Backend, die legacyImport.ts von dort übernimmt.
+    { name: 'whu-planner-session', partialize: (s) => ({ currentProjectId: s.currentProjectId }) },
   ),
 )

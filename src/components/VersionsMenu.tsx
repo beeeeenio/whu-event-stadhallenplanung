@@ -1,26 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
 import { v4 as uuid } from 'uuid'
 import { useEventStore } from '../store/store'
-import { useProjectsStore } from '../store/projectsStore'
-import { loadProjectVersions, saveProjectVersions, type ProjectVersion } from '../utils/projectStorage'
+import { useSyncStore } from '../backend/projectSync'
+import { createVersion, deleteVersion, listVersions } from '../backend/api'
+import { errorMessage } from '../backend/pb'
+import type { ProjectVersion } from '../utils/projectStorage'
 import { island, islandBtn } from '../utils/ui'
 
 const formatTime = (ts: number) => new Date(ts).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
 
 /** „Versionen“-Dropdown: benannte Stände des aktuellen Projekts speichern und wiederherstellen. */
 export default function VersionsMenu() {
-  const projectId = useProjectsStore((s) => s.currentProjectId)
+  const projectId = useSyncStore((s) => s.projectId)
+  const canEdit = useSyncStore((s) => s.role === 'owner' || s.role === 'editor')
   const restoreVersion = useEventStore((s) => s.restoreVersion)
   const [open, setOpen] = useState(false)
   const [versions, setVersions] = useState<ProjectVersion[]>([])
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open || !projectId) return
-    setVersions(loadProjectVersions(projectId))
+    setLoading(true)
+    setError(null)
+    listVersions(projectId)
+      .then(setVersions, (err) => setError(errorMessage(err)))
+      .finally(() => setLoading(false))
     function onClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
@@ -30,9 +39,14 @@ export default function VersionsMenu() {
 
   if (!projectId) return null
 
-  const update = (next: ProjectVersion[]) => {
-    saveProjectVersions(projectId, next)
-    setVersions(next)
+  const run = async (action: () => Promise<void>, next: ProjectVersion[]) => {
+    setError(null)
+    try {
+      await action()
+      setVersions(next)
+    } catch (err) {
+      setError(errorMessage(err))
+    }
   }
 
   const commitSave = () => {
@@ -43,7 +57,7 @@ export default function VersionsMenu() {
       createdAt,
       data: useEventStore.getState().getSnapshot(),
     }
-    update([version, ...loadProjectVersions(projectId)])
+    void run(() => createVersion(projectId, version), [version, ...versions])
     setName('')
     setNaming(false)
   }
@@ -61,7 +75,7 @@ export default function VersionsMenu() {
       </button>
       {open && (
         <div className={`absolute right-0 top-full mt-2 z-30 w-72 p-3 space-y-2 text-[13px] ${island}`} onMouseDown={(e) => e.stopPropagation()}>
-          {naming ? (
+          {!canEdit ? null : naming ? (
             <input
               autoFocus
               value={name}
@@ -86,7 +100,7 @@ export default function VersionsMenu() {
                     <span className="flex-1 truncate text-xs text-ink2 px-1">„{v.name}“ löschen?</span>
                     <button
                       onClick={() => {
-                        update(versions.filter((x) => x.id !== v.id))
+                        void run(() => deleteVersion(v.id), versions.filter((x) => x.id !== v.id))
                         setConfirmDeleteId(null)
                       }}
                       className="px-2 py-1 rounded-md bg-red-600 text-white text-xs font-semibold"
@@ -112,18 +126,22 @@ export default function VersionsMenu() {
                     >
                       Wiederherstellen
                     </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(v.id)}
-                      title="Version löschen"
-                      className="text-ink3 hover:text-red-700 hover:bg-red-50 text-sm w-6 h-6 rounded flex items-center justify-center leading-none transition-colors shrink-0"
-                    >
-                      ×
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => setConfirmDeleteId(v.id)}
+                        title="Version löschen"
+                        className="text-ink3 hover:text-red-700 hover:bg-red-50 text-sm w-6 h-6 rounded flex items-center justify-center leading-none transition-colors shrink-0"
+                      >
+                        ×
+                      </button>
+                    )}
                   </>
                 )}
               </li>
             ))}
-            {versions.length === 0 && <li className="text-xs text-ink3 text-center py-3">Noch keine Versionen gespeichert</li>}
+            {error && <li className="text-xs text-red-700 text-center py-2">{error}</li>}
+            {loading && versions.length === 0 && <li className="text-xs text-ink3 text-center py-3">Lade Versionen…</li>}
+            {!loading && !error && versions.length === 0 && <li className="text-xs text-ink3 text-center py-3">Noch keine Versionen gespeichert</li>}
           </ul>
         </div>
       )}

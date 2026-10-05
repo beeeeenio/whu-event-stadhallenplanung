@@ -1,50 +1,63 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
+import { ClientResponseError } from 'pocketbase'
 import ProjectsDashboard from './components/ProjectsDashboard'
 import EditorView from './components/EditorView'
-import { useEventStore } from './store/store'
+import LoginView from './components/LoginView'
+import { SyncBanner } from './components/SyncStatus'
 import { useProjectsStore } from './store/projectsStore'
-import { loadProjectData, saveProjectData } from './utils/projectStorage'
-
-const AUTOSAVE_DELAY_MS = 600
+import { pb, useCurrentUser } from './backend/pb'
+import { startSession, useSyncStore } from './backend/projectSync'
+import { btn } from './utils/ui'
 
 function App() {
+  const user = useCurrentUser()
   const currentProjectId = useProjectsStore((s) => s.currentProjectId)
-  const touchProject = useProjectsStore((s) => s.touchProject)
-  const hydrate = useEventStore((s) => s.hydrate)
-  const getSnapshot = useEventStore((s) => s.getSnapshot)
-  const loadedProjectId = useRef<string | null>(null)
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Projektdaten laden, sobald ein Projekt geöffnet wird
+  // Beim Start das Login verlängern; gibt es den Account nicht mehr, abmelden.
   useEffect(() => {
-    if (!currentProjectId || loadedProjectId.current === currentProjectId) return
-    const data = loadProjectData(currentProjectId)
-    if (data) hydrate(data)
-    loadedProjectId.current = currentProjectId
-  }, [currentProjectId, hydrate])
+    if (!pb.authStore.isValid) return
+    pb.collection('users')
+      .authRefresh()
+      .catch((err) => {
+        if (err instanceof ClientResponseError && [401, 403, 404].includes(err.status)) pb.authStore.clear()
+      })
+  }, [])
 
-  // Autosave: bei jeder Änderung am aktiven Projekt debounced in localStorage sichern
-  useEffect(() => {
-    if (!currentProjectId) return
-    const unsubscribe = useEventStore.subscribe(() => {
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-      saveTimer.current = setTimeout(() => {
-        saveProjectData(currentProjectId, getSnapshot())
-        touchProject(currentProjectId)
-      }, AUTOSAVE_DELAY_MS)
-    })
-    return () => {
-      unsubscribe()
-      if (saveTimer.current) clearTimeout(saveTimer.current)
-    }
-  }, [currentProjectId, getSnapshot, touchProject])
+  if (!user) return <LoginView />
+  if (!currentProjectId) return <ProjectsDashboard />
+  return <ProjectSession key={currentProjectId} projectId={currentProjectId} />
+}
 
-  if (!currentProjectId) {
-    loadedProjectId.current = null
-    return <ProjectsDashboard />
+/** Geöffnetes Projekt: vom Server laden, dann Editor mit automatischem Speichern (backend/projectSync.ts). */
+function ProjectSession({ projectId }: { projectId: string }) {
+  const sessionProjectId = useSyncStore((s) => s.projectId)
+  const status = useSyncStore((s) => s.status)
+  const message = useSyncStore((s) => s.message)
+  const closeProject = useProjectsStore((s) => s.closeProject)
+
+  useEffect(() => startSession(projectId), [projectId])
+
+  if (sessionProjectId !== projectId || status === 'loading') {
+    return <div className="h-screen w-screen bg-ground flex items-center justify-center text-sm text-ink3">Projekt wird geladen…</div>
   }
 
-  return <EditorView />
+  if (status === 'failed') {
+    return (
+      <div className="h-screen w-screen bg-ground flex flex-col items-center justify-center gap-3 px-4 text-center">
+        <p className="text-sm text-ink2">Das Projekt konnte nicht geladen werden{message ? `: ${message}` : '.'}</p>
+        <button onClick={closeProject} className={btn('primary', 'md')}>
+          Zur Projektübersicht
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <EditorView />
+      <SyncBanner />
+    </>
+  )
 }
 
 export default App

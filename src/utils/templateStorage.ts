@@ -11,28 +11,12 @@ export interface LayoutTemplate {
   items: TemplateItem[]
 }
 
-const TEMPLATES_KEY = 'whu-planner-templates'
-
+/** Vorlagen von vor dem Backend – nur noch für die einmalige Übernahme (src/backend/legacyImport.ts). */
 export function loadTemplates(): LayoutTemplate[] {
   try {
-    const raw = localStorage.getItem(TEMPLATES_KEY)
+    const raw = localStorage.getItem('whu-planner-templates')
     return raw ? (JSON.parse(raw) as LayoutTemplate[]) : []
   } catch {
     return []
   }
-}
-
-export function saveTemplates(templates: LayoutTemplate[]) {
-  try {
-    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates))
-  } catch {
-    // localStorage voll oder nicht verfügbar – stiller Fehlschlag
-  }
-}
-
-export function mergeTemplates(imported: LayoutTemplate[]): void {
-  const existing = loadTemplates()
-  const existingIds = new Set(existing.map((t) => t.id))
-  const toAdd = imported.filter((t) => !existingIds.has(t.id))
-  saveTemplates([...existing, ...toAdd])
 }

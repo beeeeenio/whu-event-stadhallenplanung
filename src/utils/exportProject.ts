@@ -1,7 +1,5 @@
 import { createZip, calculateSha256 } from './zipHelper'
-import { loadProjectData, loadProjectVersions } from './projectStorage'
-import { loadTemplates, type LayoutTemplate } from './templateStorage'
-import type { ProjectMeta } from '../store/projectsStore'
+import * as api from '../backend/api'
 
 export interface ExportManifest {
   version: 1
@@ -11,38 +9,25 @@ export interface ExportManifest {
   checksums: Record<string, string>
 }
 
+/** Alle sichtbaren Projekte (mit Versionen) und die eigenen Vorlagen als ZIP – Format wie vor dem Backend. */
 export async function exportAllProjects(): Promise<Blob> {
-  const projectsMetaJson = localStorage.getItem('whu-planner-projects')
-  const projectsData = projectsMetaJson ? JSON.parse(projectsMetaJson) : {}
-  const projects: ProjectMeta[] = projectsData.state?.projects || []
-
-  const templates: LayoutTemplate[] = loadTemplates()
+  const projects = (await api.listProjects()).map(({ id, name, updatedAt }) => ({ id, name, updatedAt }))
+  const templates = await api.listTemplates()
 
   const files: Record<string, string> = {}
   const checksums: Record<string, string> = {}
+  const add = async (path: string, content: string) => {
+    files[path] = content
+    checksums[path] = await calculateSha256(content)
+  }
 
-  const projectsJson = JSON.stringify(projects)
-  files['projects.json'] = projectsJson
-  checksums['projects.json'] = await calculateSha256(projectsJson)
+  await add('projects.json', JSON.stringify(projects))
+  await add('templates.json', JSON.stringify(templates))
 
-  const templatesJson = JSON.stringify(templates)
-  files['templates.json'] = templatesJson
-  checksums['templates.json'] = await calculateSha256(templatesJson)
-
-  for (const projectMeta of projects) {
-    const data = loadProjectData(projectMeta.id)
-    if (data) {
-      const dataJson = JSON.stringify(data)
-      files[`projects/${projectMeta.id}/data.json`] = dataJson
-      checksums[`projects/${projectMeta.id}/data.json`] = await calculateSha256(dataJson)
-    }
-
-    const versions = loadProjectVersions(projectMeta.id)
-    if (versions.length > 0) {
-      const versionsJson = JSON.stringify(versions)
-      files[`projects/${projectMeta.id}/versions.json`] = versionsJson
-      checksums[`projects/${projectMeta.id}/versions.json`] = await calculateSha256(versionsJson)
-    }
+  for (const meta of projects) {
+    const [{ data }, versions] = await Promise.all([api.loadProject(meta.id), api.listVersions(meta.id)])
+    if (data) await add(`projects/${meta.id}/data.json`, JSON.stringify(data))
+    if (versions.length > 0) await add(`projects/${meta.id}/versions.json`, JSON.stringify(versions))
   }
 
   const manifest: ExportManifest = {
@@ -52,12 +37,9 @@ export async function exportAllProjects(): Promise<Blob> {
     projectIds: projects.map((p) => p.id),
     checksums,
   }
+  files['manifest.json'] = JSON.stringify(manifest)
 
-  const manifestJson = JSON.stringify(manifest)
-  files['manifest.json'] = manifestJson
-
-  const zipBlob = await createZip(files)
-  return zipBlob
+  return createZip(files)
 }
 
 export function generateExportFilename(eventName?: string): string {
