@@ -49,7 +49,8 @@ export default function DraggableBar({
   const gripRef = useRef<HTMLDivElement>(null)
   const dirSnapRef = useRef<DirectionalSnapState>({ side: null, turn: 0 })
 
-  const shouldRotate = barKey === 'toolsBar' && snapInfo.y === 'bottom'
+  // Rotate toolbar when snapped to bottom or positioned near bottom edge (y <= 20)
+  const shouldRotate = barKey === 'toolsBar' && (snapInfo.y === 'bottom' || position.y <= 20)
   const dragStateRef = useRef<DragState>({
     isDragging: false,
     position: { x: defaultPosition.x, y: defaultPosition.y },
