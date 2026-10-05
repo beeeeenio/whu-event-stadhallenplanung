@@ -63,7 +63,7 @@ unter derselben Adresse.
 
 ```sh
 npm run build
-rsync -a --delete --chown=root:root dist/ root@SERVER:/opt/stadthalle/pb_public/
+rsync -rlt --delete dist/ root@SERVER:/opt/stadthalle/pb_public/
 ```
 
 Vor der Domain-Umstellung über den SSH-Tunnel (s. o.) unter
