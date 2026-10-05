@@ -85,6 +85,8 @@ export interface CanvasEditorHandle {
   zoomIn: () => void
   /** Zoom verkleinern. */
   zoomOut: () => void
+  /** Zoom auf einen Prozentwert setzen. */
+  setZoomPercent: (percent: number) => void
 }
 
 // Canvas-Grundfläche = kalibriertes Erdgeschoss (Stromplan). Bei DEFAULT_PIXELS_PER_METER=20px/m
@@ -149,6 +151,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   }
   const [measurePoints, setMeasurePoints] = useState<{ x: number; y: number }[]>([])
   const [measureCursor, setMeasureCursor] = useState<{ x: number; y: number } | null>(null)
+  const [measureLines, setMeasureLines] = useState<{ a: { x: number; y: number }; b: { x: number; y: number } }[]>([])
   const [areaStart, setAreaStart] = useState<{ x: number; y: number } | null>(null)
   const [areaCursor, setAreaCursor] = useState<{ x: number; y: number } | null>(null)
   // Rubberband-Mehrfachauswahl: bei gedrückter Shift-Taste zieht ein leerer Klick im Auswahl-
@@ -247,6 +250,10 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       const point = { x: containerSize.width / 2, y: containerSize.height / 2 }
       zoomAtPoint(newZoom, point)
     },
+    setZoomPercent: (percent: number) => {
+      if (!containerSize) return
+      zoomAtPoint(clampZoom(percent / 100), { x: containerSize.width / 2, y: containerSize.height / 2 })
+    },
   }))
 
   // Ausschnitt nach außen melden, damit z. B. die Kontextleiste an der Auswahl mitwandert
@@ -259,6 +266,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   useEffect(() => {
     setMeasurePoints([])
     setMeasureCursor(null)
+    setMeasureLines([])
     setAreaStart(null)
     setAreaCursor(null)
   }, [tool])
@@ -294,6 +302,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setMeasurePoints([])
+        setMeasureLines([])
         setAreaStart(null)
       }
     }
@@ -381,7 +390,14 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     if (tool === 'measure') {
       const pt = stagePointerToInternal(stage)
       if (!pt) return
-      setMeasurePoints((pts) => (pts.length >= 2 ? [pt] : [...pts, pt]))
+      if (measurePoints.length === 1) {
+        const a = measurePoints[0]
+        setMeasureLines((lines) => [...lines, { a, b: pt }])
+        setMeasurePoints([])
+        setMeasureCursor(null)
+      } else {
+        setMeasurePoints([pt])
+      }
       return
     }
 
@@ -514,15 +530,11 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
 
   const visibleItemIds = itemOrder.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible)
 
-  const measureEnd = measurePoints.length === 2 ? measurePoints[1] : measureCursor
   const measureStart = measurePoints[0]
-  const measureDistanceM =
-    measureStart && measureEnd
-      ? pixelsToMeters(
-          Math.hypot(measureEnd.x - measureStart.x, measureEnd.y - measureStart.y),
-          pixelsPerMeter,
-        )
-      : null
+  const measureSegments = [
+    ...measureLines,
+    ...(measureStart && measureCursor ? [{ a: measureStart, b: measureCursor }] : []),
+  ]
 
   return (
     <div className="w-full h-full relative">
@@ -674,35 +686,32 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           </Layer>
 
           {/* Maßwerkzeug */}
-          {tool === 'measure' && measureStart && measureEnd && (
+          {tool === 'measure' && measureSegments.length > 0 && (
             <Layer listening={false}>
-              <Line
-                points={[measureStart.x, measureStart.y, measureEnd.x, measureEnd.y]}
-                stroke="#dc2626"
-                strokeWidth={1.5 / zoom}
-                dash={[6 / zoom, 4 / zoom]}
-              />
-              <Circle x={measureStart.x} y={measureStart.y} radius={3 / zoom} fill="#dc2626" />
-              <Circle x={measureEnd.x} y={measureEnd.y} radius={3 / zoom} fill="#dc2626" />
-              <Group x={(measureStart.x + measureEnd.x) / 2} y={(measureStart.y + measureEnd.y) / 2 - 16 / zoom}>
-                <Rect
-                  x={-30 / zoom}
-                  y={-9 / zoom}
-                  width={60 / zoom}
-                  height={18 / zoom}
-                  fill="#dc2626"
-                  cornerRadius={3 / zoom}
-                />
-                <Text
-                  x={-30 / zoom}
-                  y={-6 / zoom}
-                  width={60 / zoom}
-                  align="center"
-                  text={`${measureDistanceM?.toFixed(2)} m`}
-                  fontSize={11 / zoom}
-                  fill="#fff"
-                />
-              </Group>
+              {measureSegments.map(({ a, b }, i) => (
+                <Group key={i}>
+                  <Line
+                    points={[a.x, a.y, b.x, b.y]}
+                    stroke="#dc2626"
+                    strokeWidth={1.5 / zoom}
+                    dash={[6 / zoom, 4 / zoom]}
+                  />
+                  <Circle x={a.x} y={a.y} radius={3 / zoom} fill="#dc2626" />
+                  <Circle x={b.x} y={b.y} radius={3 / zoom} fill="#dc2626" />
+                  <Group x={(a.x + b.x) / 2} y={(a.y + b.y) / 2 - 16 / zoom}>
+                    <Rect x={-30 / zoom} y={-9 / zoom} width={60 / zoom} height={18 / zoom} fill="#dc2626" cornerRadius={3 / zoom} />
+                    <Text
+                      x={-30 / zoom}
+                      y={-6 / zoom}
+                      width={60 / zoom}
+                      align="center"
+                      text={`${pixelsToMeters(Math.hypot(b.x - a.x, b.y - a.y), pixelsPerMeter).toFixed(2)} m`}
+                      fontSize={11 / zoom}
+                      fill="#fff"
+                    />
+                  </Group>
+                </Group>
+              ))}
             </Layer>
           )}
 
@@ -768,7 +777,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
             {placement
               ? `Tippen/Klicken zum Platzieren · ${placement.label}${placement.once ? '' : ' · Esc beendet'}`
               : tool === 'measure'
-                ? 'Messen: zwei Punkte anklicken · Esc setzt zurück'
+                ? 'Messen: Start- und Endpunkt anklicken, beliebig viele Linien · Esc löscht alle'
                 : 'Bereich: Rechteck aufziehen · Esc bricht ab'}
           </div>
         </div>

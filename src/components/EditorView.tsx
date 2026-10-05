@@ -595,7 +595,7 @@ export default function EditorView() {
         />
       </div>
 
-      {/* Draggable Floating Toolbars */}
+      {/* Werkzeug-Dock */}
       <FloatingToolbar
         tool={tool}
         onToolChange={changeTool}
@@ -609,6 +609,7 @@ export default function EditorView() {
         onZoomIn={() => canvasRef.current?.zoomIn()}
         onZoomOut={() => canvasRef.current?.zoomOut()}
         onZoomReset={() => canvasRef.current?.fitToView()}
+        onZoomSet={(percent) => canvasRef.current?.setZoomPercent(percent)}
         onExportImage={() => void handleExportPdf()}
         gridEnabled={gridEnabled}
         onGridToggle={() => setGridEnabled(!gridEnabled)}

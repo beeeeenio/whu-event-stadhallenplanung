@@ -2,9 +2,8 @@ import type { ToolMode } from './CanvasEditor'
 import type { PickerTab } from './ObjectPicker'
 import type { ItemType } from '../types'
 import type { Placement } from '../utils/placement'
-import { loadSavedPositions } from '../utils/floatingPosition'
 import { island, islandBtn } from '../utils/ui'
-import DraggableBar from './DraggableBar'
+import { useEffect, useState } from 'react'
 
 type ActivePanel = 'picker' | 'inventory' | 'properties' | 'grid' | 'command' | 'text' | 'shortcuts' | null
 
@@ -24,6 +23,7 @@ interface FloatingToolbarProps {
   onZoomIn: () => void
   onZoomOut: () => void
   onZoomReset: () => void
+  onZoomSet: (percent: number) => void
   onExportImage: () => void
   gridEnabled: boolean
   onGridToggle: () => void
@@ -78,17 +78,13 @@ export default function FloatingToolbar({
   onZoomIn,
   onZoomOut,
   onZoomReset,
+  onZoomSet,
   onExportImage,
   gridEnabled,
   onGridToggle,
 }: FloatingToolbarProps) {
-  const positions = loadSavedPositions()
-
-  const settingsPosition = positions.settingsBar || { x: 16, y: 16, anchor: 'bottom-right' as const }
 
   return (
-    <>
-      {/* Tools Bar (old dock) */}
       <div className={`absolute left-1/2 -translate-x-1/2 bottom-[108px] z-20 flex items-center gap-1 p-1.5 ${island}`} title="Werkzeuge">
         {/* Werkzeug-Dock Buttons */}
         {dockTool('select', 'Auswahl', svg(<path d="M5 3l14 8-6 2-2 6z" />), 'V', tool, placement, () => onToolChange('select'))}
@@ -160,15 +156,53 @@ export default function FloatingToolbar({
           Text
         </button>
 
-        {/* Fertig Button (when placing) */}
+        <div className="w-px h-8 bg-line mx-1" />
+
+        <button
+          onClick={onZoomOut}
+          className={islandBtn('plain', 'h-9 w-9 p-0 text-base')}
+          title="Verkleinern (−)"
+        >
+          −
+        </button>
+        <ZoomInput zoom={zoom} onZoomSet={onZoomSet} />
+        <button
+          onClick={onZoomIn}
+          className={islandBtn('plain', 'h-9 w-9 p-0 text-base')}
+          title="Vergrößern (+)"
+        >
+          +
+        </button>
+        <button
+          onClick={onZoomReset}
+          className={islandBtn('plain', 'h-9 px-2 text-[11px] font-medium')}
+          title="Plan einpassen"
+        >
+          Einpassen
+        </button>
+
+        <div className="w-px h-8 bg-line mx-1" />
+
+        <button
+          onClick={onGridToggle}
+          className={islandBtn(gridEnabled ? 'dark' : 'plain', 'h-9 w-9 p-0')}
+          title="Gitter anzeigen/verbergen"
+        >
+          📐
+        </button>
+        <button
+          onClick={onExportImage}
+          className={islandBtn('plain', 'h-9 w-9 p-0 text-lg')}
+          title="Als PDF exportieren"
+        >
+          📄
+        </button>
+
         {placement && (
           <>
             <div className="w-px h-8 bg-line mx-1" />
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onPlacementDone()
-              }}
+              onClick={onPlacementDone}
               className="h-12 px-3 rounded-xl bg-accent text-white text-xs font-semibold hover:bg-accent-hover"
               title="Platzieren beenden (Esc)"
             >
@@ -177,72 +211,39 @@ export default function FloatingToolbar({
           </>
         )}
       </div>
+  )
+}
 
-      {/* Settings Bar (compact icon column) */}
-      <DraggableBar barKey="settingsBar" defaultPosition={settingsPosition} label="Einstellungen">
-        {/* Zoom out button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onZoomOut()
-          }}
-          className={islandBtn('plain', 'h-9 w-9 p-0 text-sm')}
-          title="Verkleinern (−)"
-        >
-          −
-        </button>
+function ZoomInput({ zoom, onZoomSet }: { zoom: number; onZoomSet: (percent: number) => void }) {
+  const current = String(Math.round(zoom * 100))
+  const [draft, setDraft] = useState(current)
+  useEffect(() => setDraft(current), [current])
 
-        {/* Zoom reset button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onZoomReset()
-          }}
-          className={islandBtn('plain', 'h-9 w-9 p-0 text-xs')}
-          title="Zoom zurücksetzen (1:1)"
-        >
-          {Math.round(zoom * 100) === 100 ? '1' : Math.round(zoom * 100)}
-        </button>
+  const commit = () => {
+    const value = parseFloat(draft.replace(',', '.'))
+    if (Number.isFinite(value) && value > 0) onZoomSet(value)
+    else setDraft(current)
+  }
 
-        {/* Zoom in button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onZoomIn()
-          }}
-          className={islandBtn('plain', 'h-9 w-9 p-0 text-sm')}
-          title="Vergrößern (+)"
-        >
-          +
-        </button>
-
-        {/* Separator */}
-        <div className="w-8 h-px bg-line mx-auto my-0.5" />
-
-        {/* Grid toggle button */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onGridToggle()
-          }}
-          className={islandBtn(gridEnabled ? 'dark' : 'plain', 'h-9 w-9 p-0')}
-          title="Gitter anzeigen/verbergen"
-        >
-          📐
-        </button>
-
-        {/* Export button - PDF format */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onExportImage()
-          }}
-          className={islandBtn('plain', 'h-9 w-9 p-0 text-lg')}
-          title="Als PDF exportieren"
-        >
-          📄
-        </button>
-      </DraggableBar>
-    </>
+  return (
+    <label className="h-9 flex items-center rounded-lg bg-chip px-1.5 text-xs font-medium text-ink" title="Zoom in Prozent eingeben">
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          if (e.key === 'Escape') {
+            setDraft(current)
+            ;(e.target as HTMLInputElement).blur()
+          }
+        }}
+        inputMode="decimal"
+        className="w-9 bg-transparent text-right outline-none"
+        aria-label="Zoom in Prozent"
+      />
+      %
+    </label>
   )
 }
