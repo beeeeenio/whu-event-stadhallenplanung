@@ -85,7 +85,8 @@ export default function DraggableBar({
     // Try to capture pointer for smooth drag
     try {
       containerRef.current.setPointerCapture(e.pointerId)
-    } catch (err) {
+      // eslint-disable-next-line no-unused-vars
+    } catch (_) {
       // Ignore if setPointerCapture fails
     }
 
@@ -141,7 +142,8 @@ export default function DraggableBar({
         if (containerRef.current && containerRef.current.hasPointerCapture(e.pointerId)) {
           containerRef.current.releasePointerCapture(e.pointerId)
         }
-      } catch (err) {
+        // eslint-disable-next-line no-unused-vars
+      } catch (_) {
         // Ignore if releasePointerCapture fails
       }
 
