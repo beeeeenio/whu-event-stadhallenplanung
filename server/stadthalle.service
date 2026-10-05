@@ -1,0 +1,44 @@
+# Stadthallen-Backend (PocketBase). Installiert von install.sh nach
+# /etc/systemd/system/stadthalle.service.
+#
+# Lauscht nur auf 127.0.0.1 – von außen erreichbar ausschließlich über Caddy
+# (stadthalle.caddy). Der Dienst läuft als eigener Benutzer, darf nur in
+# pb_data schreiben und hat ein festes Speicherlimit, damit er andere Dienste
+# auf demselben Server nicht beeinträchtigen kann.
+
+[Unit]
+Description=Stadthallenplanung Backend (PocketBase)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stadthalle
+Group=stadthalle
+WorkingDirectory=/opt/stadthalle
+ExecStart=/opt/stadthalle/pocketbase serve \
+    --http 127.0.0.1:8090 \
+    --dir /opt/stadthalle/pb_data \
+    --migrationsDir /opt/stadthalle/pb_migrations \
+    --hooksDir /opt/stadthalle/pb_hooks \
+    --publicDir /opt/stadthalle/pb_public \
+    --automigrate=false \
+    --hooksWatch=false
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=4096
+MemoryMax=300M
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/stadthalle/pb_data
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

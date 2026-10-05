@@ -1,0 +1,11 @@
+# Caddy-Eintrag für die Stadthallenplanung. PocketBase liefert Frontend
+# (pb_public) und API (/api/) selbst aus, Caddy macht nur HTTPS davor.
+#
+# Erst aktivieren, wenn der DNS-Eintrag von stadthalle.whu-event.de auf diesen
+# Server zeigt – sonst versucht Caddy immer wieder vergeblich, ein Zertifikat
+# zu holen. Einbinden siehe README.md, „Domain umstellen“.
+
+stadthalle.whu-event.de {
+	encode gzip
+	reverse_proxy 127.0.0.1:8090
+}
