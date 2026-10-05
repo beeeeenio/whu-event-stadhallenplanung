@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { FloatingPosition, SnapInfo, DirectionalSnapState } from '../utils/floatingPosition'
+import type { FloatingPosition, SnapInfo, DirectionalSnapState, AnchorPosition } from '../utils/floatingPosition'
 import {
   loadSavedPositions,
   savePositions,
@@ -176,6 +176,7 @@ export default function DraggableBar({
       setPosition({
         x: snapResult.position.x,
         y: snapResult.position.y,
+        anchor: position.anchor,
       })
       setSnapInfo(snapResult.snap)
     },
