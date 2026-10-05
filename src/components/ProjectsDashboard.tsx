@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useProjectsStore, type ProjectMeta } from '../store/projectsStore'
-import { pb, errorMessage } from '../backend/pb'
+import { errorMessage, pb, useCurrentUser } from '../backend/pb'
 import { migrateLegacyData, pendingLegacyData } from '../backend/legacyImport'
 import { btn } from '../utils/ui'
 import { exportAllProjects, generateExportFilename } from '../utils/exportProject'
@@ -30,6 +30,7 @@ export default function ProjectsDashboard() {
   const deleteProject = useProjectsStore((s) => s.deleteProject)
   const duplicateProject = useProjectsStore((s) => s.duplicateProject)
   const logout = useProjectsStore((s) => s.logout)
+  const user = useCurrentUser()
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -152,12 +153,14 @@ export default function ProjectsDashboard() {
             <h1 className="text-2xl font-semibold text-gray-800 mb-1">Kongresshalle Vallendar – Event-Planungstool</h1>
             <p className="text-sm text-gray-500">Projekte verwalten und Hallenpläne bearbeiten</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0 pt-1">
-            <span className="text-xs text-ink3 hidden sm:inline">{pb.authStore.record?.email}</span>
-            <button onClick={logout} className={btn('outline', 'sm')}>
-              Abmelden
-            </button>
-          </div>
+          {user && (
+            <div className="flex items-center gap-2 shrink-0 pt-1">
+              <span className="text-xs text-ink3 hidden sm:inline">{user.email}</span>
+              <button onClick={logout} className={btn('outline', 'sm')}>
+                Abmelden
+              </button>
+            </div>
+          )}
         </div>
 
         <LegacyImportBanner onDone={refresh} />
@@ -240,9 +243,11 @@ export default function ProjectsDashboard() {
                     <button onClick={() => openProject(p.id)} className={btn('dark', 'sm')}>
                       Öffnen
                     </button>
-                    <button onClick={() => setSharing(p)} className={btn('outline', 'sm')}>
-                      {p.role === 'owner' ? 'Teilen' : 'Mitglieder'}
-                    </button>
+                    {user && (
+                      <button onClick={() => setSharing(p)} className={btn('outline', 'sm')}>
+                        {p.role === 'owner' ? 'Teilen' : 'Mitglieder'}
+                      </button>
+                    )}
                     {p.role !== 'viewer' && (
                       <button onClick={() => startRename(p.id, p.name)} className={btn('outline', 'sm')}>
                         Umbenennen

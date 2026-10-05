@@ -13,6 +13,13 @@ export const pb = new PocketBase('/')
 // (z. B. die doppelten Effekte im React-StrictMode).
 pb.autoCancellation(false)
 
+/**
+ * Vorübergehend offener Zugang: ohne Anmeldung sehen und bearbeiten alle alle Projekte;
+ * Löschen und Teilen nur angemeldet. Muss zu den Regeln auf dem Server passen
+ * (server/pb_migrations/1791158600_open_access.js). Zurück zum Login: false + Gegen-Migration.
+ */
+export const OPEN_ACCESS = true
+
 export type Role = 'owner' | 'editor' | 'viewer'
 
 export interface ProjectRecord extends RecordModel {
@@ -26,10 +33,9 @@ export interface ProjectRecord extends RecordModel {
   updated: string
 }
 
-export function currentUserId(): string {
-  const id = pb.authStore.record?.id
-  if (!id) throw new Error('Nicht angemeldet.')
-  return id
+/** ID des angemeldeten Accounts, sonst undefined (offener Zugang ohne Anmeldung). */
+export function currentUserId(): string | undefined {
+  return pb.authStore.isValid ? pb.authStore.record?.id : undefined
 }
 
 export function roleIn(record: Pick<ProjectRecord, 'owner' | 'editors' | 'viewers'>, userId: string): Role | null {
@@ -37,6 +43,12 @@ export function roleIn(record: Pick<ProjectRecord, 'owner' | 'editors' | 'viewer
   if (record.editors?.includes(userId)) return 'editor'
   if (record.viewers?.includes(userId)) return 'viewer'
   return null
+}
+
+/** Eigene Rolle im Projekt; ohne Mitgliedschaft im offenen Zugang „editor“, sonst „viewer“. */
+export function myRole(record: Pick<ProjectRecord, 'owner' | 'editors' | 'viewers'>): Role {
+  const me = currentUserId()
+  return (me && roleIn(record, me)) || (OPEN_ACCESS ? 'editor' : 'viewer')
 }
 
 /** PocketBase-Zeitstempel („2026-10-05 20:21:16.123Z“) als ms – mit „T“, damit auch Safari sie liest. */

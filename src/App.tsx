@@ -5,7 +5,7 @@ import EditorView from './components/EditorView'
 import LoginView from './components/LoginView'
 import { SyncBanner } from './components/SyncStatus'
 import { useProjectsStore } from './store/projectsStore'
-import { pb, useCurrentUser } from './backend/pb'
+import { OPEN_ACCESS, pb, useCurrentUser } from './backend/pb'
 import { startSession, useSyncStore } from './backend/projectSync'
 import { btn } from './utils/ui'
 
@@ -23,7 +23,7 @@ function App() {
       })
   }, [])
 
-  if (!user) return <LoginView />
+  if (!user && !OPEN_ACCESS) return <LoginView />
   if (!currentProjectId) return <ProjectsDashboard />
   return <ProjectSession key={currentProjectId} projectId={currentProjectId} />
 }

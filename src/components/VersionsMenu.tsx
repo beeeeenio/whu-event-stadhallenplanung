@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid'
 import { useEventStore } from '../store/store'
 import { useSyncStore } from '../backend/projectSync'
 import { createVersion, deleteVersion, listVersions } from '../backend/api'
-import { errorMessage } from '../backend/pb'
+import { errorMessage, useCurrentUser } from '../backend/pb'
 import type { ProjectVersion } from '../utils/projectStorage'
 import { island, islandBtn } from '../utils/ui'
 
@@ -13,6 +13,9 @@ const formatTime = (ts: number) => new Date(ts).toLocaleString('de-DE', { dateSt
 export default function VersionsMenu() {
   const projectId = useSyncStore((s) => s.projectId)
   const canEdit = useSyncStore((s) => s.role === 'owner' || s.role === 'editor')
+  const user = useCurrentUser()
+  // Löschen nur angemeldet – im offenen Zugang sind Versionen das Sicherheitsnetz.
+  const canDelete = canEdit && !!user
   const restoreVersion = useEventStore((s) => s.restoreVersion)
   const [open, setOpen] = useState(false)
   const [versions, setVersions] = useState<ProjectVersion[]>([])
@@ -126,7 +129,7 @@ export default function VersionsMenu() {
                     >
                       Wiederherstellen
                     </button>
-                    {canEdit && (
+                    {canDelete && (
                       <button
                         onClick={() => setConfirmDeleteId(v.id)}
                         title="Version löschen"

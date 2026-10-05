@@ -7,6 +7,7 @@ import VersionsMenu from './VersionsMenu'
 import ShareDialog from './ShareDialog'
 import { SyncStatusLine } from './SyncStatus'
 import { useSyncStore } from '../backend/projectSync'
+import { useCurrentUser } from '../backend/pb'
 
 interface Props {
   onOpenCommand: () => void
@@ -24,6 +25,7 @@ export default function Toolbar({ onOpenCommand }: Props) {
   const projectId = useSyncStore((s) => s.projectId)
   const role = useSyncStore((s) => s.role)
   const [sharing, setSharing] = useState(false)
+  const user = useCurrentUser()
 
   return (
     <>
@@ -40,9 +42,11 @@ export default function Toolbar({ onOpenCommand }: Props) {
           />
           <SyncStatusLine />
         </div>
-        <button onClick={() => setSharing(true)} title="Wer hat Zugriff auf dieses Projekt?" className={islandBtn('chip', 'ml-1')}>
-          {role === 'owner' ? 'Teilen' : 'Mitglieder'}
-        </button>
+        {user && (
+          <button onClick={() => setSharing(true)} title="Wer hat Zugriff auf dieses Projekt?" className={islandBtn('chip', 'ml-1')}>
+            {role === 'owner' ? 'Teilen' : 'Mitglieder'}
+          </button>
+        )}
       </div>
 
       {sharing && projectId && role && (

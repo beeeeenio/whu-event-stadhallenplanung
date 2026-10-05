@@ -4,12 +4,13 @@ import { useEventStore } from '../store/store'
 import type { EventItem } from '../types'
 import type { LayoutTemplate, TemplateItem } from '../utils/templateStorage'
 import { createTemplate, deleteTemplate, listTemplates } from '../backend/api'
-import { errorMessage } from '../backend/pb'
+import { errorMessage, useCurrentUser } from '../backend/pb'
 import { island, islandBtn } from '../utils/ui'
 
 /** „Vorlagen“-Dropdown: sichtbaren Aufbau der aktuellen Phase speichern bzw. als Vorlage einfügen. */
 export default function TemplatesMenu() {
   const addItemsBatch = useEventStore((s) => s.addItemsBatch)
+  const canDelete = !!useCurrentUser()
   const [open, setOpen] = useState(false)
   const [templates, setTemplates] = useState<LayoutTemplate[]>([])
   const [naming, setNaming] = useState(false)
@@ -129,13 +130,15 @@ export default function TemplatesMenu() {
                         <span className="truncate flex-1">{t.name}</span>
                         <span className="font-mono text-[11px] text-ink3 shrink-0">{t.items.length} Obj.</span>
                       </button>
-                      <button
-                        onClick={() => setConfirmDeleteId(t.id)}
-                        title="Vorlage löschen"
-                        className="text-ink3 hover:text-red-700 hover:bg-red-50 text-sm w-6 h-6 rounded flex items-center justify-center leading-none transition-colors"
-                      >
-                        ×
-                      </button>
+                      {canDelete && (
+                        <button
+                          onClick={() => setConfirmDeleteId(t.id)}
+                          title="Vorlage löschen"
+                          className="text-ink3 hover:text-red-700 hover:bg-red-50 text-sm w-6 h-6 rounded flex items-center justify-center leading-none transition-colors"
+                        >
+                          ×
+                        </button>
+                      )}
                     </>
                   )}
                 </li>

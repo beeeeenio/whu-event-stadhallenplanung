@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
 import { useEventStore } from '../store/store'
 import * as api from './api'
-import { currentUserId, errorMessage, isConflict, isRetryable, pb, roleIn, type ProjectRecord, type Role } from './pb'
+import { errorMessage, isConflict, isRetryable, myRole, pb, type ProjectRecord, type Role } from './pb'
 import { emptyProjectData, type ProjectData } from '../utils/projectStorage'
 
 /**
@@ -193,8 +193,8 @@ function onRemote(s: Session, action: string, record: ProjectRecord) {
     setStatus(s, { status: 'error', message: 'Das Projekt wurde gelöscht.' })
     return
   }
-  const role = roleIn(record, currentUserId())
-  if (role && role !== useSyncStore.getState().role) setStatus(s, { role })
+  const role = myRole(record)
+  if (role !== useSyncStore.getState().role) setStatus(s, { role })
   if (record.version <= s.version) return // die eigene Speicherung oder schon bekannt
   if (s.inflight) {
     // Kann das Echo der gerade laufenden eigenen Speicherung sein – erst deren Antwort abwarten.

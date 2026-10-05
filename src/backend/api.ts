@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid'
-import { currentUserId, parseDate, pb, roleIn, type ProjectRecord, type Role } from './pb'
+import { currentUserId, myRole, parseDate, pb, type ProjectRecord, type Role } from './pb'
 import type { ProjectData, ProjectVersion } from '../utils/projectStorage'
 import type { LayoutTemplate, TemplateItem } from '../utils/templateStorage'
 
@@ -34,19 +34,24 @@ const projects = () => pb.collection<ProjectRecord>('projects')
 // ---------- Projekte ----------
 
 export async function listProjects(): Promise<ProjectMeta[]> {
-  const me = currentUserId()
   const records = await projects().getFullList({ fields: 'id,name,updated,owner,editors,viewers', sort: '-updated' })
-  return records.map((r) => ({ id: r.id, name: r.name, updatedAt: parseDate(r.updated), role: roleIn(r, me) ?? 'viewer' }))
+  return records.map((r) => ({ id: r.id, name: r.name, updatedAt: parseDate(r.updated), role: myRole(r) }))
+}
+
+/** Eigentümer/Ersteller nur mitschicken, wenn angemeldet (offener Zugang: ohne). */
+const byMe = (field: 'owner' | 'createdBy') => {
+  const me = currentUserId()
+  return me ? { [field]: me } : {}
 }
 
 export async function createProject(name: string, data: ProjectData, id: string = uuid()): Promise<string> {
-  await projects().create({ id, name, data, owner: currentUserId() })
+  await projects().create({ id, name, data, ...byMe('owner') })
   return id
 }
 
 export async function loadProject(id: string): Promise<LoadedProject> {
   const r = await projects().getOne(id)
-  return { name: r.name, data: r.data, version: r.version, role: roleIn(r, currentUserId()) ?? 'viewer' }
+  return { name: r.name, data: r.data, version: r.version, role: myRole(r) }
 }
 
 /**
@@ -101,7 +106,7 @@ export async function createVersion(projectId: string, v: ProjectVersion): Promi
     name: v.name,
     data: v.data,
     createdAt: v.createdAt,
-    createdBy: currentUserId(),
+    ...byMe('createdBy'),
   })
 }
 
@@ -127,7 +132,7 @@ export async function listTemplates(): Promise<LayoutTemplate[]> {
 }
 
 export async function createTemplate(t: LayoutTemplate): Promise<void> {
-  await pb.collection('templates').create({ ...t, owner: currentUserId() })
+  await pb.collection('templates').create({ ...t, ...byMe('owner') })
 }
 
 export async function deleteTemplate(id: string): Promise<void> {
