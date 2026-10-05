@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { FloatingPosition } from '../utils/floatingPosition'
+import type { FloatingPosition, SnapInfo } from '../utils/floatingPosition'
 import {
   loadSavedPositions,
   savePositions,
   anchorToStyle,
   clampPosition,
+  applyEdgeSnap,
 } from '../utils/floatingPosition'
 import { island, Z } from '../utils/ui'
 
@@ -33,6 +34,7 @@ export default function DraggableBar({
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [size, setSize] = useState({ width: 200, height: 200 })
+  const [snapInfo, setSnapInfo] = useState<SnapInfo>({})
   const containerRef = useRef<HTMLDivElement>(null)
   const pointerStartRef = useRef({ x: 0, y: 0, pointerId: -1 })
 
@@ -113,13 +115,21 @@ export default function DraggableBar({
       const newY = e.clientY - dragOffset.y
 
       const clamped = clampPosition(newX, newY, size.width, size.height)
+
+      // Apply edge snapping (unless alt-key is pressed)
+      const isTouch = isTouchInput(e as PointerEvent)
+      const snapResult = !e.altKey
+        ? applyEdgeSnap(clamped, size.width, size.height, isTouch, snapInfo)
+        : { position: clamped, snap: {} }
+
       setPosition({
         ...position,
-        x: clamped.x,
-        y: clamped.y,
+        x: snapResult.position.x,
+        y: snapResult.position.y,
       })
+      setSnapInfo(snapResult.snap)
     },
-    [isDragging, dragOffset, size, position, getDragThreshold]
+    [isDragging, dragOffset, size, position, getDragThreshold, isTouchInput, snapInfo]
   )
 
   const handlePointerUp = useCallback(
@@ -143,6 +153,7 @@ export default function DraggableBar({
           settingsBar: barKey === 'settingsBar' ? position : saved.settingsBar,
         })
         setIsDragging(false)
+        setSnapInfo({})
       }
 
       pointerStartRef.current = { x: 0, y: 0, pointerId: -1 }
@@ -172,6 +183,7 @@ export default function DraggableBar({
 
   const style = anchorToStyle(position)
   const isSettingsBar = barKey === 'settingsBar'
+  const isSnapped = Object.keys(snapInfo).length > 0
 
   return (
     <div
@@ -182,9 +194,9 @@ export default function DraggableBar({
         zIndex: isDragging ? Z.toolbarDragging : Z.toolbars,
         cursor: isDragging ? 'grabbing' : 'grab',
       }}
-      className={`flex flex-col ${isSettingsBar ? 'gap-0.5 p-1' : 'gap-1.5 p-2'} select-none touch-none transition-[box-shadow] ${island} ${
-        isDragging ? 'shadow-[0_20px_40px_-8px_rgba(20,30,35,0.4)] ring-2 ring-accent/40' : ''
-      }`}
+      className={`flex flex-col ${isSettingsBar ? 'gap-0.5 p-1' : 'gap-1.5 p-2'} select-none touch-none transition-[box-shadow,ring-color] duration-120 ${island} ${
+        isDragging ? 'shadow-[0_20px_40px_-8px_rgba(20,30,35,0.4)]' : ''
+      } ${isSnapped && isDragging ? 'ring-2 ring-accent/40' : ''}`}
       onPointerDown={handlePointerDown}
       title={label}
     >

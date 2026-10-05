@@ -1,4 +1,4 @@
-/** Floating toolbar position management with localStorage persistence. */
+/** Floating toolbar position management with localStorage persistence and edge snapping. */
 
 export type AnchorPosition = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
@@ -7,6 +7,27 @@ export interface FloatingPosition {
   y: number
   anchor: AnchorPosition
 }
+
+export interface SnapInfo {
+  x?: 'left' | 'right'
+  y?: 'top' | 'bottom'
+}
+
+/** Safe insets to prevent toolbars from covering header/timeline */
+export const SAFE_INSETS = {
+  top: 84,    // Below ToolsBar default
+  right: 16,
+  bottom: 112, // Above SettingsBar default
+  left: 16,
+} as const
+
+/** Snap distance thresholds (pixels) */
+export const SNAP_THRESHOLDS = {
+  snapIn: 30,  // Snap when within 30px of edge
+  snapOut: 45, // Release snap when beyond 45px
+  snapInTouch: 40,  // Touch: 40px snap distance
+  snapOutTouch: 55, // Touch: 55px release distance
+} as const
 
 interface StoredPositionsV3 {
   toolsBar?: FloatingPosition
@@ -131,5 +152,78 @@ export function getOffsetFromAnchor(
       return { x: screenX, y: screenHeight - screenY - toolbarHeight }
     case 'bottom-right':
       return { x: screenWidth - screenX - toolbarWidth, y: screenHeight - screenY - toolbarHeight }
+  }
+}
+
+/**
+ * Apply edge snapping with hysterese and alt-key override.
+ * Returns snapped position and snap info for visual feedback.
+ * Respects SAFE_INSETS to avoid covering important UI.
+ */
+export function applyEdgeSnap(
+  position: { x: number; y: number },
+  toolbarWidth: number,
+  toolbarHeight: number,
+  isTouch: boolean,
+  snapState?: SnapInfo
+): { position: { x: number; y: number }; snap: SnapInfo } {
+  // Check alt-key to disable snapping (if we're in an event context)
+  // Note: This is handled at the component level during drag
+
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  const snapIn = isTouch ? SNAP_THRESHOLDS.snapInTouch : SNAP_THRESHOLDS.snapIn
+  const snapOut = isTouch ? SNAP_THRESHOLDS.snapOutTouch : SNAP_THRESHOLDS.snapOut
+
+  let newX = position.x
+  let newY = position.y
+  const snap: SnapInfo = {}
+
+  // X-axis snapping (left/right edges)
+  const distFromLeft = position.x
+  const distFromRight = vw - (position.x + toolbarWidth)
+
+  // Snap to left edge if within range
+  if (
+    distFromLeft < snapIn ||
+    (snapState?.x === 'left' && distFromLeft < snapOut)
+  ) {
+    newX = SAFE_INSETS.left
+    snap.x = 'left'
+  }
+  // Snap to right edge if within range
+  else if (
+    distFromRight < snapIn ||
+    (snapState?.x === 'right' && distFromRight < snapOut)
+  ) {
+    newX = vw - toolbarWidth - SAFE_INSETS.right
+    snap.x = 'right'
+  }
+
+  // Y-axis snapping (top/bottom edges)
+  const distFromTop = position.y
+  const distFromBottom = vh - (position.y + toolbarHeight)
+
+  // Snap to top edge if within range
+  if (
+    distFromTop < snapIn ||
+    (snapState?.y === 'top' && distFromTop < snapOut)
+  ) {
+    newY = SAFE_INSETS.top
+    snap.y = 'top'
+  }
+  // Snap to bottom edge if within range
+  else if (
+    distFromBottom < snapIn ||
+    (snapState?.y === 'bottom' && distFromBottom < snapOut)
+  ) {
+    newY = vh - toolbarHeight - SAFE_INSETS.bottom
+    snap.y = 'bottom'
+  }
+
+  return {
+    position: { x: newX, y: newY },
+    snap,
   }
 }
