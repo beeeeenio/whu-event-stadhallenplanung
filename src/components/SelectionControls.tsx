@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useEventStore, AREA_COLORS, NIVTEC_COLORS } from '../store/store'
 import type { EventItem } from '../types'
+import { sortPhases } from '../utils/phaseDiff'
 import { btn, input as inputCls, island } from '../utils/ui'
 
 interface ActionProps {
@@ -65,19 +66,25 @@ export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpe
 
 interface MultiActionProps {
   count: number
+  onCopyToLaterPhases?: () => void
   onHide: () => void
   onDelete: () => void
 }
 
 /** Leiste für die Mehrfachauswahl: nur die gemeinsamen Aktionen (Verschieben passiert direkt per
  *  Ziehen eines der ausgewählten Objekte, dafür braucht es keinen eigenen Button). */
-export function MultiSelectionBar({ count, onHide, onDelete }: MultiActionProps) {
+export function MultiSelectionBar({ count, onCopyToLaterPhases, onHide, onDelete }: MultiActionProps) {
   const cell = 'h-9 px-2.5 rounded-lg text-xs font-medium text-ink hover:bg-chip inline-flex items-center gap-1 whitespace-nowrap'
   return (
     <div className={`flex items-center gap-0.5 p-1 rounded-xl ${island}`} onMouseDown={(e) => e.stopPropagation()}>
       <span className="h-9 px-2.5 rounded-lg text-[11px] font-semibold font-mono bg-accent-soft text-accent inline-flex items-center whitespace-nowrap">
         {count} Objekte ausgewählt
       </span>
+      {onCopyToLaterPhases && (
+        <button onClick={onCopyToLaterPhases} className={cell} title="Alle so, wie sie hier sind, als eigenständige Kopien in alle folgenden Phasen übernehmen">
+          ⇥ In folgende Phasen
+        </button>
+      )}
       <button onClick={onHide} className={cell} title="Alle in dieser Phase ausblenden">
         ◌ Ausblenden
       </button>
@@ -100,6 +107,11 @@ interface PanelProps {
 export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, onDelete }: PanelProps) {
   const resizeItem = useEventStore((s) => s.resizeItem)
   const toggleItemLocked = useEventStore((s) => s.toggleItemLocked)
+  const copyItemsToLaterPhases = useEventStore((s) => s.copyItemsToLaterPhases)
+  const laterPhaseCount = useEventStore((s) => {
+    const sorted = sortPhases(s.phases)
+    return sorted.length - 1 - sorted.findIndex((p) => p.id === currentPhaseId)
+  })
 
   return (
     <div className={`p-3.5 w-64 text-xs space-y-3 ${island}`} onMouseDown={(e) => e.stopPropagation()}>
@@ -152,6 +164,15 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
         <ColorSwatches item={item} />
       )}
       <div className="flex flex-col gap-1.5 pt-1">
+        {laterPhaseCount > 0 && (
+          <button
+            onClick={() => copyItemsToLaterPhases([item.id])}
+            className={`w-full ${btn('primaryOutline', 'sm')}`}
+            title="Objekt so, wie es hier ist, als eigenständige Kopie in alle folgenden Phasen übernehmen"
+          >
+            ⇥ In folgende Phasen übernehmen ({laterPhaseCount})
+          </button>
+        )}
         <button onClick={onDuplicate} className={`w-full ${btn('primaryOutline', 'sm')}`} title="Strg/Cmd+D">
           ⧉ Duplizieren
         </button>

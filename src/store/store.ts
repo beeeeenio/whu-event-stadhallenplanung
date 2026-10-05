@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
 import type { EventItem, EventState, ItemType, ItemWithId, NivtecData, Phase } from '../types'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
+import { sortPhases } from '../utils/phaseDiff'
 
 const PHASE_1 = uuid()
 const MAX_HISTORY = 50
@@ -86,6 +87,11 @@ interface Store extends EventState {
   removeItems: (itemIds: string[]) => void
   toggleItemsVisible: (itemIds: string[], visible?: boolean) => void
   moveItemsBy: (itemIds: string[], dx: number, dy: number) => void
+  /**
+   * Objekte so, wie sie in der aktuellen Phase sind, in alle folgenden Phasen übernehmen —
+   * je Phase als eigenständige Kopie, damit spätere Änderungen die anderen Phasen nicht berühren.
+   */
+  copyItemsToLaterPhases: (itemIds: string[]) => void
 
   // Bereiche (z.B. Messestände): frei gezogenes Rechteck mit individueller Größe
   addArea: (x: number, y: number, width: number, height: number, label?: string) => string
@@ -123,6 +129,41 @@ export interface CustomItemSpec {
   height: number
   shape: 'rect' | 'round'
   color: string
+}
+
+/**
+ * Eigenschaften (Name, Größe, Farbe, Notiz) nur in der aktuellen Phase ändern.
+ * Ist das Objekt auch in anderen Phasen sichtbar (z. B. nach "Phase übernehmen"), wird es
+ * aufgeteilt: Die anderen Phasen behalten eine Kopie mit den alten Eigenschaften, das
+ * Objekt selbst (gleiche ID, Auswahl bleibt erhalten) gilt danach nur noch für diese Phase.
+ */
+function patchItemInCurrentPhase(
+  state: EventState,
+  itemId: string,
+  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color'>>,
+): Pick<EventState, 'items' | 'itemOrder'> {
+  const item = state.items[itemId]
+  const current = item.phaseData[state.currentPhaseId]
+  const sharedElsewhere = Object.entries(item.phaseData).some(
+    ([phaseId, pd]) => phaseId !== state.currentPhaseId && pd.visible,
+  )
+  if (!current || !sharedElsewhere) {
+    return { items: { ...state.items, [itemId]: { ...item, ...patch } }, itemOrder: state.itemOrder }
+  }
+  const otherPhaseData = { ...item.phaseData }
+  delete otherPhaseData[state.currentPhaseId]
+  const copyId = uuid()
+  const idx = state.itemOrder.indexOf(itemId)
+  const itemOrder = [...state.itemOrder]
+  itemOrder.splice(idx < 0 ? itemOrder.length : idx + 1, 0, copyId)
+  return {
+    items: {
+      ...state.items,
+      [copyId]: { ...item, id: copyId, phaseData: otherPhaseData },
+      [itemId]: { ...item, ...patch, phaseData: { [state.currentPhaseId]: current } },
+    },
+    itemOrder,
+  }
 }
 
 export const useEventStore = create<Store>((set, get) => {
@@ -415,27 +456,24 @@ export const useEventStore = create<Store>((set, get) => {
         const item = state.items[itemId]
         if (!item || item.label === label) return state
         pushHistory()
-        return {
-          items: { ...state.items, [itemId]: { ...item, label } },
-        }
+        return patchItemInCurrentPhase(state, itemId, { label })
       })
     },
 
     setItemNote: (itemId, note) => {
-      pushHistory()
-      set((state) => ({
-        items: { ...state.items, [itemId]: { ...state.items[itemId], note } },
-      }))
+      set((state) => {
+        if (!state.items[itemId]) return state
+        pushHistory()
+        return patchItemInCurrentPhase(state, itemId, { note })
+      })
     },
 
     resizeItem: (itemId, width, height) => {
-      pushHistory()
-      set((state) => ({
-        items: {
-          ...state.items,
-          [itemId]: { ...state.items[itemId], width, height },
-        },
-      }))
+      set((state) => {
+        if (!state.items[itemId]) return state
+        pushHistory()
+        return patchItemInCurrentPhase(state, itemId, { width, height })
+      })
     },
 
     setItemColor: (itemId, color) => {
@@ -445,12 +483,7 @@ export const useEventStore = create<Store>((set, get) => {
         const newColor = color ?? undefined
         if (item.color === newColor) return state
         pushHistory()
-        return {
-          items: {
-            ...state.items,
-            [itemId]: { ...item, color: newColor },
-          },
-        }
+        return patchItemInCurrentPhase(state, itemId, { color: newColor })
       })
     },
 
@@ -460,6 +493,32 @@ export const useEventStore = create<Store>((set, get) => {
         const item = state.items[itemId]
         if (!item) return state
         return { items: { ...state.items, [itemId]: { ...item, locked: locked ?? !item.locked } } }
+      })
+    },
+
+    copyItemsToLaterPhases: (itemIds) => {
+      set((state) => {
+        const sorted = sortPhases(state.phases)
+        const later = sorted.slice(sorted.findIndex((p) => p.id === state.currentPhaseId) + 1)
+        const sources = itemIds.map((id) => state.items[id]).filter((it) => it?.phaseData[state.currentPhaseId])
+        if (later.length === 0 || sources.length === 0) return state
+        pushHistory()
+        const items = { ...state.items }
+        const itemOrder = [...state.itemOrder]
+        for (const source of sources) {
+          const current = source.phaseData[state.currentPhaseId]
+          // Das Original gilt danach nicht mehr in den folgenden Phasen, dort stehen die Kopien.
+          const phaseData = { ...source.phaseData }
+          for (const p of later) delete phaseData[p.id]
+          items[source.id] = { ...source, phaseData }
+          let insertAt = itemOrder.indexOf(source.id) + 1 || itemOrder.length
+          for (const p of later) {
+            const copyId = uuid()
+            items[copyId] = { ...source, id: copyId, phaseData: { [p.id]: { ...current, visible: true } } }
+            itemOrder.splice(insertAt++, 0, copyId)
+          }
+        }
+        return { items, itemOrder }
       })
     },
 
