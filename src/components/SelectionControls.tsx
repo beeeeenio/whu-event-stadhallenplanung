@@ -20,6 +20,12 @@ interface ActionProps {
 export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpenProperties, propertiesOpen }: ActionProps) {
   const rotateItem = useEventStore((s) => s.rotateItem)
   const toggleItemLocked = useEventStore((s) => s.toggleItemLocked)
+  const copyItemsToLaterPhases = useEventStore((s) => s.copyItemsToLaterPhases)
+  const laterPhaseCount = useEventStore((s) => {
+    const sorted = sortPhases(s.phases)
+    return sorted.length - 1 - sorted.findIndex((p) => p.id === s.currentPhaseId)
+  })
+  const [copied, setCopied] = useState(false)
   const cell = 'h-9 px-2.5 rounded-lg text-xs font-medium text-ink hover:bg-chip inline-flex items-center gap-1 whitespace-nowrap'
   return (
     <div
@@ -47,6 +53,19 @@ export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpe
       <button onClick={onDuplicate} className={cell} title="Duplizieren (Strg/Cmd+D)">
         ⧉ Duplizieren
       </button>
+      {laterPhaseCount > 0 && (
+        <button
+          onClick={() => {
+            copyItemsToLaterPhases([item.id])
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2500)
+          }}
+          className={`${cell} ${copied ? 'text-accent bg-accent-soft' : ''}`}
+          title="So, wie es hier ist, als eigenständige Kopie in alle folgenden Phasen übernehmen"
+        >
+          {copied ? `✓ In ${laterPhaseCount} Phase${laterPhaseCount === 1 ? '' : 'n'}` : '⇥ In folgende Phasen'}
+        </button>
+      )}
       <button onClick={onHideInPhase} className={cell} title="Nur in dieser Phase ausblenden, andere Phasen bleiben unverändert">
         ◌ Ausblenden
       </button>
@@ -108,6 +127,7 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
   const resizeItem = useEventStore((s) => s.resizeItem)
   const toggleItemLocked = useEventStore((s) => s.toggleItemLocked)
   const copyItemsToLaterPhases = useEventStore((s) => s.copyItemsToLaterPhases)
+  const [copied, setCopied] = useState(false)
   const laterPhaseCount = useEventStore((s) => {
     const sorted = sortPhases(s.phases)
     return sorted.length - 1 - sorted.findIndex((p) => p.id === currentPhaseId)
@@ -165,7 +185,11 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
       )}
       <div className="flex flex-col gap-1.5 pt-1">
         <button
-          onClick={() => copyItemsToLaterPhases([item.id])}
+          onClick={() => {
+            copyItemsToLaterPhases([item.id])
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2500)
+          }}
           disabled={laterPhaseCount <= 0}
           className={`w-full ${btn('primaryOutline', 'sm')} disabled:opacity-40 disabled:cursor-not-allowed`}
           title={
@@ -174,7 +198,9 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
               : 'Keine folgende Phase vorhanden – wechsle in eine frühere Phase oder lege eine neue an'
           }
         >
-          ⇥ In folgende Phasen übernehmen ({Math.max(laterPhaseCount, 0)})
+          {copied
+            ? `✓ In ${laterPhaseCount} Phase${laterPhaseCount === 1 ? '' : 'n'} übernommen`
+            : `⇥ In folgende Phasen übernehmen (${Math.max(laterPhaseCount, 0)})`}
         </button>
         {laterPhaseCount <= 0 && <div className="text-[11px] text-ink3 -mt-0.5">Dies ist die letzte Phase.</div>}
         <button onClick={onDuplicate} className={`w-full ${btn('primaryOutline', 'sm')}`} title="Strg/Cmd+D">

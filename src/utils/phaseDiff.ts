@@ -11,7 +11,7 @@ export interface PhaseDiff {
 export function sortPhases(phases: Phase[]): Phase[] {
   return phases
     .map((p, i) => ({ p, i }))
-    .sort((a, b) => a.p.order - b.p.order || a.i - b.i)
+    .sort((a, b) => (a.p.order ?? a.i) - (b.p.order ?? b.i) || a.i - b.i)
     .map(({ p }) => p)
 }
 
