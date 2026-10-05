@@ -27,6 +27,8 @@ interface FloatingToolbarProps {
   onExportImage: () => void
   gridEnabled: boolean
   onGridToggle: () => void
+  codesHidden: boolean
+  onCodesToggle: () => void
 }
 
 // Helper functions for dock tools
@@ -82,6 +84,8 @@ export default function FloatingToolbar({
   onExportImage,
   gridEnabled,
   onGridToggle,
+  codesHidden,
+  onCodesToggle,
 }: FloatingToolbarProps) {
 
   return (
@@ -189,6 +193,13 @@ export default function FloatingToolbar({
           title="Gitter anzeigen/verbergen"
         >
           📐
+        </button>
+        <button
+          onClick={onCodesToggle}
+          className={islandBtn(codesHidden ? 'plain' : 'dark', 'h-9 px-2 text-[11px] font-medium')}
+          title="Steckdosen-Codes (z. B. 3F9) im Plan ein-/ausblenden"
+        >
+          Codes
         </button>
         <button
           onClick={onExportImage}

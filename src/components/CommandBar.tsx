@@ -37,7 +37,7 @@ interface Result {
   runAlt?: () => void
 }
 
-const LAYER_LABELS: Record<keyof LayerState, string> = {
+const LAYER_LABELS: Record<Exclude<keyof LayerState, 'hideCodes'>, string> = {
   walls: 'Grundriss',
   rigging: 'Bühnenzüge',
   power: 'Strom/CEE',
@@ -133,12 +133,18 @@ export default function CommandBar({ onClose, actions }: Props) {
       { id: 'fit', icon: '⤢', label: 'Einpassen', run: actions.fitToView },
       { id: 'undo', icon: '↺', label: 'Rückgängig', hint: '⌘Z', run: undo },
       { id: 'redo', icon: '↻', label: 'Wiederholen', hint: '⌘⇧Z', run: redo },
-      ...(Object.keys(LAYER_LABELS) as (keyof LayerState)[]).map((k) => ({
+      ...(Object.keys(LAYER_LABELS) as (keyof typeof LAYER_LABELS)[]).map((k) => ({
         id: `layer-${k}`,
         icon: layers[k] ? '☑' : '☐',
         label: `Ansicht: ${LAYER_LABELS[k]} ${layers[k] ? 'ausblenden' : 'einblenden'}`,
         run: () => toggleLayer(k),
       })),
+      {
+        id: 'layer-hideCodes',
+        icon: layers.hideCodes ? '☐' : '☑',
+        label: `Ansicht: Steckdosen-Codes ${layers.hideCodes ? 'einblenden' : 'ausblenden'}`,
+        run: () => toggleLayer('hideCodes'),
+      },
       { id: 'help', icon: '?', label: 'Tastatur-Shortcuts', hint: '?', run: actions.showShortcuts },
       { id: 'projects', icon: '←', label: 'Zurück zur Projektübersicht', run: actions.goToProjects },
     ]

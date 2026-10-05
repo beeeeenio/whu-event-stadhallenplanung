@@ -26,7 +26,9 @@ export default function PresentationMode({ onClose, startPhaseId }: Props) {
     return Math.max(0, sorted.findIndex((p) => p.id === startPhaseId))
   })
   const [playing, setPlaying] = useState(false)
-  const [image] = useImage(layers.simplified ? '/plans/power-plan-simple.png' : '/plans/power-plan.png')
+  const [image] = useImage(
+    `/plans/power-plan${layers.simplified ? '-simple' : ''}${layers.hideCodes ? '-nolabels' : ''}.png`,
+  )
 
   const sortedPhases = useMemo(() => [...phases].sort((a, b) => a.order - b.order), [phases])
   const phase = sortedPhases[index]

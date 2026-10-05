@@ -76,6 +76,8 @@ export default function EditorView() {
   const gridSize = useEventStore((s) => s.gridSize)
   const setGridEnabled = useEventStore((s) => s.setGridEnabled)
   const setGridSize = useEventStore((s) => s.setGridSize)
+  const codesHidden = useEventStore((s) => !!s.layers.hideCodes)
+  const toggleLayer = useEventStore((s) => s.toggleLayer)
 
   // Restore grid settings from localStorage on mount
   useEffect(() => {
@@ -613,6 +615,8 @@ export default function EditorView() {
         onExportImage={() => void handleExportPdf()}
         gridEnabled={gridEnabled}
         onGridToggle={() => setGridEnabled(!gridEnabled)}
+        codesHidden={codesHidden}
+        onCodesToggle={() => toggleLayer('hideCodes')}
       />
 
       {/* Tastatur-Hilfe */}

@@ -89,6 +89,8 @@ export interface LayerState {
   power: boolean
   /** Vereinfachter (entrümpelter/aufgehellter) statt des detaillierten Original-Scans. */
   simplified: boolean
+  /** Steckdosen-/Anschluss-Codes (z. B. 3F9) im Grundriss ausblenden. */
+  hideCodes?: boolean
 }
 
 export interface EventState {

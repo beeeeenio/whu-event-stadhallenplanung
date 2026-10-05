@@ -134,8 +134,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   // als eigenes Overlay unabhängig davon darüber.
   const [detailedImage] = useImage('/plans/power-plan.png')
   const [simplifiedImage] = useImage('/plans/power-plan-simple.png')
+  const [detailedNoCodesImage] = useImage('/plans/power-plan-nolabels.png')
+  const [simplifiedNoCodesImage] = useImage('/plans/power-plan-simple-nolabels.png')
   const [powerOverlayImage] = useImage('/plans/power-overlay.png')
-  const image = layers.simplified ? simplifiedImage : detailedImage
+  const image = layers.hideCodes
+    ? layers.simplified ? simplifiedNoCodesImage : detailedNoCodesImage
+    : layers.simplified ? simplifiedImage : detailedImage
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
 
