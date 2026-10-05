@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { FloatingPosition, SnapInfo } from '../utils/floatingPosition'
+import type { FloatingPosition, SnapInfo, DirectionalSnapState } from '../utils/floatingPosition'
 import {
   loadSavedPositions,
   savePositions,
   anchorToStyle,
   clampPosition,
-  applyEdgeSnap,
+  applyDirectionalSnap,
+  detectAnchor,
+  getOffsetFromAnchor,
 } from '../utils/floatingPosition'
 import { island, Z } from '../utils/ui'
 
@@ -23,6 +25,7 @@ const DRAG_THRESHOLD_TOUCH = 6 // pixels
  * Draggable floating toolbar container with pointer events.
  * Supports mouse, touch, and pen input with proper drag detection.
  * Saves position on release, double-tap grip to reset to default.
+ * Direction-based snap: determines snap side from drag direction.
  */
 export default function DraggableBar({
   barKey,
@@ -37,6 +40,7 @@ export default function DraggableBar({
   const [snapInfo, setSnapInfo] = useState<SnapInfo>({})
   const containerRef = useRef<HTMLDivElement>(null)
   const pointerStartRef = useRef({ x: 0, y: 0, pointerId: -1 })
+  const dirSnapRef = useRef<DirectionalSnapState>({ side: null, turn: 0 })
 
   // Measure size with ResizeObserver
   useEffect(() => {
@@ -82,6 +86,9 @@ export default function DraggableBar({
       pointerId: e.pointerId,
     }
 
+    // Initialize directional snap state
+    dirSnapRef.current = { side: null, turn: 0 }
+
     // Try to capture pointer for smooth drag
     try {
       containerRef.current.setPointerCapture(e.pointerId)
@@ -117,11 +124,25 @@ export default function DraggableBar({
 
       const clamped = clampPosition(newX, newY, size.width, size.height)
 
-      // Apply edge snapping (unless alt-key is pressed)
-      const isTouch = isTouchInput(e as PointerEvent)
-      const snapResult = !e.altKey
-        ? applyEdgeSnap(clamped, size.width, size.height, isTouch, snapInfo)
-        : { position: clamped, snap: {} }
+      // Apply directional snap (unless alt-key is pressed)
+      let snapResult
+      if (e.altKey) {
+        // Alt key disables snapping
+        snapResult = { position: clamped, state: { side: null, turn: 0 }, snap: {} as SnapInfo }
+        dirSnapRef.current = { side: null, turn: 0 }
+      } else {
+        snapResult = applyDirectionalSnap(
+          clamped,
+          pointerStartRef.current,
+          { x: e.clientX, y: e.clientY },
+          dirSnapRef.current,
+          size,
+          window.innerWidth,
+          window.innerHeight,
+          isTouchInput(e as PointerEvent)
+        )
+        dirSnapRef.current = snapResult.state
+      }
 
       setPosition({
         ...position,
@@ -130,7 +151,7 @@ export default function DraggableBar({
       })
       setSnapInfo(snapResult.snap)
     },
-    [isDragging, dragOffset, size, position, getDragThreshold, isTouchInput, snapInfo]
+    [isDragging, dragOffset, size, position, getDragThreshold, isTouchInput]
   )
 
   const handlePointerUp = useCallback(
@@ -148,19 +169,51 @@ export default function DraggableBar({
       }
 
       if (isDragging) {
-        // Save position on drag release
+        // Read directional snap state from ref (not from closure)
+        const snapState = dirSnapRef.current
+        const newX = position.x
+        const newY = position.y
+
+        // Detect anchor based on current position
+        let anchor = detectAnchor(newX, newY, size.width, size.height)
+
+        // Override anchor with snap side if applicable
+        if (snapState.side === 'left') {
+          anchor = 'top-left'
+        } else if (snapState.side === 'right') {
+          anchor = 'top-right'
+        } else if (snapState.side === 'bottom') {
+          anchor = 'bottom-left'
+        } else if (snapState.side === 'top') {
+          anchor = 'top-left'
+        }
+
+        // Calculate offset from anchor for storage
+        const offset = getOffsetFromAnchor(newX, newY, size.width, size.height, anchor)
+
+        // Save position with calculated anchor
+        const newPosition: FloatingPosition = {
+          x: offset.x,
+          y: offset.y,
+          anchor,
+        }
+
         const saved = loadSavedPositions()
         savePositions({
-          toolsBar: barKey === 'toolsBar' ? position : saved.toolsBar,
-          settingsBar: barKey === 'settingsBar' ? position : saved.settingsBar,
+          toolsBar: barKey === 'toolsBar' ? newPosition : saved.toolsBar,
+          settingsBar: barKey === 'settingsBar' ? newPosition : saved.settingsBar,
         })
+
+        // Update component position to match saved state
+        setPosition(newPosition)
         setIsDragging(false)
         setSnapInfo({})
       }
 
       pointerStartRef.current = { x: 0, y: 0, pointerId: -1 }
+      dirSnapRef.current = { side: null, turn: 0 }
     },
-    [isDragging, position, barKey]
+    [isDragging, position, size, barKey]
   )
 
   const handleGripDoubleClick = useCallback(() => {
@@ -183,7 +236,11 @@ export default function DraggableBar({
     }
   }, [handlePointerMove, handlePointerUp])
 
-  const style = anchorToStyle(position)
+  // During drag, use hardcoded 'top-left' anchor for positioning
+  const displayStyle = isDragging
+    ? { left: `${position.x}px`, top: `${position.y}px` }
+    : anchorToStyle(position)
+
   const isSettingsBar = barKey === 'settingsBar'
   const isSnapped = Object.keys(snapInfo).length > 0
 
@@ -192,7 +249,7 @@ export default function DraggableBar({
       ref={containerRef}
       style={{
         position: 'fixed',
-        ...style,
+        ...displayStyle,
         zIndex: isDragging ? Z.toolbarDragging : Z.toolbars,
         cursor: isDragging ? 'grabbing' : 'grab',
       }}

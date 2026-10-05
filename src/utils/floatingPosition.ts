@@ -13,6 +13,13 @@ export interface SnapInfo {
   y?: 'top' | 'bottom'
 }
 
+export type SnapSide = 'left' | 'right' | 'top' | 'bottom'
+
+export interface DirectionalSnapState {
+  side: SnapSide | null
+  turn: number
+}
+
 /** Safe insets to prevent toolbars from covering header/timeline */
 export const SAFE_INSETS = {
   top: 84,    // Below ToolsBar default
@@ -27,6 +34,12 @@ export const SNAP_THRESHOLDS = {
   snapOut: 45, // Release snap when beyond 45px
   snapInTouch: 40,  // Touch: 40px snap distance
   snapOutTouch: 55, // Touch: 55px release distance
+} as const
+
+/** Directional snap thresholds based on drag direction */
+export const DIRECTIONAL_SNAP = {
+  threshold: 15, // pixels to determine dominant axis
+  hysteresis: 35, // pixels to release snap (2.33x threshold)
 } as const
 
 interface StoredPositionsV3 {
@@ -224,6 +237,170 @@ export function applyEdgeSnap(
 
   return {
     position: { x: newX, y: newY },
+    snap,
+  }
+}
+
+/**
+ * Apply directional snap based on drag direction with hysteresis.
+ * Determines dominant axis and snaps to appropriate edge.
+ * Pure function for testing.
+ *
+ * @param position Current position {x, y}
+ * @param startPos Initial drag position {x, y}
+ * @param pointer Current pointer position {x, y}
+ * @param state Current snap state {side, turn}
+ * @param rect Toolbar's bounding rect
+ * @param vw Viewport width
+ * @param vh Viewport height
+ * @param _isTouch Whether input is touch/pen (for future threshold adjustments)
+ * @returns {position, state, snap}
+ */
+export function applyDirectionalSnap(
+  position: { x: number; y: number },
+  startPos: { x: number; y: number },
+  pointer: { x: number; y: number },
+  state: DirectionalSnapState,
+  rect: { width: number; height: number },
+  vw: number,
+  vh: number,
+  _isTouch: boolean
+): {
+  position: { x: number; y: number }
+  state: DirectionalSnapState
+  snap: SnapInfo
+} {
+  const { width: toolbarWidth, height: toolbarHeight } = rect
+  const threshold = DIRECTIONAL_SNAP.threshold
+  const hysteresis = DIRECTIONAL_SNAP.hysteresis
+
+  // Calculate drag deltas
+  const dx = pointer.x - startPos.x
+  const dy = pointer.y - startPos.y
+
+  // Determine dominant axis (first to exceed threshold)
+  const absDx = Math.abs(dx)
+  const absDy = Math.abs(dy)
+  const isDominantHorizontal = absDx > absDy
+
+  // Calculate distances to edges
+  const distFromLeft = position.x
+  const distFromRight = vw - (position.x + toolbarWidth)
+  const distFromTop = position.y
+  const distFromBottom = vh - (position.y + toolbarHeight)
+
+  let newX = position.x
+  let newY = position.y
+  let newSide: SnapSide | null = null
+  const snap: SnapInfo = {}
+
+  // If already snapped and dominant axis changed significantly, release
+  if (state.side) {
+    const isLeftRight = state.side === 'left' || state.side === 'right'
+    const isTopBottom = state.side === 'top' || state.side === 'bottom'
+
+    // If snapped horizontally but dominant is now vertical by hysteresis
+    if (isLeftRight && absDy > hysteresis && absDy > absDx) {
+      state.side = null
+      state.turn++
+    }
+    // If snapped vertically but dominant is now horizontal by hysteresis
+    if (isTopBottom && absDx > hysteresis && absDx > absDy) {
+      state.side = null
+      state.turn++
+    }
+  }
+
+  // Apply snapping based on dominant axis and state
+  if (!state.side) {
+    // Not snapped: determine if we should snap based on dominant axis
+    if (isDominantHorizontal && absDx > threshold) {
+      // Horizontal drag: check left/right
+      if (dx > 0 && distFromRight < threshold) {
+        // Moving right, snap to right
+        newX = vw - toolbarWidth - SAFE_INSETS.right
+        newSide = 'right'
+        snap.x = 'right'
+        // Clamp Y to safe insets
+        newY = Math.max(SAFE_INSETS.top, Math.min(newY, vh - toolbarHeight - SAFE_INSETS.bottom))
+      } else if (dx < 0 && distFromLeft < threshold) {
+        // Moving left, snap to left
+        newX = SAFE_INSETS.left
+        newSide = 'left'
+        snap.x = 'left'
+        // Clamp Y to safe insets
+        newY = Math.max(SAFE_INSETS.top, Math.min(newY, vh - toolbarHeight - SAFE_INSETS.bottom))
+      }
+    } else if (!isDominantHorizontal && absDy > threshold) {
+      // Vertical drag: check top/bottom
+      if (dy > 0 && distFromBottom < threshold) {
+        // Moving down, snap to bottom
+        newY = vh - toolbarHeight - SAFE_INSETS.bottom
+        newSide = 'bottom'
+        snap.y = 'bottom'
+        // Clamp X to safe insets
+        newX = Math.max(SAFE_INSETS.left, Math.min(newX, vw - toolbarWidth - SAFE_INSETS.right))
+      } else if (dy < 0 && distFromTop < threshold) {
+        // Moving up, snap to top
+        newY = SAFE_INSETS.top
+        newSide = 'top'
+        snap.y = 'top'
+        // Clamp X to safe insets
+        newX = Math.max(SAFE_INSETS.left, Math.min(newX, vw - toolbarWidth - SAFE_INSETS.right))
+      }
+    }
+  } else {
+    // Already snapped: apply hysteresis-based release
+    const isLeftRight = state.side === 'left' || state.side === 'right'
+
+    if (isLeftRight) {
+      // Snapped horizontally: release only if moved far enough away
+      if (state.side === 'left' && distFromLeft > hysteresis) {
+        // Released from left: don't re-snap left
+        newSide = null
+      } else if (state.side === 'right' && distFromRight > hysteresis) {
+        // Released from right: don't re-snap right
+        newSide = null
+      } else {
+        // Still snapped: maintain snap
+        newSide = state.side
+        if (state.side === 'left') {
+          newX = SAFE_INSETS.left
+          snap.x = 'left'
+        } else {
+          newX = vw - toolbarWidth - SAFE_INSETS.right
+          snap.x = 'right'
+        }
+        // Clamp Y
+        newY = Math.max(SAFE_INSETS.top, Math.min(newY, vh - toolbarHeight - SAFE_INSETS.bottom))
+      }
+    } else {
+      // Snapped vertically: release only if moved far enough away
+      if (state.side === 'top' && distFromTop > hysteresis) {
+        // Released from top: don't re-snap top
+        newSide = null
+      } else if (state.side === 'bottom' && distFromBottom > hysteresis) {
+        // Released from bottom: don't re-snap bottom
+        newSide = null
+      } else {
+        // Still snapped: maintain snap
+        newSide = state.side
+        if (state.side === 'top') {
+          newY = SAFE_INSETS.top
+          snap.y = 'top'
+        } else {
+          newY = vh - toolbarHeight - SAFE_INSETS.bottom
+          snap.y = 'bottom'
+        }
+        // Clamp X
+        newX = Math.max(SAFE_INSETS.left, Math.min(newX, vw - toolbarWidth - SAFE_INSETS.right))
+      }
+    }
+  }
+
+  return {
+    position: { x: newX, y: newY },
+    state: { side: newSide, turn: state.turn },
     snap,
   }
 }
