@@ -1,18 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import type { FloatingPosition } from '../utils/floatingPosition'
 import type { ToolMode } from './CanvasEditor'
 import type { PickerTab } from './ObjectPicker'
 import type { ItemType } from '../types'
 import type { Placement } from '../utils/placement'
-import {
-  loadSavedPositions,
-  savePositions,
-  anchorToStyle,
-  clampPosition,
-  detectAnchor,
-  getOffsetFromAnchor,
-} from '../utils/floatingPosition'
-import { island, islandBtn, Z } from '../utils/ui'
+import { loadSavedPositions } from '../utils/floatingPosition'
+import { islandBtn } from '../utils/ui'
+import DraggableBar from './DraggableBar'
 
 type ActivePanel = 'picker' | 'inventory' | 'properties' | 'grid' | 'command' | 'text' | 'shortcuts' | null
 
@@ -36,115 +28,6 @@ interface FloatingToolbarProps {
   onExportImage: () => void
   gridEnabled: boolean
   onGridToggle: () => void
-}
-
-/** Single draggable floating toolbar container */
-function DraggableBar({
-  barKey,
-  defaultPosition,
-  label,
-  children,
-}: {
-  barKey: 'toolsBar' | 'settingsBar'
-  defaultPosition: FloatingPosition
-  label: string
-  children: React.ReactNode
-}) {
-  const [position, setPosition] = useState(defaultPosition)
-  const [isDragging, setIsDragging] = useState(false)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
-  const [size, setSize] = useState({ width: 200, height: 200 })
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  // Measure size with ResizeObserver
-  useEffect(() => {
-    const observer = new ResizeObserver(() => {
-      if (containerRef.current) {
-        setSize({
-          width: containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight,
-        })
-      }
-    })
-    if (containerRef.current) observer.observe(containerRef.current)
-    return () => observer.disconnect()
-  }, [])
-
-  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('button')) return
-    const rect = containerRef.current?.getBoundingClientRect()
-    if (rect) {
-      setIsDragging(true)
-      setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-    }
-  }, [])
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (!isDragging || !containerRef.current) return
-
-      const newX = e.clientX - dragOffset.x
-      const newY = e.clientY - dragOffset.y
-
-      const clamped = clampPosition(newX, newY, size.width, size.height)
-      const anchor = detectAnchor(clamped.x, clamped.y, size.width, size.height)
-      const offset = getOffsetFromAnchor(clamped.x, clamped.y, size.width, size.height, anchor)
-
-      setPosition({ x: offset.x, y: offset.y, anchor })
-    },
-    [isDragging, dragOffset, size]
-  )
-
-  const handleMouseUp = useCallback(() => {
-    if (isDragging) {
-      setIsDragging(false)
-    }
-  }, [isDragging])
-
-  useEffect(() => {
-    if (!isDragging) return
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp])
-
-  // Save position on release
-  useEffect(() => {
-    if (!isDragging) {
-      const saved = loadSavedPositions()
-      savePositions({
-        toolsBar: barKey === 'toolsBar' ? position : saved.toolsBar,
-        settingsBar: barKey === 'settingsBar' ? position : saved.settingsBar,
-      })
-    }
-  }, [isDragging, position, barKey])
-
-  const style = anchorToStyle(position)
-  const isSettingsBar = barKey === 'settingsBar'
-
-  return (
-    <div
-      ref={containerRef}
-      style={{
-        position: 'fixed',
-        ...style,
-        zIndex: Z.toolbars,
-        cursor: isDragging ? 'grabbing' : 'grab',
-      }}
-      className={`flex flex-col ${isSettingsBar ? 'gap-0.5 p-1' : 'gap-1.5 p-2'} select-none touch-none ${island}`}
-      onMouseDown={handleMouseDown}
-      title={label}
-    >
-      {/* Drag handle */}
-      <div className={`${isSettingsBar ? 'w-8 h-0.5' : 'w-12 h-1'} bg-line rounded-full mx-auto mb-0.5`} />
-
-      {/* Content */}
-      {children}
-    </div>
-  )
 }
 
 // Helper functions for dock tools
