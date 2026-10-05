@@ -3,7 +3,7 @@ import type { PickerTab } from './ObjectPicker'
 import type { ItemType } from '../types'
 import type { Placement } from '../utils/placement'
 import { loadSavedPositions } from '../utils/floatingPosition'
-import { islandBtn } from '../utils/ui'
+import { island, islandBtn } from '../utils/ui'
 import DraggableBar from './DraggableBar'
 
 type ActivePanel = 'picker' | 'inventory' | 'properties' | 'grid' | 'command' | 'text' | 'shortcuts' | null
@@ -84,22 +84,18 @@ export default function FloatingToolbar({
 }: FloatingToolbarProps) {
   const positions = loadSavedPositions()
 
-  // Default positions: ToolsBar bottom-center, SettingsBar bottom-right
-  const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 800
-  const toolsBarDefaultX = Math.round((screenWidth - 80) / 2)
-  const toolsPosition = positions.toolsBar || { x: toolsBarDefaultX, y: 16, anchor: 'bottom-left' as const }
   const settingsPosition = positions.settingsBar || { x: 16, y: 16, anchor: 'bottom-right' as const }
 
   return (
     <>
       {/* Tools Bar (old dock) */}
-      <DraggableBar barKey="toolsBar" defaultPosition={toolsPosition} label="Werkzeuge">
+      <div className={`absolute left-1/2 -translate-x-1/2 bottom-[108px] z-20 flex items-center gap-1 p-1.5 ${island}`} title="Werkzeuge">
         {/* Werkzeug-Dock Buttons */}
         {dockTool('select', 'Auswahl', svg(<path d="M5 3l14 8-6 2-2 6z" />), 'V', tool, placement, () => onToolChange('select'))}
         {dockTool('area', 'Bereich', svg(<rect x="4" y="6" width="16" height="12" strokeDasharray="3 2" />), 'B', tool, placement, () => onToolChange('area'))}
         {dockTool('measure', 'Messen', svg(<><path d="M3 17L17 3l4 4L7 21z" /><path d="M8 8l2 2M11 5l2 2M5 11l2 2" /></>), 'M', tool, placement, () => onToolChange('measure'))}
 
-        <div className="w-px h-8 bg-line mx-auto my-0.5" />
+        <div className="w-px h-8 bg-line mx-1" />
 
         {/* Objekte Button */}
         <button
@@ -180,7 +176,7 @@ export default function FloatingToolbar({
             </button>
           </>
         )}
-      </DraggableBar>
+      </div>
 
       {/* Settings Bar (compact icon column) */}
       <DraggableBar barKey="settingsBar" defaultPosition={settingsPosition} label="Einstellungen">
