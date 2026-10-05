@@ -84,9 +84,11 @@ export default function FloatingToolbar({
 }: FloatingToolbarProps) {
   const positions = loadSavedPositions()
 
-  // New defaults (Opus-Plan Schritt 1): ToolsBar top-left (16, 84), SettingsBar bottom-left (16, 112)
-  const toolsPosition = positions.toolsBar || { x: 16, y: 84, anchor: 'top-left' as const }
-  const settingsPosition = positions.settingsBar || { x: 16, y: 112, anchor: 'bottom-left' as const }
+  // Default positions: ToolsBar bottom-center, SettingsBar bottom-right
+  const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 800
+  const toolsBarDefaultX = Math.round((screenWidth - 80) / 2)
+  const toolsPosition = positions.toolsBar || { x: toolsBarDefaultX, y: 16, anchor: 'bottom-left' as const }
+  const settingsPosition = positions.settingsBar || { x: 16, y: 16, anchor: 'bottom-right' as const }
 
   return (
     <>
