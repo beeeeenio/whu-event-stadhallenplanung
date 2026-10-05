@@ -105,7 +105,7 @@ export default function FloatingToolbar({
             if (activePanel !== 'picker') onPanelChange('picker')
           }}
           className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure') ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
+            activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure' || pickerTab === 'custom') ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
           }`}
           title="Objekt-Bibliothek (O)"
         >

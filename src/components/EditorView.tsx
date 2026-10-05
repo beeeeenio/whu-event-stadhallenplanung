@@ -10,7 +10,7 @@ import CommandBar, { type CommandActions } from './CommandBar'
 import FloatingToolbar from './FloatingToolbar'
 import { SelectionBar, MultiSelectionBar, PropertiesPanel } from './SelectionControls'
 import { useNivtecImport } from './useNivtecImport'
-import { useEventStore } from '../store/store'
+import { useEventStore, type CustomItemSpec } from '../store/store'
 import { useProjectsStore } from '../store/projectsStore'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import type { EventItem, ItemType } from '../types'
@@ -114,6 +114,7 @@ export default function EditorView() {
   const addItem = useEventStore((s) => s.addItem)
   const addItemsBatch = useEventStore((s) => s.addItemsBatch)
   const addChairRowGroup = useEventStore((s) => s.addChairRowGroup)
+  const addCustomItem = useEventStore((s) => s.addCustomItem)
   const addTextLabel = useEventStore((s) => s.addTextLabel)
   const setCurrentPhase = useEventStore((s) => s.setCurrentPhase)
   const undo = useEventStore((s) => s.undo)
@@ -229,6 +230,22 @@ export default function EditorView() {
       })
     },
     [addItem, addItemsBatch, viewCenter, select],
+  )
+
+  const placeCustom = useCallback(
+    (spec: CustomItemSpec, mode: 'tap' | 'center') => {
+      setTool('select')
+      if (mode === 'center') {
+        const c = viewCenter()
+        select(addCustomItem(c.x, c.y, spec))
+        setPlacement(null)
+        setActivePanel(null)
+        return
+      }
+      setPlacement({ label: spec.label, place: (x, y) => addCustomItem(x, y, spec) })
+      setActivePanel(null)
+    },
+    [addCustomItem, viewCenter, select],
   )
 
   const placeChairRows = useCallback(
@@ -552,6 +569,7 @@ export default function EditorView() {
             onInsertCenter={(type) => placeType(type, 1, 'center')}
             onCreateChairRows={placeChairRows}
             onImportNivtec={nivtec.open}
+            onCreateCustom={placeCustom}
             onClose={() => setActivePanel(null)}
             onTileDragStart={handleTileDragStart}
           />

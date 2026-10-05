@@ -21,6 +21,8 @@ export type ItemType =
   | 'screen'
   | 'pipe_drape'
   | 'text_label'
+  | 'custom_rect'
+  | 'custom_round'
 
 export interface PhaseData {
   x: number

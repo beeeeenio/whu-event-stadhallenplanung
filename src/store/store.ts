@@ -91,6 +91,8 @@ interface Store extends EventState {
   addArea: (x: number, y: number, width: number, height: number, label?: string) => string
   /** Freie Text-Beschriftung an einer Stelle im Plan (z. B. "Einlass hier"). */
   addTextLabel: (x: number, y: number, text: string) => string
+  /** Eigenes Objekt mit frei gewähltem Namen, Maßen (m), Form und Farbe. */
+  addCustomItem: (x: number, y: number, spec: CustomItemSpec) => string
   duplicateItem: (itemId: string, offsetX?: number, offsetY?: number) => string | null
 
   /** Stuhlreihen als EIN Objekt (Gruppe), damit sie gemeinsam verschoben werden können. */
@@ -112,6 +114,15 @@ interface Store extends EventState {
   importProject: (data: Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers'>) => void
   hydrate: (data: Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers'>) => void
   getSnapshot: () => Pick<EventState, 'eventName' | 'currentPhaseId' | 'phases' | 'items' | 'itemOrder' | 'layers'>
+}
+
+export interface CustomItemSpec {
+  label: string
+  /** Breite bzw. Durchmesser in Metern */
+  width: number
+  height: number
+  shape: 'rect' | 'round'
+  color: string
 }
 
 export const useEventStore = create<Store>((set, get) => {
@@ -468,6 +479,31 @@ export const useEventStore = create<Store>((set, get) => {
         height,
         phaseData,
         color: AREA_COLORS[areaCount % AREA_COLORS.length],
+      }
+      pushHistory()
+      set((state) => ({
+        items: { ...state.items, [id]: item },
+        itemOrder: [...state.itemOrder, id],
+      }))
+      return id
+    },
+
+    addCustomItem: (x, y, spec) => {
+      const id = uuid()
+      const { currentPhaseId, phases } = get()
+      const phaseData: EventItem['phaseData'] = {}
+      for (const p of phases) {
+        phaseData[p.id] = { x, y, rotation: 0, visible: p.id === currentPhaseId }
+      }
+      const round = spec.shape === 'round'
+      const item: EventItem = {
+        id,
+        type: round ? 'custom_round' : 'custom_rect',
+        label: spec.label,
+        width: spec.width,
+        height: round ? spec.width : spec.height,
+        phaseData,
+        color: spec.color,
       }
       pushHistory()
       set((state) => ({
