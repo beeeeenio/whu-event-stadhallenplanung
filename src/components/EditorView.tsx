@@ -466,27 +466,6 @@ export default function EditorView() {
 
   if (presenting) return <PresentationMode startPhaseId={currentPhaseId} onClose={() => setPresenting(false)} />
 
-  const dockTool = (key: ToolMode, label: string, icon: React.ReactNode, shortcut: string) => {
-    const active = tool === key && !placement
-    return (
-      <button
-        onClick={() => changeTool(key)}
-        className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-          active ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-        }`}
-        title={`${label} (${shortcut})`}
-      >
-        {icon}
-        {label}
-      </button>
-    )
-  }
-  const svg = (d: React.ReactNode) => (
-    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      {d}
-    </svg>
-  )
-
   return (
     <div className="h-screen w-screen relative overflow-hidden bg-ground select-none">
       <CanvasEditor
@@ -509,12 +488,7 @@ export default function EditorView() {
       />
 
       <Toolbar
-        onExportPdf={handleExportPdf}
-        onPresent={() => setPresenting(true)}
         onOpenCommand={() => setActivePanel('command')}
-        onionSkin={onionSkin}
-        onToggleOnionSkin={() => setOnionSkin((v) => !v)}
-        hasPreviousPhase={!!prevPhaseId}
       />
 
       {/* Kontextleiste an der Auswahl (Einzelauswahl) */}
@@ -610,75 +584,6 @@ export default function EditorView() {
         </div>
       )}
 
-      {/* Werkzeug-Dock */}
-      <div className={`absolute left-1/2 -translate-x-1/2 bottom-[108px] z-20 flex items-center gap-1 p-1.5 ${island}`}>
-        {dockTool('select', 'Auswahl', svg(<path d="M5 3l14 8-6 2-2 6z" />), 'V')}
-        {dockTool('area', 'Bereich', svg(<rect x="4" y="6" width="16" height="12" strokeDasharray="3 2" />), 'B')}
-        {dockTool('measure', 'Messen', svg(<><path d="M3 17L17 3l4 4L7 21z" /><path d="M8 8l2 2M11 5l2 2M5 11l2 2" /></>), 'M')}
-        <div className="w-px h-8 bg-line mx-1" />
-        <button
-          onClick={() => {
-            if (activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure')) setActivePanel(null)
-            else openPicker(pickerTab === 'rows' || pickerTab === 'nivtec' ? 'furniture' : pickerTab)
-          }}
-          className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'picker' && (pickerTab === 'furniture' || pickerTab === 'infrastructure') ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-          }`}
-          title="Objekt-Bibliothek (O)"
-        >
-          {svg(<path d="M12 5v14M5 12h14" />)}
-          Objekte
-        </button>
-        <button
-          onClick={() => {
-            setPickerTab('rows')
-            setActivePanel(activePanel === 'picker' ? null : 'picker')
-          }}
-          className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'picker' && pickerTab === 'rows' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-          }`}
-          title="Stuhlreihen-Generator"
-        >
-          {svg(<>{[6, 12, 18].flatMap((x) => [8, 16].map((y) => <circle key={`${x}-${y}`} cx={x} cy={y} r={1.5} />))}</>)}
-          Reihen
-        </button>
-        <button
-          onClick={() => {
-            setPickerTab('nivtec')
-            setActivePanel(activePanel === 'picker' ? null : 'picker')
-          }}
-          className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'picker' && pickerTab === 'nivtec' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-          }`}
-          title="NivTec Import"
-        >
-          {svg(<><path d="M12 15V4M8 8l4-4 4 4" /><path d="M4 15v4h16v-4" /></>)}
-          NivTec
-        </button>
-        <button
-          onClick={() => setActivePanel(activePanel === 'text' ? null : 'text')}
-          className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
-            activePanel === 'text' ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
-          }`}
-          title="Freie Textbeschriftung in den Plan setzen"
-        >
-          {svg(<><path d="M5 6h14M12 6v13" /></>)}
-          Text
-        </button>
-        {placement && (
-          <>
-            <div className="w-px h-8 bg-line mx-1" />
-            <button
-              onClick={() => setPlacement(null)}
-              className="h-12 px-3 rounded-xl bg-accent text-white text-xs font-semibold hover:bg-accent-hover"
-              title="Platzieren beenden (Esc)"
-            >
-              Fertig
-            </button>
-          </>
-        )}
-      </div>
-
       {/* Phasen-Zeitleiste */}
       <div className="absolute left-4 right-4 bottom-4 z-20">
         <PhaseTimeline
@@ -692,11 +597,15 @@ export default function EditorView() {
 
       {/* Draggable Floating Toolbars */}
       <FloatingToolbar
-        onMeasure={() => changeTool('measure')}
-        onArea={() => changeTool('area')}
-        onDuplicate={duplicateSelected}
-        isMeasuring={tool === 'measure'}
-        isAreaMode={tool === 'area'}
+        tool={tool}
+        onToolChange={changeTool}
+        placement={placement}
+        onPlacementDone={() => setPlacement(null)}
+        activePanel={activePanel}
+        onPanelChange={setActivePanel}
+        pickerTab={pickerTab}
+        onPickerTabChange={setPickerTab}
+        onOpenPicker={openPicker}
         zoom={viewport?.zoom ?? 1}
         onZoomIn={() => canvasRef.current?.zoomIn()}
         onZoomOut={() => canvasRef.current?.zoomOut()}

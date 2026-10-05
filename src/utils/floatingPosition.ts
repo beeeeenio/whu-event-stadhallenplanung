@@ -8,18 +8,33 @@ export interface FloatingPosition {
   anchor: AnchorPosition
 }
 
-interface StoredPositions {
-  toolsToolbar?: FloatingPosition
-  settingsToolbar?: FloatingPosition
+interface StoredPositionsV2 {
+  toolsBar?: FloatingPosition
+  settingsBar?: FloatingPosition
 }
 
-const STORAGE_KEY = 'stadthalle.floating-positions'
+const STORAGE_KEY_V2 = 'stadthalle.toolbar-positions.v2'
+const OLD_STORAGE_KEY = 'stadthalle.floating-positions'
 
-/** Load saved positions from localStorage. */
-export function loadSavedPositions(): StoredPositions {
+/** Load saved positions from localStorage (v2), migrate from old keys if needed. */
+export function loadSavedPositions(): StoredPositionsV2 {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY)
+    // Try v2 first
+    const stored = localStorage.getItem(STORAGE_KEY_V2)
     if (stored) return JSON.parse(stored)
+
+    // Migrate from old key if exists
+    const oldStored = localStorage.getItem(OLD_STORAGE_KEY)
+    if (oldStored) {
+      const oldData = JSON.parse(oldStored)
+      const migrated: StoredPositionsV2 = {
+        toolsBar: oldData.toolsToolbar,
+        settingsBar: oldData.settingsToolbar,
+      }
+      localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(migrated))
+      localStorage.removeItem(OLD_STORAGE_KEY)
+      return migrated
+    }
   } catch (e) {
     console.error('Failed to load floating positions:', e)
   }
@@ -27,41 +42,40 @@ export function loadSavedPositions(): StoredPositions {
 }
 
 /** Save positions to localStorage. */
-export function savePositions(positions: StoredPositions): void {
+export function savePositions(positions: StoredPositionsV2): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(positions))
+    localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(positions))
   } catch (e) {
     console.error('Failed to save floating positions:', e)
   }
 }
 
-/** Get next non-overlapping anchor position. If all are occupied, cycle to first. */
-export function getNextAnchorPosition(
-  occupiedAnchors: Set<AnchorPosition>
-): AnchorPosition {
-  const allAnchors: AnchorPosition[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
-  const available = allAnchors.find((a) => !occupiedAnchors.has(a))
-  return available || allAnchors[0]
+/** Clamp position to screen bounds. */
+export function clampPosition(
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): { x: number; y: number } {
+  return {
+    x: Math.max(0, Math.min(x, window.innerWidth - width)),
+    y: Math.max(0, Math.min(y, window.innerHeight - height)),
+  }
 }
 
-/** Calculate screen pixel position from anchor and offset. */
-export function getPixelPosition(
-  pos: FloatingPosition,
-  toolbarWidth: number,
-  toolbarHeight: number
-): { x: number; y: number } {
-  const screenWidth = window.innerWidth
-  const screenHeight = window.innerHeight
-
+/** Convert FloatingPosition to CSS style properties. */
+export function anchorToStyle(
+  pos: FloatingPosition
+): { left?: string; right?: string; top?: string; bottom?: string } {
   switch (pos.anchor) {
     case 'top-left':
-      return { x: pos.x, y: pos.y }
+      return { left: `${pos.x}px`, top: `${pos.y}px` }
     case 'top-right':
-      return { x: screenWidth - toolbarWidth - pos.x, y: pos.y }
+      return { right: `${pos.x}px`, top: `${pos.y}px` }
     case 'bottom-left':
-      return { x: pos.x, y: screenHeight - toolbarHeight - pos.y }
+      return { left: `${pos.x}px`, bottom: `${pos.y}px` }
     case 'bottom-right':
-      return { x: screenWidth - toolbarWidth - pos.x, y: screenHeight - toolbarHeight - pos.y }
+      return { right: `${pos.x}px`, bottom: `${pos.y}px` }
   }
 }
 
