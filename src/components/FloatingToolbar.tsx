@@ -123,6 +123,7 @@ function DraggableBar({
   }, [isDragging, position, barKey])
 
   const style = anchorToStyle(position)
+  const isSettingsBar = barKey === 'settingsBar'
 
   return (
     <div
@@ -133,12 +134,12 @@ function DraggableBar({
         zIndex: Z.toolbars,
         cursor: isDragging ? 'grabbing' : 'grab',
       }}
-      className={`flex flex-col gap-1.5 p-2 select-none touch-none ${island}`}
+      className={`flex flex-col ${isSettingsBar ? 'gap-0.5 p-1' : 'gap-1.5 p-2'} select-none touch-none ${island}`}
       onMouseDown={handleMouseDown}
       title={label}
     >
       {/* Drag handle */}
-      <div className="w-12 h-1 bg-line rounded-full mx-auto mb-0.5" />
+      <div className={`${isSettingsBar ? 'w-8 h-0.5' : 'w-12 h-1'} bg-line rounded-full mx-auto mb-0.5`} />
 
       {/* Content */}
       {children}
@@ -149,7 +150,7 @@ function DraggableBar({
 // Helper functions for dock tools
 function svg(d: React.ReactNode) {
   return (
-    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <svg viewBox="0 0 24 24" className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
       {d}
     </svg>
   )
@@ -171,7 +172,7 @@ function dockTool(
         e.stopPropagation()
         onClick()
       }}
-      className={`h-12 w-[62px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors ${
+      className={`h-11 w-[52px] rounded-xl flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
         active ? 'bg-ink text-white' : 'text-ink2 hover:bg-chip'
       }`}
       title={`${label} (${shortcut})`}
@@ -202,8 +203,9 @@ export default function FloatingToolbar({
 }: FloatingToolbarProps) {
   const positions = loadSavedPositions()
 
-  const toolsPosition = positions.toolsBar || { x: 20, y: 80, anchor: 'top-left' as const }
-  const settingsPosition = positions.settingsBar || { x: 20, y: 320, anchor: 'top-left' as const }
+  // New defaults (Opus-Plan Schritt 1): ToolsBar top-left (16, 84), SettingsBar bottom-left (16, 112)
+  const toolsPosition = positions.toolsBar || { x: 16, y: 84, anchor: 'top-left' as const }
+  const settingsPosition = positions.settingsBar || { x: 16, y: 112, anchor: 'bottom-left' as const }
 
   return (
     <>
@@ -214,7 +216,7 @@ export default function FloatingToolbar({
         {dockTool('area', 'Bereich', svg(<rect x="4" y="6" width="16" height="12" strokeDasharray="3 2" />), 'B', tool, placement, () => onToolChange('area'))}
         {dockTool('measure', 'Messen', svg(<><path d="M3 17L17 3l4 4L7 21z" /><path d="M8 8l2 2M11 5l2 2M5 11l2 2" /></>), 'M', tool, placement, () => onToolChange('measure'))}
 
-        <div className="w-px h-8 bg-line mx-1" />
+        <div className="w-px h-8 bg-line mx-auto my-0.5" />
 
         {/* Objekte Button */}
         <button
@@ -297,70 +299,70 @@ export default function FloatingToolbar({
         )}
       </DraggableBar>
 
-      {/* Settings Bar */}
+      {/* Settings Bar (compact icon column) */}
       <DraggableBar barKey="settingsBar" defaultPosition={settingsPosition} label="Einstellungen">
-        {/* Zoom controls */}
-        <div className="flex gap-1">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onZoomOut()
-            }}
-            className={islandBtn('plain', '')}
-            title="Verkleinern (−)"
-          >
-            −
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onZoomReset()
-            }}
-            className={islandBtn('plain', 'flex-1')}
-            title="Zoom zurücksetzen (1:1)"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onZoomIn()
-            }}
-            className={islandBtn('plain', '')}
-            title="Vergrößern (+)"
-          >
-            +
-          </button>
-        </div>
+        {/* Zoom out button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onZoomOut()
+          }}
+          className={islandBtn('plain', 'h-9 w-9 p-0 text-sm')}
+          title="Verkleinern (−)"
+        >
+          −
+        </button>
 
-        {/* Grid toggle */}
+        {/* Zoom reset button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onZoomReset()
+          }}
+          className={islandBtn('plain', 'h-9 w-9 p-0 text-xs')}
+          title="Zoom zurücksetzen (1:1)"
+        >
+          {Math.round(zoom * 100) === 100 ? '1' : Math.round(zoom * 100)}
+        </button>
+
+        {/* Zoom in button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onZoomIn()
+          }}
+          className={islandBtn('plain', 'h-9 w-9 p-0 text-sm')}
+          title="Vergrößern (+)"
+        >
+          +
+        </button>
+
+        {/* Separator */}
+        <div className="w-8 h-px bg-line mx-auto my-0.5" />
+
+        {/* Grid toggle button */}
         <button
           onClick={(e) => {
             e.stopPropagation()
             onGridToggle()
           }}
-          className={islandBtn(gridEnabled ? 'dark' : 'plain', 'w-full justify-center')}
+          className={islandBtn(gridEnabled ? 'dark' : 'plain', 'h-9 w-9 p-0')}
           title="Gitter anzeigen/verbergen"
         >
-          📐 Gitter
+          📐
         </button>
 
-        {/* Export image */}
+        {/* Export button - PDF format */}
         <button
           onClick={(e) => {
             e.stopPropagation()
             onExportImage()
           }}
-          className={islandBtn('plain', 'w-full justify-center')}
-          title="Als PNG exportieren"
+          className={islandBtn('plain', 'h-9 w-9 p-0 text-lg')}
+          title="Als PDF exportieren"
         >
-          📸 Exportieren
+          📄
         </button>
-
-        {/* Zoom info */}
-        <div className="text-[10px] text-ink3 text-center px-1 py-0.5">
-          Scroll zum Zoomen
-        </div>
       </DraggableBar>
     </>
   )

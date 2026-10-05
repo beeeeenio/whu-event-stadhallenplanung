@@ -8,30 +8,40 @@ export interface FloatingPosition {
   anchor: AnchorPosition
 }
 
-interface StoredPositionsV2 {
+interface StoredPositionsV3 {
   toolsBar?: FloatingPosition
   settingsBar?: FloatingPosition
 }
 
+const STORAGE_KEY_V3 = 'stadthalle.toolbar-positions.v3'
 const STORAGE_KEY_V2 = 'stadthalle.toolbar-positions.v2'
 const OLD_STORAGE_KEY = 'stadthalle.floating-positions'
 
-/** Load saved positions from localStorage (v2), migrate from old keys if needed. */
-export function loadSavedPositions(): StoredPositionsV2 {
+/** Load saved positions from localStorage (v3), migrate from v2 or old keys if needed. */
+export function loadSavedPositions(): StoredPositionsV3 {
   try {
-    // Try v2 first
-    const stored = localStorage.getItem(STORAGE_KEY_V2)
+    // Try v3 first
+    const stored = localStorage.getItem(STORAGE_KEY_V3)
     if (stored) return JSON.parse(stored)
+
+    // Migrate from v2 if exists
+    const storedV2 = localStorage.getItem(STORAGE_KEY_V2)
+    if (storedV2) {
+      const v2Data = JSON.parse(storedV2)
+      localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(v2Data))
+      localStorage.removeItem(STORAGE_KEY_V2)
+      return v2Data
+    }
 
     // Migrate from old key if exists
     const oldStored = localStorage.getItem(OLD_STORAGE_KEY)
     if (oldStored) {
       const oldData = JSON.parse(oldStored)
-      const migrated: StoredPositionsV2 = {
+      const migrated: StoredPositionsV3 = {
         toolsBar: oldData.toolsToolbar,
         settingsBar: oldData.settingsToolbar,
       }
-      localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(migrated))
+      localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(migrated))
       localStorage.removeItem(OLD_STORAGE_KEY)
       return migrated
     }
@@ -41,10 +51,10 @@ export function loadSavedPositions(): StoredPositionsV2 {
   return {}
 }
 
-/** Save positions to localStorage. */
-export function savePositions(positions: StoredPositionsV2): void {
+/** Save positions to localStorage (v3). */
+export function savePositions(positions: StoredPositionsV3): void {
   try {
-    localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(positions))
+    localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(positions))
   } catch (e) {
     console.error('Failed to save floating positions:', e)
   }
