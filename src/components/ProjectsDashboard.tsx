@@ -204,7 +204,7 @@ export default function ProjectsDashboard() {
         </div>
       ) : (
         <div className="mt-3 space-y-2">
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             <button onClick={() => openProject(p.id)} className={btn('dark', 'sm', 'whitespace-nowrap')}>
               Öffnen
             </button>
@@ -234,7 +234,7 @@ export default function ProjectsDashboard() {
 
   return (
     <div className="h-screen w-screen overflow-y-auto bg-ground">
-      <div className="max-w-3xl mx-auto px-6 py-10">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
         <div className="flex items-start justify-between gap-4 mb-8">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-gray-800 mb-1">Kongresshalle Vallendar – Event-Planungstool</h1>
@@ -290,7 +290,7 @@ export default function ProjectsDashboard() {
                   : 'Noch keine Projekte vorhanden. Legen Sie oben Ihr erstes Projekt an.'}
               </div>
             ) : (
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">{ownProjects.map(card)}</ul>
+              <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3">{ownProjects.map(card)}</ul>
             )}
 
             {backupProjects.length > 0 && (
@@ -301,7 +301,7 @@ export default function ProjectsDashboard() {
                   </button>
                   <span className="text-xs text-ink3">Projekte anderer Accounts, auf die Sie als Admin Zugriff haben.</span>
                 </div>
-                {showBackups && <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">{backupProjects.map(card)}</ul>}
+                {showBackups && <ul className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">{backupProjects.map(card)}</ul>}
               </section>
             )}
           </>
