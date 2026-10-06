@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import * as api from '../backend/api'
-import { errorMessage, pb } from '../backend/pb'
+import { errorMessage, isSuperAdmin, pb } from '../backend/pb'
+import { useProjectsStore } from '../store/projectsStore'
 import { btn, Z } from '../utils/ui'
 
-const ROLE_LABELS: Record<api.AccountRole, string> = { user: 'Normal', admin: 'Admin' }
+const ROLE_LABELS: Record<api.AccountRole, string> = { user: 'Normal', admin: 'Admin', superadmin: 'Super-Admin' }
 const MIN_PASSWORD = 8
 
 const field =
@@ -11,21 +12,24 @@ const field =
 
 /**
  * Benutzerverwaltung für Admins: Accounts anlegen (Admin oder Normal), Rolle ändern,
- * Passwort neu setzen, löschen. Rechte prüft der Server (users.manageRule); die eigene
- * Rolle ändern oder sich selbst löschen geht dort bewusst nicht.
+ * Passwort neu setzen, löschen. Rechte prüft der Server (1791158800_superadmin.js):
+ * Normale Accounts verwalten alle Admins; Admin-Accounts stuft nur der Super-Admin zurück,
+ * löschen kann sich ein Admin nur selbst; den Super-Admin fasst niemand an.
  */
 export default function UsersDialog({ onClose }: { onClose: () => void }) {
   const [accounts, setAccounts] = useState<api.Account[] | null>(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<api.AccountRole>('user')
+  const [role, setRole] = useState<'admin' | 'user'>('user')
   const [passwordFor, setPasswordFor] = useState<string | null>(null)
   const [newPassword, setNewPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const me = pb.authStore.record?.id
+  const superAdmin = isSuperAdmin()
+  const logout = useProjectsStore((s) => s.logout)
 
   const reload = useCallback(() => api.listAllAccounts().then(setAccounts, (err) => setError(errorMessage(err))), [])
   useEffect(() => {
@@ -79,8 +83,15 @@ export default function UsersDialog({ onClose }: { onClose: () => void }) {
   }
 
   const remove = (a: api.Account) => {
-    if (!window.confirm(`Account ${a.email} löschen? Die Person kann sich danach nicht mehr anmelden.`)) return
+    const msg = `Account ${a.email} löschen? Die Person kann sich danach nicht mehr anmelden; ihre Projekte gehen an den Super-Admin.`
+    if (!window.confirm(msg)) return
     void run(() => api.deleteAccount(a.id), `${a.email} gelöscht.`)
+  }
+
+  const removeSelf = async (a: api.Account) => {
+    const msg = 'Ihren eigenen Admin-Account löschen? Ihre Projekte gehen an den Super-Admin, und Sie werden abgemeldet.'
+    if (!window.confirm(msg)) return
+    if (await run(() => api.deleteAccount(a.id), 'Account gelöscht.')) logout()
   }
 
   return (
@@ -94,7 +105,10 @@ export default function UsersDialog({ onClose }: { onClose: () => void }) {
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h2 className="text-base font-semibold text-ink">Benutzer verwalten</h2>
-            <p className="text-xs text-ink3">Admins legen Accounts an und können alle Projekte sehen und verwalten.</p>
+            <p className="text-xs text-ink3">
+              Admins legen Accounts an und sehen alle Projekte. Admin-Accounts stuft nur der Super-Admin zurück; löschen kann
+              sich ein Admin nur selbst.
+            </p>
           </div>
           <button onClick={onClose} className={btn('ghost', 'icon', 'text-base')} title="Schließen">
             ×
@@ -123,7 +137,7 @@ export default function UsersDialog({ onClose }: { onClose: () => void }) {
             className={field}
           />
           <div className="flex gap-2">
-            <select value={role} onChange={(e) => setRole(e.target.value as api.AccountRole)} className={`${field} flex-1`}>
+            <select value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'user')} className={`${field} flex-1`}>
               <option value="user">{ROLE_LABELS.user}</option>
               <option value="admin">{ROLE_LABELS.admin}</option>
             </select>
@@ -150,6 +164,16 @@ export default function UsersDialog({ onClose }: { onClose: () => void }) {
                   {a.name && <div className="text-xs text-ink3 truncate">{a.email}</div>}
                 </div>
                 {a.id === me ? (
+                  <>
+                    <span className="text-xs text-ink3 shrink-0">{ROLE_LABELS[a.role]}</span>
+                    {a.role === 'admin' && (
+                      <button onClick={() => removeSelf(a)} disabled={busy} className={btn('dangerOutline', 'sm')}>
+                        Konto löschen
+                      </button>
+                    )}
+                  </>
+                ) : a.role === 'superadmin' || (a.role === 'admin' && !superAdmin) ? (
+                  // Super-Admin fasst niemand an; andere Admins nur der Super-Admin.
                   <span className="text-xs text-ink3 shrink-0">{ROLE_LABELS[a.role]}</span>
                 ) : (
                   <>
@@ -157,7 +181,7 @@ export default function UsersDialog({ onClose }: { onClose: () => void }) {
                       value={a.role}
                       disabled={busy}
                       onChange={(e) => {
-                        const next = e.target.value as api.AccountRole
+                        const next = e.target.value as 'admin' | 'user'
                         void run(() => api.updateAccount(a.id, { role: next }), `${a.email} ist jetzt ${ROLE_LABELS[next]}.`)
                       }}
                       className="text-xs border border-line rounded-md px-1.5 py-1 bg-white text-ink2"
@@ -175,14 +199,17 @@ export default function UsersDialog({ onClose }: { onClose: () => void }) {
                     >
                       Passwort
                     </button>
-                    <button
-                      onClick={() => remove(a)}
-                      disabled={busy}
-                      title="Account löschen"
-                      className={btn('ghost', 'icon', 'hover:text-red-700 hover:bg-red-50')}
-                    >
-                      ×
-                    </button>
+                    {/* Admin-Accounts löschen sich nur selbst. */}
+                    {a.role === 'user' && (
+                      <button
+                        onClick={() => remove(a)}
+                        disabled={busy}
+                        title="Account löschen"
+                        className={btn('ghost', 'icon', 'hover:text-red-700 hover:bg-red-50')}
+                      >
+                        ×
+                      </button>
+                    )}
                   </>
                 )}
               </div>

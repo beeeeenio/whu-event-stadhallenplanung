@@ -24,7 +24,7 @@ function projectForMember(e) {
   } catch (_) {
     throw new NotFoundError("Projekt nicht gefunden.")
   }
-  const isAdmin = e.auth.getString("role") === "admin"
+  const isAdmin = ["admin", "superadmin"].includes(e.auth.getString("role"))
   const role = roleOf(project, e.auth.id)
   if (!role && !isAdmin) throw new NotFoundError("Projekt nicht gefunden.")
   return { project, role, canManage: role === "owner" || isAdmin }

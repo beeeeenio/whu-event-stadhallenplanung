@@ -45,9 +45,15 @@ export function roleIn(record: Pick<ProjectRecord, 'owner' | 'editors' | 'viewer
   return null
 }
 
-/** Admin-Account: verwaltet Accounts und hat in jedem Projekt Eigentümer-Rechte. */
+/** Admin oder Super-Admin: verwaltet Accounts und hat in jedem Projekt Eigentümer-Rechte. */
 export function isAdmin(): boolean {
-  return pb.authStore.isValid && pb.authStore.record?.role === 'admin'
+  const role = pb.authStore.isValid ? pb.authStore.record?.role : undefined
+  return role === 'admin' || role === 'superadmin'
+}
+
+/** Super-Admin: Notfall-Instanz, verwaltet auch Admin-Accounts (server/pb_migrations/1791158800_superadmin.js). */
+export function isSuperAdmin(): boolean {
+  return pb.authStore.isValid && pb.authStore.record?.role === 'superadmin'
 }
 
 /** Eigene Rolle im Projekt; Admins wie Eigentümer, ohne Mitgliedschaft im offenen Zugang „editor“. */

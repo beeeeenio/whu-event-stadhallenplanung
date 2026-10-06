@@ -22,8 +22,15 @@ für HTTPS.
   Bearbeiter speichern, Leser sehen nur.
 - **project_versions**: benannte Stände eines Projekts (wie das VersionsMenu).
 - **templates**: Aufbau-Vorlagen, pro Person.
-- **users**: nur auf Einladung, keine Selbst-Registrierung. Login per E-Mail-Code
-  (braucht SMTP) oder Passwort.
+- **users**: keine Selbst-Registrierung; Accounts legen Admins in der App an
+  („Benutzer“). Login mit Passwort (per E-Mail-Code, sobald SMTP eingerichtet ist).
+  Rollen (`role`):
+  - **superadmin** – Notfall-Instanz: von niemandem löschbar oder zurückstufbar,
+    sieht alle Projekte; Projekte und Vorlagen gelöschter Accounts gehen an ihn.
+    Vergeben nur im Admin-Bereich (`/_/` → users → role).
+  - **admin** – verwaltet normale Accounts, sieht alle Projekte. Andere Admins
+    stuft nur der Super-Admin zurück; löschen kann sich ein Admin nur selbst.
+  - **user** (oder leer) – sieht eigene und freigegebene Projekte.
 
 Speichern mit Konflikterkennung: Die App schickt `version` = geladene Version + 1.
 Hat jemand anderes inzwischen gespeichert, antwortet der Server mit **409**
