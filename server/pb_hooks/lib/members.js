@@ -13,7 +13,10 @@ function roleOf(project, userId) {
   return null
 }
 
-/** Das Projekt aus dem Pfad, aber nur für Mitglieder – allen anderen ein 404, damit nicht erkennbar ist, ob es existiert. */
+/**
+ * Das Projekt aus dem Pfad, aber nur für Mitglieder und Admins – allen anderen ein 404,
+ * damit nicht erkennbar ist, ob es existiert. `canManage`: darf Mitglieder verwalten.
+ */
 function projectForMember(e) {
   let project
   try {
@@ -21,13 +24,14 @@ function projectForMember(e) {
   } catch (_) {
     throw new NotFoundError("Projekt nicht gefunden.")
   }
+  const isAdmin = e.auth.getString("role") === "admin"
   const role = roleOf(project, e.auth.id)
-  if (!role) throw new NotFoundError("Projekt nicht gefunden.")
-  return { project, role }
+  if (!role && !isAdmin) throw new NotFoundError("Projekt nicht gefunden.")
+  return { project, role, canManage: role === "owner" || isAdmin }
 }
 
 function list(app, project) {
-  const entries = [[project.getString("owner"), "owner"]]
+  const entries = project.getString("owner") ? [[project.getString("owner"), "owner"]] : []
   for (const id of project.getStringSlice("editors")) entries.push([id, "editor"])
   for (const id of project.getStringSlice("viewers")) entries.push([id, "viewer"])
 
@@ -53,17 +57,13 @@ function setRole(project, userId, role) {
   project.set("viewers", viewers)
 }
 
-/** Sucht den Account zur E-Mail oder legt ihn an (Login später per E-Mail-Code). */
-function findOrCreateUser(app, email) {
+/** Bestehender Account zur E-Mail – Accounts legt nur ein Admin an (Benutzerverwaltung). */
+function findUser(app, email) {
   try {
     return app.findAuthRecordByEmail("users", email)
   } catch (_) {
-    const user = new Record(app.findCollectionByNameOrId("users"))
-    user.setEmail(email)
-    user.setRandomPassword()
-    app.save(user)
-    return user
+    throw new BadRequestError("Kein Account mit dieser E-Mail-Adresse. Neue Accounts legt ein Admin an.")
   }
 }
 
-module.exports = { EMAIL, roleOf, projectForMember, list, setRole, findOrCreateUser }
+module.exports = { EMAIL, roleOf, projectForMember, list, setRole, findUser }

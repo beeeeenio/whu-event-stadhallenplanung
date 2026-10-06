@@ -5,16 +5,19 @@ import { btn } from '../utils/ui'
 
 type Step = { kind: 'email' } | { kind: 'code'; otpId: string } | { kind: 'password' }
 
+/** Login per E-Mail-Code erst anbieten, wenn auf dem Server SMTP eingerichtet ist (server/README.md). */
+const EMAIL_CODE_LOGIN = false
+
 const field =
   'w-full border border-line bg-white rounded-lg px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent/50'
 const link = 'text-xs text-accent hover:underline'
 
 /**
- * Anmeldung: standardmäßig per Code an die E-Mail-Adresse, wahlweise mit Passwort.
- * Accounts gibt es nur auf Einladung (Teilen-Dialog oder Admin-Oberfläche).
+ * Anmeldung mit E-Mail und Passwort (bzw. per Code, sobald EMAIL_CODE_LOGIN an ist).
+ * Accounts legt ein Admin in der Benutzerverwaltung an.
  */
 export default function LoginView() {
-  const [step, setStep] = useState<Step>({ kind: 'email' })
+  const [step, setStep] = useState<Step>({ kind: EMAIL_CODE_LOGIN ? 'email' : 'password' })
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
@@ -150,15 +153,17 @@ export default function LoginView() {
             <button type="submit" disabled={busy} className={btn('primary', 'md', 'w-full')}>
               {busy ? 'Prüfe…' : 'Anmelden'}
             </button>
-            <button type="button" onClick={() => switchTo({ kind: 'email' })} className={link}>
-              Stattdessen Code per E-Mail
-            </button>
+            {EMAIL_CODE_LOGIN && (
+              <button type="button" onClick={() => switchTo({ kind: 'email' })} className={link}>
+                Stattdessen Code per E-Mail
+              </button>
+            )}
           </form>
         )}
 
         {error && <p className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
-        <p className="mt-6 text-xs text-ink3">Zugang nur auf Einladung. Bitte wenden Sie sich an die Projektleitung.</p>
+        <p className="mt-6 text-xs text-ink3">Accounts vergibt ein Admin. Bitte wenden Sie sich an die Projektleitung.</p>
       </div>
     </div>
   )

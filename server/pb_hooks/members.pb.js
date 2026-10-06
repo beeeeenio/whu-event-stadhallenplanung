@@ -3,10 +3,16 @@
 // Mitglieder eines Projekts: anzeigen, einladen, Rolle ändern, entfernen.
 //
 // Eigene Routen statt direkter Zugriffe auf `users`, weil Accounts füreinander
-// unsichtbar sind (users.viewRule) und ein Einladen per E-Mail ggf. erst einen
-// Account anlegen muss – das darf die öffentliche API nicht (users.createRule).
-// Nur der Eigentümer verwaltet Mitglieder; jedes Mitglied kann sich selbst
-// austragen.
+// unsichtbar sind (users.viewRule). Freigeben geht nur für bestehende Accounts –
+// neue legt ein Admin an. Eigentümer und Admins verwalten Mitglieder; jedes
+// Mitglied kann sich selbst austragen.
+
+// Alle Accounts (Name, E-Mail) zum Auswählen beim Freigeben.
+routerAdd("GET", "/api/stadthalle/accounts", (e) => {
+  const accounts = e.app.findAllRecords("users").map((u) => ({ id: u.id, email: u.email(), name: u.getString("name") }))
+  accounts.sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email, "de"))
+  return e.json(200, accounts)
+}, $apis.requireAuth("users"))
 
 routerAdd("GET", "/api/stadthalle/projects/{id}/members", (e) => {
   const m = require(`${__hooks}/lib/members.js`)
@@ -18,8 +24,8 @@ routerAdd("GET", "/api/stadthalle/projects/{id}/members", (e) => {
 // wird nur ihre Rolle geändert.
 routerAdd("POST", "/api/stadthalle/projects/{id}/members", (e) => {
   const m = require(`${__hooks}/lib/members.js`)
-  const { project, role: myRole } = m.projectForMember(e)
-  if (myRole !== "owner") throw new ForbiddenError("Nur der Eigentümer kann Mitglieder einladen.")
+  const { project, canManage } = m.projectForMember(e)
+  if (!canManage) throw new ForbiddenError("Nur Eigentümer und Admins können Projekte freigeben.")
 
   const body = e.requestInfo().body
   const email = String(body.email || "").trim().toLowerCase()
@@ -27,21 +33,19 @@ routerAdd("POST", "/api/stadthalle/projects/{id}/members", (e) => {
   if (!m.EMAIL.test(email)) throw new BadRequestError("Ungültige E-Mail-Adresse.")
   if (role !== "editor" && role !== "viewer") throw new BadRequestError('Rolle muss "editor" oder "viewer" sein.')
 
-  e.app.runInTransaction((txApp) => {
-    const user = m.findOrCreateUser(txApp, email)
-    if (user.id === project.getString("owner")) throw new BadRequestError("Das ist der Eigentümer des Projekts.")
-    m.setRole(project, user.id, role)
-    txApp.save(project)
-  })
+  const user = m.findUser(e.app, email)
+  if (user.id === project.getString("owner")) throw new BadRequestError("Das ist der Eigentümer des Projekts.")
+  m.setRole(project, user.id, role)
+  e.app.save(project)
   return e.json(200, m.list(e.app, project))
 }, $apis.requireAuth("users"))
 
 routerAdd("DELETE", "/api/stadthalle/projects/{id}/members/{userId}", (e) => {
   const m = require(`${__hooks}/lib/members.js`)
-  const { project, role: myRole } = m.projectForMember(e)
+  const { project, canManage } = m.projectForMember(e)
   const userId = e.request.pathValue("userId")
   if (userId === project.getString("owner")) throw new BadRequestError("Der Eigentümer kann nicht entfernt werden.")
-  if (myRole !== "owner" && userId !== e.auth.id) throw new ForbiddenError("Nur der Eigentümer kann Mitglieder entfernen.")
+  if (!canManage && userId !== e.auth.id) throw new ForbiddenError("Nur Eigentümer und Admins können Mitglieder entfernen.")
 
   m.setRole(project, userId, null)
   e.app.save(project)

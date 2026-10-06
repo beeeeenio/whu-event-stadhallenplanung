@@ -155,3 +155,40 @@ export function inviteMember(projectId: string, email: string, role: 'editor' | 
 export function removeMember(projectId: string, userId: string): Promise<Member[]> {
   return pb.send(`${membersPath(projectId)}/${encodeURIComponent(userId)}`, { method: 'DELETE' })
 }
+
+/** Alle Accounts (Name, E-Mail) – zum Auswählen beim Freigeben. */
+export function listAccounts(): Promise<{ id: string; email: string; name: string }[]> {
+  return pb.send('/api/stadthalle/accounts', { method: 'GET' })
+}
+
+// ---------- Benutzerverwaltung (nur Admins, server/pb_migrations/1791158700_accounts_and_login.js) ----------
+
+export type AccountRole = 'admin' | 'user'
+
+export interface Account {
+  id: string
+  email: string
+  name: string
+  role: AccountRole
+}
+
+const users = () => pb.collection('users')
+
+export async function listAllAccounts(): Promise<Account[]> {
+  const records = await users().getFullList({ sort: 'name,email', fields: 'id,email,name,role' })
+  // Accounts von vor der Rollen-Einführung haben keine Rolle → normal.
+  return records.map((r) => ({ id: r.id, email: r.email, name: r.name, role: r.role === 'admin' ? 'admin' : 'user' }))
+}
+
+export async function createAccount(a: { email: string; name: string; password: string; role: AccountRole }): Promise<void> {
+  await users().create({ ...a, passwordConfirm: a.password, verified: true })
+}
+
+export async function updateAccount(id: string, patch: { role?: AccountRole; password?: string }): Promise<void> {
+  const { password, ...rest } = patch
+  await users().update(id, password ? { ...rest, password, passwordConfirm: password } : rest)
+}
+
+export async function deleteAccount(id: string): Promise<void> {
+  await users().delete(id)
+}

@@ -24,6 +24,7 @@ interface Props {
 /** Wer hat Zugriff auf das Projekt? Der Eigentümer lädt per E-Mail ein und vergibt Rollen. */
 export default function ShareDialog({ projectId, projectName, myRole, onClose, onLeft }: Props) {
   const [members, setMembers] = useState<api.Member[] | null>(null)
+  const [accounts, setAccounts] = useState<{ id: string; email: string; name: string }[]>([])
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'editor' | 'viewer'>('editor')
   const [busy, setBusy] = useState(false)
@@ -34,6 +35,12 @@ export default function ShareDialog({ projectId, projectName, myRole, onClose, o
   useEffect(() => {
     api.listMembers(projectId).then(setMembers, (err) => setError(errorMessage(err)))
   }, [projectId])
+
+  // Bestehende Accounts als Vorschläge – freigeben geht nur für die.
+  useEffect(() => {
+    if (isOwner) api.listAccounts().then(setAccounts, () => {})
+  }, [isOwner])
+  const memberIds = new Set(members?.map((m) => m.id))
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -89,22 +96,32 @@ export default function ShareDialog({ projectId, projectName, myRole, onClose, o
               type="email"
               required
               autoFocus
-              placeholder="E-Mail-Adresse"
+              list="share-accounts"
+              placeholder="E-Mail-Adresse oder Name"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={`${field} flex-1 min-w-0 basis-48`}
             />
+            <datalist id="share-accounts">
+              {accounts
+                .filter((a) => !memberIds.has(a.id))
+                .map((a) => (
+                  <option key={a.id} value={a.email}>
+                    {a.name}
+                  </option>
+                ))}
+            </datalist>
             <select value={role} onChange={(e) => setRole(e.target.value as 'editor' | 'viewer')} className={field}>
               <option value="editor">{ROLE_LABELS.editor}</option>
               <option value="viewer">{ROLE_LABELS.viewer}</option>
             </select>
             <button type="submit" disabled={busy} className={btn('primary', 'md')}>
-              Einladen
+              Freigeben
             </button>
           </form>
         )}
         {isOwner && (
-          <p className="text-[11px] text-ink3 mb-4">Neue Personen melden sich mit dieser E-Mail-Adresse an und erhalten einen Code.</p>
+          <p className="text-[11px] text-ink3 mb-4">Nur für bestehende Accounts. Neue Accounts legt ein Admin unter „Benutzer“ an.</p>
         )}
 
         {error && <p className="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}

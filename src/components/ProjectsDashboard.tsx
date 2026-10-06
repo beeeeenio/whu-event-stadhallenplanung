@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useProjectsStore, type ProjectMeta } from '../store/projectsStore'
-import { errorMessage, pb, useCurrentUser } from '../backend/pb'
+import { errorMessage, isAdmin, pb, useCurrentUser } from '../backend/pb'
 import { migrateLegacyData, pendingLegacyData } from '../backend/legacyImport'
 import { btn } from '../utils/ui'
 import { exportAllProjects, generateExportFilename } from '../utils/exportProject'
 import { importAllProjects } from '../utils/importProject'
 import ExportImportDialog from './ExportImportDialog'
 import ShareDialog from './ShareDialog'
+import UsersDialog from './UsersDialog'
 
 function formatDate(ts: number) {
   return new Date(ts).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
@@ -37,6 +38,7 @@ export default function ProjectsDashboard() {
   const [renameValue, setRenameValue] = useState('')
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const [sharing, setSharing] = useState<ProjectMeta | null>(null)
+  const [managingUsers, setManagingUsers] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [exportLoading, setExportLoading] = useState(false)
@@ -156,6 +158,11 @@ export default function ProjectsDashboard() {
           {user && (
             <div className="flex items-center gap-2 shrink-0 pt-1">
               <span className="text-xs text-ink3 hidden sm:inline">{user.email}</span>
+              {isAdmin() && (
+                <button onClick={() => setManagingUsers(true)} className={btn('outline', 'sm')}>
+                  Benutzer
+                </button>
+              )}
               <button onClick={logout} className={btn('outline', 'sm')}>
                 Abmelden
               </button>
@@ -305,6 +312,8 @@ export default function ProjectsDashboard() {
           }
         }}
       />
+
+      {managingUsers && <UsersDialog onClose={() => setManagingUsers(false)} />}
 
       {sharing && (
         <ShareDialog

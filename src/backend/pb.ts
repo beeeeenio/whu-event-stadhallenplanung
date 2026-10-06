@@ -14,11 +14,11 @@ export const pb = new PocketBase('/')
 pb.autoCancellation(false)
 
 /**
- * Vorübergehend offener Zugang: ohne Anmeldung sehen und bearbeiten alle alle Projekte;
- * Löschen und Teilen nur angemeldet. Muss zu den Regeln auf dem Server passen
- * (server/pb_migrations/1791158600_open_access.js). Zurück zum Login: false + Gegen-Migration.
+ * Offener Zugang ohne Anmeldung (06.10.2026 vorübergehend an). Muss zu den Regeln auf dem
+ * Server passen: true ↔ server/pb_migrations/1791158600_open_access.js,
+ * false ↔ 1791158700_accounts_and_login.js.
  */
-export const OPEN_ACCESS = true
+export const OPEN_ACCESS = false
 
 export type Role = 'owner' | 'editor' | 'viewer'
 
@@ -45,8 +45,14 @@ export function roleIn(record: Pick<ProjectRecord, 'owner' | 'editors' | 'viewer
   return null
 }
 
-/** Eigene Rolle im Projekt; ohne Mitgliedschaft im offenen Zugang „editor“, sonst „viewer“. */
+/** Admin-Account: verwaltet Accounts und hat in jedem Projekt Eigentümer-Rechte. */
+export function isAdmin(): boolean {
+  return pb.authStore.isValid && pb.authStore.record?.role === 'admin'
+}
+
+/** Eigene Rolle im Projekt; Admins wie Eigentümer, ohne Mitgliedschaft im offenen Zugang „editor“. */
 export function myRole(record: Pick<ProjectRecord, 'owner' | 'editors' | 'viewers'>): Role {
+  if (isAdmin()) return 'owner'
   const me = currentUserId()
   return (me && roleIn(record, me)) || (OPEN_ACCESS ? 'editor' : 'viewer')
 }
