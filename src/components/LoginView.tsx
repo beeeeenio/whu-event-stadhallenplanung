@@ -21,6 +21,7 @@ export default function LoginView() {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -139,17 +140,31 @@ export default function LoginView() {
                 className={`${field} mt-1`}
               />
             </label>
-            <label className="block text-xs font-medium text-ink2">
-              Passwort
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={`${field} mt-1`}
-              />
-            </label>
+            <div>
+              <label htmlFor="login-password" className="block text-xs font-medium text-ink2">
+                Passwort
+              </label>
+              <div className="relative mt-1">
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`${field} pr-24`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-pressed={showPassword}
+                  title={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                  className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-accent hover:underline"
+                >
+                  {showPassword ? 'Verbergen' : 'Anzeigen'}
+                </button>
+              </div>
+            </div>
             <button type="submit" disabled={busy} className={btn('primary', 'md', 'w-full')}>
               {busy ? 'Prüfe…' : 'Anmelden'}
             </button>
