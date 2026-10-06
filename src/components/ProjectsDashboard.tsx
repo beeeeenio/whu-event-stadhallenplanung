@@ -21,7 +21,9 @@ const MEMBERSHIP_BADGE: Record<ProjectMeta['role'], string | null> = {
 
 function badge(p: ProjectMeta): string | null {
   if (p.membership) return MEMBERSHIP_BADGE[p.membership]
-  return p.ownerName ? `Backup · Eigentümer: ${p.ownerName}` : 'Backup · ohne Eigentümer'
+  if (p.ownerName) return `Backup · Eigentümer: ${p.ownerName}`
+  // Eigentümer, den man nicht sehen darf (Super-Admin), bleibt ungenannt.
+  return p.hasOwner ? 'Backup' : 'Backup · ohne Eigentümer'
 }
 
 export default function ProjectsDashboard() {

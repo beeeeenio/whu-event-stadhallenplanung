@@ -7,9 +7,15 @@
 // neue legt ein Admin an. Eigentümer und Admins verwalten Mitglieder; jedes
 // Mitglied kann sich selbst austragen.
 
-// Alle Accounts (Name, E-Mail) zum Auswählen beim Freigeben.
+// Accounts (Name, E-Mail) zum Auswählen beim Freigeben – nur auf der eigenen Ebene oder
+// darunter: normale Accounts sehen normale, Admins zusätzlich Admins, der Super-Admin alle.
 routerAdd("GET", "/api/stadthalle/accounts", (e) => {
-  const accounts = e.app.findAllRecords("users").map((u) => ({ id: u.id, email: u.email(), name: u.getString("name") }))
+  const level = (role) => ({ superadmin: 3, admin: 2 })[role] || 1
+  const mine = level(e.auth.getString("role"))
+  const accounts = e.app
+    .findAllRecords("users")
+    .filter((u) => level(u.getString("role")) <= mine)
+    .map((u) => ({ id: u.id, email: u.email(), name: u.getString("name") }))
   accounts.sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email, "de"))
   return e.json(200, accounts)
 }, $apis.requireAuth("users"))

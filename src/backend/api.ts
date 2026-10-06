@@ -16,8 +16,9 @@ export interface ProjectMeta {
   role: Role
   /** Eigene Mitgliedschaft; null = nur über Admin-Rechte sichtbar („Backup“). */
   membership: Role | null
-  /** Name oder E-Mail des Eigentümers – nur für Admins lesbar. */
+  /** Name oder E-Mail des Eigentümers – nur lesbar, wenn man den Account sehen darf. */
   ownerName?: string
+  hasOwner: boolean
 }
 
 export interface LoadedProject {
@@ -52,6 +53,7 @@ export async function listProjects(): Promise<ProjectMeta[]> {
     role: myRole(r),
     membership: me ? roleIn(r, me) : null,
     ownerName: r.expand?.owner?.name || r.expand?.owner?.email || undefined,
+    hasOwner: !!r.owner,
   }))
 }
 
