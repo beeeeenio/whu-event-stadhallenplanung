@@ -152,16 +152,17 @@ export default function LoginView() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`${field} pr-24`}
+                  className={`${field} pr-10`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   aria-pressed={showPassword}
+                  aria-label={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
                   title={showPassword ? 'Passwort verbergen' : 'Passwort anzeigen'}
-                  className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-accent hover:underline"
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-ink3 hover:text-ink focus:outline-none focus-visible:text-accent"
                 >
-                  {showPassword ? 'Verbergen' : 'Anzeigen'}
+                  <EyeIcon crossed={showPassword} />
                 </button>
               </div>
             </div>
@@ -181,5 +182,16 @@ export default function LoginView() {
         <p className="mt-6 text-xs text-ink3">Accounts vergibt ein Admin. Bitte wenden Sie sich an die Projektleitung.</p>
       </div>
     </div>
+  )
+}
+
+/** Auge (Passwort anzeigen) bzw. durchgestrichenes Auge (verbergen). */
+function EyeIcon({ crossed }: { crossed: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+      {crossed && <path d="M3 3l18 18" />}
+    </svg>
   )
 }
