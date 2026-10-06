@@ -203,25 +203,27 @@ export default function ProjectsDashboard() {
           </button>
         </div>
       ) : (
-        <div className="flex flex-wrap gap-2 mt-3">
-          <button onClick={() => openProject(p.id)} className={btn('dark', 'sm')}>
-            Öffnen
-          </button>
-          {user && (
-            <button onClick={() => setSharing(p)} className={btn('outline', 'sm')}>
-              {p.role === 'owner' ? 'Teilen' : 'Mitglieder'}
+        <div className="mt-3 space-y-2">
+          <div className="flex gap-1.5">
+            <button onClick={() => openProject(p.id)} className={btn('dark', 'sm', 'whitespace-nowrap')}>
+              Öffnen
             </button>
-          )}
-          {p.role !== 'viewer' && (
-            <button onClick={() => startRename(p.id, p.name)} className={btn('outline', 'sm')}>
-              Umbenennen
+            {user && (
+              <button onClick={() => setSharing(p)} className={btn('outline', 'sm', 'whitespace-nowrap')}>
+                {p.role === 'owner' ? 'Teilen' : 'Mitglieder'}
+              </button>
+            )}
+            {p.role !== 'viewer' && (
+              <button onClick={() => startRename(p.id, p.name)} className={btn('outline', 'sm', 'whitespace-nowrap')}>
+                Umbenennen
+              </button>
+            )}
+            <button onClick={() => void duplicateProject(p.id)} className={btn('outline', 'sm', 'whitespace-nowrap')}>
+              Duplizieren
             </button>
-          )}
-          <button onClick={() => void duplicateProject(p.id)} className={btn('outline', 'sm')}>
-            Duplizieren
-          </button>
+          </div>
           {p.role === 'owner' && (
-            <button onClick={() => setConfirmingDeleteId(p.id)} className={`ml-auto ${btn('dangerOutline', 'sm')}`}>
+            <button onClick={() => setConfirmingDeleteId(p.id)} className={btn('dangerOutline', 'sm')}>
               Löschen
             </button>
           )}
