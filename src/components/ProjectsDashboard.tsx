@@ -13,10 +13,15 @@ function formatDate(ts: number) {
   return new Date(ts).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-const ROLE_BADGE: Record<ProjectMeta['role'], string | null> = {
+const MEMBERSHIP_BADGE: Record<ProjectMeta['role'], string | null> = {
   owner: null,
   editor: 'Geteilt · Bearbeiten',
   viewer: 'Geteilt · Nur ansehen',
+}
+
+function badge(p: ProjectMeta): string | null {
+  if (p.membership) return MEMBERSHIP_BADGE[p.membership]
+  return p.ownerName ? `Backup · Eigentümer: ${p.ownerName}` : 'Backup · ohne Eigentümer'
 }
 
 export default function ProjectsDashboard() {
@@ -39,6 +44,8 @@ export default function ProjectsDashboard() {
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
   const [sharing, setSharing] = useState<ProjectMeta | null>(null)
   const [managingUsers, setManagingUsers] = useState(false)
+  // Projekte anderer Accounts, die Admins nur über ihre Admin-Rechte sehen, erst auf Klick zeigen.
+  const [showBackups, setShowBackups] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [exportLoading, setExportLoading] = useState(false)
@@ -147,6 +154,80 @@ export default function ProjectsDashboard() {
     }
   }
 
+  const ownProjects = projects.filter((p) => p.membership !== null)
+  const backupProjects = projects.filter((p) => p.membership === null)
+
+  const card = (p: ProjectMeta) => (
+    <li
+      key={p.id}
+      className="bg-white border border-gray-200 rounded-2xl p-4 hover:shadow-md hover:border-gray-300 transition-all"
+    >
+      {renamingId === p.id ? (
+        <input
+          autoFocus
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitRename(p.id)
+            if (e.key === 'Escape') setRenamingId(null)
+          }}
+          onBlur={() => commitRename(p.id)}
+          className="w-full border border-blue-300 rounded-md px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-200"
+        />
+      ) : (
+        <button onClick={() => openProject(p.id)} className="text-left w-full">
+          <div className="font-medium text-gray-800 truncate">{p.name}</div>
+          <div className="text-xs text-gray-400 mt-1">
+            Zuletzt bearbeitet: {formatDate(p.updatedAt)}
+            {badge(p) && <span className="ml-2 text-accent">{badge(p)}</span>}
+          </div>
+        </button>
+      )}
+
+      {confirmingDeleteId === p.id ? (
+        <div className="flex items-center gap-2 mt-3 text-xs">
+          <span className="text-gray-600">Für alle löschen?</span>
+          <button
+            onClick={() => {
+              void deleteProject(p.id)
+              setConfirmingDeleteId(null)
+            }}
+            className={btn('danger', 'sm')}
+          >
+            Ja, löschen
+          </button>
+          <button onClick={() => setConfirmingDeleteId(null)} className={btn('outline', 'sm')}>
+            Abbrechen
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2 mt-3">
+          <button onClick={() => openProject(p.id)} className={btn('dark', 'sm')}>
+            Öffnen
+          </button>
+          {user && (
+            <button onClick={() => setSharing(p)} className={btn('outline', 'sm')}>
+              {p.role === 'owner' ? 'Teilen' : 'Mitglieder'}
+            </button>
+          )}
+          {p.role !== 'viewer' && (
+            <button onClick={() => startRename(p.id, p.name)} className={btn('outline', 'sm')}>
+              Umbenennen
+            </button>
+          )}
+          <button onClick={() => void duplicateProject(p.id)} className={btn('outline', 'sm')}>
+            Duplizieren
+          </button>
+          {p.role === 'owner' && (
+            <button onClick={() => setConfirmingDeleteId(p.id)} className={`ml-auto ${btn('dangerOutline', 'sm')}`}>
+              Löschen
+            </button>
+          )}
+        </div>
+      )}
+    </li>
+  )
+
   return (
     <div className="h-screen w-screen overflow-y-auto bg-ground">
       <div className="max-w-3xl mx-auto px-6 py-10">
@@ -196,83 +277,30 @@ export default function ProjectsDashboard() {
 
         {loading ? (
           <div className="text-center text-gray-400 text-sm py-16">Projekte werden geladen…</div>
-        ) : projects.length === 0 ? (
-          <div className="text-center text-gray-400 text-sm py-16 border border-dashed border-gray-300 rounded-lg">
-            Noch keine Projekte vorhanden. Legen Sie oben Ihr erstes Projekt an.
-          </div>
         ) : (
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {projects.map((p) => (
-              <li
-                key={p.id}
-                className="bg-white border border-gray-200 rounded-2xl p-4 hover:shadow-md hover:border-gray-300 transition-all"
-              >
-                {renamingId === p.id ? (
-                  <input
-                    autoFocus
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') commitRename(p.id)
-                      if (e.key === 'Escape') setRenamingId(null)
-                    }}
-                    onBlur={() => commitRename(p.id)}
-                    className="w-full border border-blue-300 rounded-md px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  />
-                ) : (
-                  <button onClick={() => openProject(p.id)} className="text-left w-full">
-                    <div className="font-medium text-gray-800 truncate">{p.name}</div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      Zuletzt bearbeitet: {formatDate(p.updatedAt)}
-                      {ROLE_BADGE[p.role] && <span className="ml-2 text-accent">{ROLE_BADGE[p.role]}</span>}
-                    </div>
-                  </button>
-                )}
+          <>
+            {ownProjects.length === 0 ? (
+              <div className="text-center text-gray-400 text-sm py-16 border border-dashed border-gray-300 rounded-lg">
+                {backupProjects.length > 0
+                  ? 'Noch keine eigenen oder für Sie freigegebenen Projekte.'
+                  : 'Noch keine Projekte vorhanden. Legen Sie oben Ihr erstes Projekt an.'}
+              </div>
+            ) : (
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">{ownProjects.map(card)}</ul>
+            )}
 
-                {confirmingDeleteId === p.id ? (
-                  <div className="flex items-center gap-2 mt-3 text-xs">
-                    <span className="text-gray-600">Für alle löschen?</span>
-                    <button
-                      onClick={() => {
-                        void deleteProject(p.id)
-                        setConfirmingDeleteId(null)
-                      }}
-                      className={btn('danger', 'sm')}
-                    >
-                      Ja, löschen
-                    </button>
-                    <button onClick={() => setConfirmingDeleteId(null)} className={btn('outline', 'sm')}>
-                      Abbrechen
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <button onClick={() => openProject(p.id)} className={btn('dark', 'sm')}>
-                      Öffnen
-                    </button>
-                    {user && (
-                      <button onClick={() => setSharing(p)} className={btn('outline', 'sm')}>
-                        {p.role === 'owner' ? 'Teilen' : 'Mitglieder'}
-                      </button>
-                    )}
-                    {p.role !== 'viewer' && (
-                      <button onClick={() => startRename(p.id, p.name)} className={btn('outline', 'sm')}>
-                        Umbenennen
-                      </button>
-                    )}
-                    <button onClick={() => void duplicateProject(p.id)} className={btn('outline', 'sm')}>
-                      Duplizieren
-                    </button>
-                    {p.role === 'owner' && (
-                      <button onClick={() => setConfirmingDeleteId(p.id)} className={`ml-auto ${btn('dangerOutline', 'sm')}`}>
-                        Löschen
-                      </button>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
+            {backupProjects.length > 0 && (
+              <section className="mt-8">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button onClick={() => setShowBackups((v) => !v)} aria-expanded={showBackups} className={btn('outline', 'sm')}>
+                    {showBackups ? 'Backups ausblenden' : `Backups anzeigen (${backupProjects.length})`}
+                  </button>
+                  <span className="text-xs text-ink3">Projekte anderer Accounts, auf die Sie als Admin Zugriff haben.</span>
+                </div>
+                {showBackups && <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">{backupProjects.map(card)}</ul>}
+              </section>
+            )}
+          </>
         )}
 
         <div className="flex gap-3 mt-8 pt-6 border-t border-gray-200">

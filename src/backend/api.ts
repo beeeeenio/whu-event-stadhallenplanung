@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid'
-import { currentUserId, myRole, parseDate, pb, type ProjectRecord, type Role } from './pb'
+import { currentUserId, myRole, parseDate, pb, roleIn, type ProjectRecord, type Role } from './pb'
 import type { ProjectData, ProjectVersion } from '../utils/projectStorage'
 import type { LayoutTemplate, TemplateItem } from '../utils/templateStorage'
 
@@ -12,7 +12,12 @@ export interface ProjectMeta {
   id: string
   name: string
   updatedAt: number
+  /** Was man darf (Admins wie Eigentümer). */
   role: Role
+  /** Eigene Mitgliedschaft; null = nur über Admin-Rechte sichtbar („Backup“). */
+  membership: Role | null
+  /** Name oder E-Mail des Eigentümers – nur für Admins lesbar. */
+  ownerName?: string
 }
 
 export interface LoadedProject {
@@ -34,8 +39,20 @@ const projects = () => pb.collection<ProjectRecord>('projects')
 // ---------- Projekte ----------
 
 export async function listProjects(): Promise<ProjectMeta[]> {
-  const records = await projects().getFullList({ fields: 'id,name,updated,owner,editors,viewers', sort: '-updated' })
-  return records.map((r) => ({ id: r.id, name: r.name, updatedAt: parseDate(r.updated), role: myRole(r) }))
+  const me = currentUserId()
+  const records = await projects().getFullList({
+    fields: 'id,name,updated,owner,editors,viewers,expand.owner.name,expand.owner.email',
+    expand: 'owner',
+    sort: '-updated',
+  })
+  return records.map((r) => ({
+    id: r.id,
+    name: r.name,
+    updatedAt: parseDate(r.updated),
+    role: myRole(r),
+    membership: me ? roleIn(r, me) : null,
+    ownerName: r.expand?.owner?.name || r.expand?.owner?.email || undefined,
+  }))
 }
 
 /** Eigentümer/Ersteller nur mitschicken, wenn angemeldet (offener Zugang: ohne). */
