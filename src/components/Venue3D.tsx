@@ -288,7 +288,7 @@ function buildVenue(): THREE.Group {
     g.add(segmentBox(seg, VENUE.doorHeight, VENUE.woodPanelHeight, t, VENUE.woodColor))
     g.add(segmentBox(seg, VENUE.woodPanelHeight, VENUE.wallHeight, t, VENUE.upperWallColor))
   }
-  // Glasfassade zur Terrasse: Scheiben (mit Türöffnungen), darüber weiße Wand
+  // Glasfassaden (Terrasse, Foyer): Scheiben mit Türöffnungen, darüber weiße Wand
   const glass = new THREE.MeshStandardMaterial({ color: '#bcd7e6', transparent: true, opacity: 0.28, roughness: 0.1, metalness: 0.1, depthWrite: false })
   for (const seg of GLASS_SEGMENTS_PX) {
     for (const [a, b] of solidParts(seg)) {
