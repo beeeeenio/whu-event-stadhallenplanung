@@ -21,6 +21,8 @@ export const VENUE = {
   stageColor: '#b98350',
   curtainColor: '#7f1d1d',
   curtainHeight: 6,
+  /** Feste Säulen (Sichtbeton) */
+  columnColor: '#d6d3d1',
   background: '#dfe3e8',
 } as const
 
@@ -105,4 +107,11 @@ export const GLASS_SEGMENTS_PX: [number, number, number, number][] = [
 export const PARTITIONS_PX: [number, number, number, number][] = [
   [842, 275, 842, 716],
   [1102, 275, 1102, 716],
+]
+
+/** Feste Säulen als [Mitte x, Mitte y, Durchmesser] in Plan-Pixeln (Kreise im Grundriss). */
+export const COLUMNS_PX: [number, number, number][] = [
+  // Foyer
+  [861, 961, 10],
+  [1048, 961, 10],
 ]
