@@ -83,7 +83,7 @@ export function forexEdge(pieces: Piece2D[], panel: ForexPanel): ForexEdge | nul
   return pieceEdges(pieces[i]).find((e) => e.side === panel.side) ?? null
 }
 
-/** Ungültige Blenden verwerfen (Podest fehlt, Seite gibt es nicht, doppelt). */
+/** Ungültige Blenden verwerfen (Podest fehlt, Seite gibt es nicht, Innenkante, doppelt). */
 export function sanitizeForexPanels(pieces: Piece2D[], raw: unknown): ForexPanel[] {
   if (!Array.isArray(raw)) return []
   const seen = new Set<string>()
@@ -94,7 +94,10 @@ export function sanitizeForexPanels(pieces: Piece2D[], raw: unknown): ForexPanel
     if (typeof v.thicknessMm === 'number' && v.thicknessMm > 0) panel.thicknessMm = v.thicknessMm
     if (typeof v.printGroup === 'string' && v.printGroup) panel.printGroup = v.printGroup
     const key = `${panel.pieceId}|${panel.side}`
-    if (seen.has(key) || seen.has(`id:${panel.id}`) || !forexEdge(pieces, panel)) continue
+    const i = pieces.findIndex((p, idx) => pieceKey(p, idx) === panel.pieceId)
+    const edge = forexEdge(pieces, panel)
+    // nur an freien Außenkanten (an Innenkanten liegt ein Nachbarpodest an)
+    if (seen.has(key) || seen.has(`id:${panel.id}`) || !edge || !isFreeEdge(pieces, i, edge)) continue
     seen.add(key)
     seen.add(`id:${panel.id}`)
     out.push(panel)
