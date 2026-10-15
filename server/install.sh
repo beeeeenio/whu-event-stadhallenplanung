@@ -38,15 +38,22 @@ DEPLOY_USER=stadthalle-deploy
 DEPLOY_PUBKEY_FILE=/etc/stadthalle/deploy_key.pub
 id "$DEPLOY_USER" >/dev/null 2>&1 ||
   useradd --system --create-home --home-dir "/home/$DEPLOY_USER" --shell /bin/sh "$DEPLOY_USER"
+# Rekursiv: Unterordner wie assets/ stammen evtl. noch aus einem Ausrollen als root.
 install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$APP_DIR/pb_public"
+chown -R "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR/pb_public"
 if [ -s "$DEPLOY_PUBKEY_FILE" ]; then
   command -v rrsync >/dev/null || { echo "rrsync fehlt (Paket rsync ≥ 3.2.4 installieren)." >&2; exit 1; }
   install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 700 "/home/$DEPLOY_USER/.ssh"
-  printf 'command="rrsync -wo %s",restrict %s\n' "$APP_DIR/pb_public" "$(cat "$DEPLOY_PUBKEY_FILE")" \
+  # -munge: PocketBase folgt Symlinks aus pb_public heraus; ein hochgeladener Link
+  # auf pb_data/data.db wäre sonst über HTTPS abrufbar. Nur die erste Zeile der
+  # Datei, damit keine weitere, uneingeschränkte Schlüsselzeile durchrutscht.
+  printf 'command="rrsync -wo -munge %s",restrict %s\n' "$APP_DIR/pb_public" "$(head -n 1 "$DEPLOY_PUBKEY_FILE")" \
     > "/home/$DEPLOY_USER/.ssh/authorized_keys"
   chown "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh/authorized_keys"
   chmod 600 "/home/$DEPLOY_USER/.ssh/authorized_keys"
   echo "Deploy-Schlüssel für $DEPLOY_USER eingetragen (nur rsync nach pb_public)."
+else
+  rm -f "/home/$DEPLOY_USER/.ssh/authorized_keys"
 fi
 install -d -o stadthalle -g stadthalle -m 700 "$APP_DIR/pb_data"
 

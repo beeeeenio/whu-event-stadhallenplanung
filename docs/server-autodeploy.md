@@ -5,8 +5,8 @@ Ziel: Jede Änderung auf dem Branch `backend-pocketbase` wird von GitHub Actions
 ## Sicherheit
 
 - **Eigener Deploy-Benutzer:** GitHub verbindet sich als `stadthalle-deploy`, nicht als `root`.
-- **Eingeschränkter Schlüssel:** Der Schlüssel erlaubt nur `rsync` in das Verzeichnis `/opt/stadthalle/pb_public/` (`rrsync -wo`, `restrict`). Keine Shell, kein Lesen, kein anderes Verzeichnis.
-- **Datenbank geschützt:** `pb_data/` ist für diesen Benutzer nicht erreichbar.
+- **Eingeschränkter Schlüssel:** Der Schlüssel erlaubt nur `rsync` in das Verzeichnis `/opt/stadthalle/pb_public/` (`rrsync -wo -munge`, `restrict`). Keine Shell, kein Lesen, kein anderes Verzeichnis.
+- **Datenbank geschützt:** `pb_data/` ist für diesen Benutzer nicht erreichbar. Hochgeladene Symlinks macht `-munge` unbrauchbar – PocketBase folgt Symlinks aus `pb_public` heraus und würde sonst z. B. einen Link auf `pb_data/data.db` öffentlich ausliefern.
 - **Privater Schlüssel bleibt bei Benni:** Er liegt nur als verschlüsseltes GitHub-Secret vor. Der Server bekommt nur den öffentlichen Teil.
 
 ## Schritt 1: Benni (Repository-Besitzer)
@@ -30,13 +30,13 @@ Diesen Text an Claude Code geben, im Ordner des Repositorys. `SERVER` und den Sc
 > 2. Auf dem Server (`root@SERVER`) die Datei `/etc/stadthalle/deploy_key.pub` mit genau dieser Zeile anlegen (Verzeichnis ggf. erstellen, Rechte 644): `ssh-ed25519 AAAA… stadthalle-deploy`
 > 3. Prüfen, dass `rrsync` auf dem Server vorhanden ist (`command -v rrsync`, kommt mit `rsync` ≥ 3.2.4). Falls nicht: `apt-get install -y rsync`, und wenn es dann immer noch fehlt, `/usr/share/doc/rsync/scripts/rrsync` nach `/usr/local/bin/rrsync` kopieren und ausführbar machen.
 > 4. Das Backend wie gewohnt aktualisieren: `rsync -a --delete server/ root@SERVER:/root/stadthalle-src/` und `ssh root@SERVER bash /root/stadthalle-src/install.sh`. Das Skript legt den Benutzer `stadthalle-deploy` an, gibt ihm `pb_public/` und trägt den Schlüssel eingeschränkt ein.
-> 5. Kontrolle: `ssh root@SERVER cat /home/stadthalle-deploy/.ssh/authorized_keys` muss mit `command="rrsync -wo /opt/stadthalle/pb_public",restrict ssh-ed25519` beginnen, und `ls -ld /opt/stadthalle/pb_public` muss `stadthalle-deploy` als Besitzer zeigen.
+> 5. Kontrolle: `ssh root@SERVER cat /home/stadthalle-deploy/.ssh/authorized_keys` muss mit `command="rrsync -wo -munge /opt/stadthalle/pb_public",restrict ssh-ed25519` beginnen, und `ls -ld /opt/stadthalle/pb_public` muss `stadthalle-deploy` als Besitzer zeigen.
 > 6. Mir den Hostnamen nennen, unter dem der Server per SSH aus dem Internet erreichbar ist (IPv4, GitHub Actions hat kein IPv6).
 > Nichts an `pb_data/` ändern.
 
 ## Schritt 3: Benni
 
-Mit dem Hostnamen aus Schritt 2 (Beispiel: `stadthalle.whu-event.de`):
+Mit dem Hostnamen aus Schritt 2 (`stadthalle.whu-event.de` zeigt per IPv4 auf den Server, SSH ist dort offen):
 
 ```bash
 HOST=stadthalle.whu-event.de
@@ -45,10 +45,13 @@ gh secret set DEPLOY_KNOWN_HOSTS -R beeeeenio/whu-event-stadhallenplanung -b "$(
 gh workflow run deploy-server.yml -R beeeeenio/whu-event-stadhallenplanung --ref backend-pocketbase
 ```
 
+Vor dem Setzen von `DEPLOY_KNOWN_HOSTS` prüfen: `ssh-keyscan -t ed25519 "$HOST" 2>/dev/null | ssh-keygen -lf -` muss `SHA256:fIabnmaxeFqUBI55awKO3ir+Q8HEq3iGM6ZbhSvDQhA` zeigen (direkt auf dem Server abgelesen). Sonst nicht weitermachen.
+
 Danach unter GitHub → Actions → „Deploy to Stadthalle server“ nachsehen, ob der Lauf grün ist, und die Seite mit Cmd+Shift+R neu laden.
 
 ## Ab dann
 
 - **Neue Version live:** Ein Push bzw. Merge auf `backend-pocketbase` reicht.
 - **Ohne Secrets:** Fehlen die Secrets, überspringt der Workflow das Hochladen mit einem Hinweis, statt rot zu werden.
-- **Zugang sperren:** `/etc/stadthalle/deploy_key.pub` auf dem Server löschen, `/home/stadthalle-deploy/.ssh/authorized_keys` leeren und das Secret in GitHub entfernen.
+- **Doch einmal von Hand als root ausrollen** (`docs/live-schalten.md`): danach `ssh root@SERVER chown -R stadthalle-deploy:stadthalle-deploy /opt/stadthalle/pb_public`, sonst kann der nächste automatische Lauf in neu angelegte Ordner nicht schreiben.
+- **Zugang sperren:** `/etc/stadthalle/deploy_key.pub` auf dem Server löschen und `install.sh` erneut ausführen (entfernt den Schlüssel), dann das Secret in GitHub entfernen.
