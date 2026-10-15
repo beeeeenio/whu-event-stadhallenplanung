@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useEventStore, AREA_COLORS, NIVTEC_COLORS } from '../store/store'
+import { useEventStore, AREA_COLORS, NIVTEC_COLORS, OBJECT_COLORS } from '../store/store'
+import { getDefaultColor } from './EventItemShape'
 import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
 import { btn, input as inputCls, island } from '../utils/ui'
@@ -180,7 +181,7 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
       </label>
       {/* key inkl. Notiz: bei Undo/Redo von außen geänderte Notiz neu übernehmen */}
       <NoteField key={`${item.id}:${item.note ?? ''}`} itemId={item.id} note={item.note ?? ''} />
-      {(item.type === 'area' || item.type === 'nivtec_group') && (
+      {item.type !== 'text_label' && (
         <ColorSwatches item={item} />
       )}
       <div className="flex flex-col gap-1.5 pt-1">
@@ -291,8 +292,8 @@ function RotationField({ item, currentPhaseId }: { item: EventItem; currentPhase
 function ColorSwatches({ item }: { item: EventItem }) {
   const setItemColor = useEventStore((s) => s.setItemColor)
   const isNivTec = item.type === 'nivtec_group'
-  const colors = isNivTec ? NIVTEC_COLORS : AREA_COLORS
-  const defaultColor = colors[0]
+  const colors = isNivTec ? NIVTEC_COLORS : item.type === 'area' ? AREA_COLORS : OBJECT_COLORS
+  const defaultColor = isNivTec || item.type === 'area' ? colors[0] : getDefaultColor(item.type)
   const [customColor, setCustomColor] = useState(item.color ?? defaultColor)
   const [showColorPicker, setShowColorPicker] = useState(false)
 
@@ -314,7 +315,7 @@ function ColorSwatches({ item }: { item: EventItem }) {
 
   return (
     <div>
-      <div className="text-ink3 mb-1.5">{isNivTec ? 'Farbe' : 'Farbe'}</div>
+      <div className="text-ink3 mb-1.5">{isNivTec ? 'Farbe (Molton in 3D)' : 'Farbe'}</div>
       <div className="flex flex-wrap gap-1.5">
         {colors.map((color) => (
           <button

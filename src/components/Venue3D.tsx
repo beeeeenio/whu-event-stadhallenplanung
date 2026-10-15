@@ -5,6 +5,7 @@ import { useEventStore } from '../store/store'
 import type { EventItem, ItemType, PhaseData } from '../types'
 import { DEFAULT_PIXELS_PER_METER, POWER_PLAN_NATIVE_PIXELS_PER_METER } from '../utils/scale'
 import { getDefaultColor } from './EventItemShape'
+import { buildNivtecDeck } from './nivtec3d'
 import { DOORS_PX, MAIN_CURTAIN_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
 
@@ -56,6 +57,24 @@ function box(w: number, hgt: number, d: number, x: number, y: number, z: number,
   return m
 }
 
+/** Stuhlfarbe wie im Saal (schwarze Bankettstühle mit Chromgestell). */
+const CHAIR_COLOR = '#1f2937'
+const CHROME = new THREE.MeshStandardMaterial({ color: '#c0c4c8', metalness: 0.9, roughness: 0.3 })
+
+/** Einzelner Stuhl (ca. 45 × 45 cm), Lehne hinten (+z), Mittelpunkt im Ursprung. */
+function buildChair(color: string): THREE.Group {
+  const c = new THREE.Group()
+  c.add(box(0.44, 0.05, 0.42, 0, 0.46, 0, color))
+  c.add(box(0.44, 0.42, 0.04, 0, 0.74, 0.2, color))
+  const leg = new THREE.CylinderGeometry(0.012, 0.012, 0.45, 6)
+  for (const [x, z] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) {
+    const m = new THREE.Mesh(leg, CHROME)
+    m.position.set(x, 0.225, z)
+    c.add(m)
+  }
+  return c
+}
+
 /** Ein Objekt als einfache Geometrie; lokaler Ursprung = Konva-Ursprung (oben links bzw. Mitte bei runden). */
 function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
   if (item.type === 'text_label') return null
@@ -96,23 +115,23 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
       if (!grid) break
       for (let r = 0; r < grid.rows; r++) {
         for (let c = 0; c < grid.cols; c++) {
-          const cx = (c + 0.5) * grid.spacingM
-          const cz = (r + 0.5) * grid.spacingM
-          g.add(box(0.42, 0.45, 0.42, cx, 0.225, cz, color))
-          g.add(box(0.42, 0.45, 0.05, cx, 0.675, cz + 0.19, color))
+          const chair = buildChair(item.color || CHAIR_COLOR)
+          chair.position.set((c + 0.5) * grid.spacingM, 0, (r + 0.5) * grid.spacingM)
+          g.add(chair)
         }
       }
       break
     }
-    case 'chair':
-      g.add(box(w, 0.45, d, w / 2, 0.225, d / 2, color))
-      g.add(box(w, 0.45, 0.05, w / 2, 0.675, d - 0.025, color))
+    case 'chair': {
+      const chair = buildChair(item.color || CHAIR_COLOR)
+      chair.position.set(w / 2, 0, d / 2)
+      g.add(chair)
       break
+    }
     case 'nivtec_group': {
-      const ph = (item.nivtecData?.heightCm ?? 40) / 100
-      for (const p of item.nivtecData?.pieces ?? []) {
-        g.add(box(p.w, ph, p.d, p.x + p.w / 2, ph / 2, p.y + p.d / 2, item.color ?? '#1f2937'))
-      }
+      const heightM = (item.nivtecData?.heightCm ?? 40) / 100
+      // Objektfarbe = Molton rundherum; ohne gesetzte Farbe kein Behang
+      g.add(buildNivtecDeck(item.nivtecData?.pieces ?? [], heightM, item.color ?? null))
       break
     }
     default:
@@ -326,11 +345,21 @@ export default function Venue3D({ onClose }: Props) {
       s.camera.position.set(VIEW_FROM_BACK_X, EYE_HEIGHT, stageZ)
       s.controls.target.set(stageX, EYE_HEIGHT, stageZ)
     } else {
-      s.camera.position.set(PLAN_W * 0.55, 45, PLAN_D * 1.05)
-      s.controls.target.set(PLAN_W * 0.5, 0, PLAN_D * 0.45)
+      // Übersicht: auf die geplanten Objekte zielen, ohne Objekte die ganze Halle
+      const bounds = new THREE.Box3().setFromObject(s.items)
+      if (bounds.isEmpty()) {
+        s.camera.position.set(PLAN_W * 0.55, 45, PLAN_D * 1.05)
+        s.controls.target.set(PLAN_W * 0.5, 0, PLAN_D * 0.45)
+      } else {
+        const c = bounds.getCenter(new THREE.Vector3())
+        // steil von oben, damit die ~7 m hohen Wände nicht davor stehen
+        const size = Math.max(bounds.getSize(new THREE.Vector3()).length(), 10)
+        s.camera.position.set(c.x + size * 0.25, VENUE.wallHeight + size * 0.9, c.z + size * 0.55)
+        s.controls.target.set(c.x, 0, c.z)
+      }
     }
     s.controls.update()
-  }, [eye, hideCodes])
+  }, [eye, hideCodes, items, currentPhaseId])
 
   return (
     <div className="absolute inset-0 z-40" style={{ background: VENUE.background }}>

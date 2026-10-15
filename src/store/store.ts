@@ -19,6 +19,19 @@ export const AREA_COLORS = [
   '#84cc16', // limette
 ]
 
+/** Allgemeine Farbauswahl für alle übrigen Objekte (Molton/Pipe & Drape, Möbel, Technik …). */
+export const OBJECT_COLORS = [
+  '#111827', // schwarz (Molton)
+  '#6b7280', // grau
+  '#f9fafb', // weiß
+  '#7f1d1d', // bordeaux
+  '#dc2626', // rot
+  '#1d4ed8', // blau
+  '#059669', // grün
+  '#7c3aed', // violett
+  '#b45309', // holz
+]
+
 /** Vordefinierte Farben für NivTec-Gruppen. */
 export const NIVTEC_COLORS = [
   '#111827', // schwarz
