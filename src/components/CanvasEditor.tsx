@@ -9,6 +9,7 @@ import EventItemShape from './EventItemShape'
 import type { EventItem, PhaseData } from '../types'
 import type { Placement } from '../utils/placement'
 import { exportCanvasAsImage } from '../utils/exportImage'
+import { splitVisiovaRun } from '../utils/visiova'
 
 /** Achsenparallele Welt-Bounding-Box eines (ggf. gedrehten) Objekts, für die Rubberband-Auswahl. */
 function itemWorldBBox(item: EventItem, pd: PhaseData, ppm: number) {
@@ -532,6 +533,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     [updateItemTransform],
   )
 
+  const setVisiovaRun = useEventStore((s) => s.setVisiovaRun)
+  const handleVisiovaRun = useCallback(
+    (id: string, lengthM: number) => setVisiovaRun(id, splitVisiovaRun(lengthM)),
+    [setVisiovaRun],
+  )
+
   const visibleItemIds = itemOrder.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible)
 
   const measureStart = measurePoints[0]
@@ -680,6 +687,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                   onSelect={handleItemSelect}
                   onDragEnd={handleItemDragEnd}
                   onRotate={handleItemRotate}
+                  onVisiovaRun={handleVisiovaRun}
                   draggable={tool === 'select' && !placement}
                   zoom={zoom}
                   gridEnabled={gridEnabledInternal}
