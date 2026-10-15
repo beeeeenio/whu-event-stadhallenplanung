@@ -17,6 +17,7 @@ const SYNONYMS: Partial<Record<ItemType, string[]>> = {
   truss: ['traverse', 'truss', 'rigging'],
   curtain: ['vorhang', 'molton', 'vorhänge'],
   pipe_drape: ['pipe', 'drape', 'stellwand', 'trennwand'],
+  visiova_frame: ['visiova', 'rahmen', 'messerahmen', 'druckrahmen'],
   podium: ['podest', 'bühne', 'buehne', 'podeste', 'bühnenpodest'],
   exhibition_stand: ['messestand', 'stand', 'aussteller', 'messe'],
   coat_rack: ['garderobe', 'garderobenständer'],

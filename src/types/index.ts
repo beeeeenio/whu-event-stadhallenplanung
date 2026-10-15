@@ -20,6 +20,7 @@ export type ItemType =
   | 'plant'
   | 'screen'
   | 'pipe_drape'
+  | 'visiova_frame'
   | 'text_label'
   | 'custom_rect'
   | 'custom_round'
@@ -67,6 +68,10 @@ export interface EventItem {
   grid?: { rows: number; cols: number; spacingM: number }
   /** Freitext-Notiz zum Objekt (z. B. „Kabel bis Bühne legen”). */
   note?: string
+  /** Nur 'visiova_frame': Rahmenhöhe in Metern (die 2D-Tiefe `height` ist die Profiltiefe). */
+  frameHeight?: number
+  /** Nur 'visiova_frame': eingesetzter Druck (Vorderseite) als verkleinertes JPEG-Data-URL. */
+  printImage?: string
   /** Gegen versehentliches Verschieben/Drehen gesperrt (z. B. fest stehende Bühne). */
   locked?: boolean
 }

@@ -19,6 +19,19 @@ export const AREA_COLORS = [
   '#84cc16', // limette
 ]
 
+/** Allgemeine Farbauswahl für alle übrigen Objekte (Molton/Pipe & Drape, Möbel, Technik …). */
+export const OBJECT_COLORS = [
+  '#111827', // schwarz (Molton)
+  '#6b7280', // grau
+  '#f9fafb', // weiß
+  '#7f1d1d', // bordeaux
+  '#dc2626', // rot
+  '#1d4ed8', // blau
+  '#059669', // grün
+  '#7c3aed', // violett
+  '#b45309', // holz
+]
+
 /** Vordefinierte Farben für NivTec-Gruppen. */
 export const NIVTEC_COLORS = [
   '#111827', // schwarz
@@ -80,6 +93,12 @@ interface Store extends EventState {
   setItemNote: (itemId: string, note: string) => void
   resizeItem: (itemId: string, width: number, height: number) => void
   setItemColor: (itemId: string, color: string | null) => void
+  /** Visiova-Rahmen: Druck (Data-URL) setzen bzw. mit null entfernen. */
+  setItemPrint: (itemId: string, image: string | null) => void
+  /** Mehrere Drucke auf einmal setzen (ein Undo-Schritt), z. B. ein Bild über mehrere Rahmen verteilt. */
+  setItemPrints: (prints: Record<string, string>) => void
+  /** Visiova-Rahmen: Rahmenhöhe in Metern. */
+  setFrameHeight: (itemId: string, heightM: number) => void
   /** Sperrt/entsperrt ein Objekt gegen Verschieben und Drehen (unabhängig von der Phase). */
   toggleItemLocked: (itemId: string, locked?: boolean) => void
 
@@ -140,7 +159,7 @@ export interface CustomItemSpec {
 function patchItemInCurrentPhase(
   state: EventState,
   itemId: string,
-  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color'>>,
+  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'printImage'>>,
 ): Pick<EventState, 'items' | 'itemOrder'> {
   const item = state.items[itemId]
   const current = item.phaseData[state.currentPhaseId]
@@ -484,6 +503,34 @@ export const useEventStore = create<Store>((set, get) => {
         if (item.color === newColor) return state
         pushHistory()
         return patchItemInCurrentPhase(state, itemId, { color: newColor })
+      })
+    },
+
+    setItemPrint: (itemId, image) => {
+      set((state) => {
+        if (!state.items[itemId]) return state
+        pushHistory()
+        return patchItemInCurrentPhase(state, itemId, { printImage: image ?? undefined })
+      })
+    },
+
+    setItemPrints: (prints) => {
+      set((state) => {
+        const ids = Object.keys(prints).filter((id) => state.items[id])
+        if (ids.length === 0) return state
+        pushHistory()
+        let next: Pick<EventState, 'items' | 'itemOrder'> = { items: state.items, itemOrder: state.itemOrder }
+        for (const id of ids) next = patchItemInCurrentPhase({ ...state, ...next }, id, { printImage: prints[id] })
+        return next
+      })
+    },
+
+    setFrameHeight: (itemId, heightM) => {
+      set((state) => {
+        const item = state.items[itemId]
+        if (!item || item.frameHeight === heightM) return state
+        pushHistory()
+        return patchItemInCurrentPhase(state, itemId, { frameHeight: heightM })
       })
     },
 

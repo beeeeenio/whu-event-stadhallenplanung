@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { useEventStore, AREA_COLORS, NIVTEC_COLORS } from '../store/store'
+import { useEventStore, AREA_COLORS, NIVTEC_COLORS, OBJECT_COLORS } from '../store/store'
+import { getDefaultColor } from '../utils/itemColors'
 import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
+import { downscaleImage, slicePrint } from '../utils/printImage'
 import { btn, input as inputCls, island } from '../utils/ui'
 
 interface ActionProps {
@@ -85,6 +87,8 @@ export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpe
 
 interface MultiActionProps {
   count: number
+  /** Ausgewählte Visiova-Rahmen in Reihenfolge entlang der Wand (ab 2 Stück: Druck verteilen). */
+  visiovaFrames?: EventItem[]
   onCopyToLaterPhases?: () => void
   onHide: () => void
   onDelete: () => void
@@ -92,13 +96,31 @@ interface MultiActionProps {
 
 /** Leiste für die Mehrfachauswahl: nur die gemeinsamen Aktionen (Verschieben passiert direkt per
  *  Ziehen eines der ausgewählten Objekte, dafür braucht es keinen eigenen Button). */
-export function MultiSelectionBar({ count, onCopyToLaterPhases, onHide, onDelete }: MultiActionProps) {
+export function MultiSelectionBar({ count, visiovaFrames, onCopyToLaterPhases, onHide, onDelete }: MultiActionProps) {
+  const setItemPrints = useEventStore((s) => s.setItemPrints)
+  const onSpreadPrint = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !visiovaFrames) return
+    try {
+      const parts = await slicePrint(file, visiovaFrames.map((f) => f.width))
+      setItemPrints(Object.fromEntries(visiovaFrames.map((f, i) => [f.id, parts[i]])))
+    } catch (err) {
+      alert((err as Error).message)
+    }
+  }
   const cell = 'h-9 px-2.5 rounded-lg text-xs font-medium text-ink hover:bg-chip inline-flex items-center gap-1 whitespace-nowrap'
   return (
     <div className={`flex items-center gap-0.5 p-1 rounded-xl ${island}`} onMouseDown={(e) => e.stopPropagation()}>
       <span className="h-9 px-2.5 rounded-lg text-[11px] font-semibold font-mono bg-accent-soft text-accent inline-flex items-center whitespace-nowrap">
         {count} Objekte ausgewählt
       </span>
+      {visiovaFrames && visiovaFrames.length >= 2 && (
+        <label className={`${cell} cursor-pointer`} title="Ein Bild über alle ausgewählten Visiova-Rahmen verteilen (von links nach rechts, Anteile nach Rahmenbreite)">
+          🖼 Druck über {visiovaFrames.length} Rahmen
+          <input type="file" accept="image/*" className="hidden" onChange={onSpreadPrint} />
+        </label>
+      )}
       {onCopyToLaterPhases && (
         <button onClick={onCopyToLaterPhases} className={cell} title="Alle so, wie sie hier sind, als eigenständige Kopien in alle folgenden Phasen übernehmen">
           ⇥ In folgende Phasen
@@ -168,11 +190,12 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
             />
           </label>
         </div>
-      ) : item.type !== 'text_label' ? (
+      ) : item.type !== 'text_label' && item.type !== 'visiova_frame' ? (
         <div className="text-ink3">
           Größe: {item.width}m × {item.height}m
         </div>
       ) : null}
+      {item.type === 'visiova_frame' && <VisiovaFields item={item} />}
       <RotationField item={item} currentPhaseId={currentPhaseId} />
       <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
         <span className="text-ink3">Gegen Verschieben/Drehen per Maus sperren</span>
@@ -180,7 +203,7 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
       </label>
       {/* key inkl. Notiz: bei Undo/Redo von außen geänderte Notiz neu übernehmen */}
       <NoteField key={`${item.id}:${item.note ?? ''}`} itemId={item.id} note={item.note ?? ''} />
-      {(item.type === 'area' || item.type === 'nivtec_group') && (
+      {item.type !== 'text_label' && (
         <ColorSwatches item={item} />
       )}
       <div className="flex flex-col gap-1.5 pt-1">
@@ -291,8 +314,8 @@ function RotationField({ item, currentPhaseId }: { item: EventItem; currentPhase
 function ColorSwatches({ item }: { item: EventItem }) {
   const setItemColor = useEventStore((s) => s.setItemColor)
   const isNivTec = item.type === 'nivtec_group'
-  const colors = isNivTec ? NIVTEC_COLORS : AREA_COLORS
-  const defaultColor = colors[0]
+  const colors = isNivTec ? NIVTEC_COLORS : item.type === 'area' ? AREA_COLORS : OBJECT_COLORS
+  const defaultColor = isNivTec || item.type === 'area' ? colors[0] : getDefaultColor(item.type)
   const [customColor, setCustomColor] = useState(item.color ?? defaultColor)
   const [showColorPicker, setShowColorPicker] = useState(false)
 
@@ -314,7 +337,7 @@ function ColorSwatches({ item }: { item: EventItem }) {
 
   return (
     <div>
-      <div className="text-ink3 mb-1.5">{isNivTec ? 'Farbe' : 'Farbe'}</div>
+      <div className="text-ink3 mb-1.5">{isNivTec ? 'Farbe (Molton in 3D)' : 'Farbe'}</div>
       <div className="flex flex-wrap gap-1.5">
         {colors.map((color) => (
           <button
@@ -350,6 +373,90 @@ function ColorSwatches({ item }: { item: EventItem }) {
               </button>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Visiova V55: lieferbare Rahmenmaße (visiova.de, 62-mm-Lochraster). */
+const VISIOVA_WIDTHS_MM = [310, 496, 744, 992]
+const VISIOVA_HEIGHTS_MM = [992, 1488, 1984, 2480, 2976]
+const VISIOVA_DEFAULT_HEIGHT_M = 2.48
+
+/** Visiova-Rahmen: Breite/Höhe und eingesetzter Druck (einseitig). */
+function VisiovaFields({ item }: { item: EventItem }) {
+  const resizeItem = useEventStore((s) => s.resizeItem)
+  const setFrameHeight = useEventStore((s) => s.setFrameHeight)
+  const setItemPrint = useEventStore((s) => s.setItemPrint)
+  const frameHeight = item.frameHeight ?? VISIOVA_DEFAULT_HEIGHT_M
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      setItemPrint(item.id, await downscaleImage(file))
+    } catch (err) {
+      alert((err as Error).message)
+    }
+  }
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <label className="flex-1 space-y-1">
+          <span className="text-ink3">Breite</span>
+          <select
+            value={VISIOVA_WIDTHS_MM.includes(Math.round(item.width * 1000)) ? Math.round(item.width * 1000) : ''}
+            onChange={(e) => resizeItem(item.id, Number(e.target.value) / 1000, item.height)}
+            className={`w-full ${inputCls}`}
+          >
+            {!VISIOVA_WIDTHS_MM.includes(Math.round(item.width * 1000)) && <option value="">{item.width} m</option>}
+            {VISIOVA_WIDTHS_MM.map((mm) => (
+              <option key={mm} value={mm}>
+                {mm} mm
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex-1 space-y-1">
+          <span className="text-ink3">Höhe</span>
+          <select
+            value={VISIOVA_HEIGHTS_MM.includes(Math.round(frameHeight * 1000)) ? Math.round(frameHeight * 1000) : ''}
+            onChange={(e) => setFrameHeight(item.id, Number(e.target.value) / 1000)}
+            className={`w-full ${inputCls}`}
+          >
+            {!VISIOVA_HEIGHTS_MM.includes(Math.round(frameHeight * 1000)) && <option value="">{frameHeight} m</option>}
+            {VISIOVA_HEIGHTS_MM.map((mm) => (
+              <option key={mm} value={mm}>
+                {mm} mm
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div>
+        <div className="text-ink3 mb-1">Druck (Vorderseite)</div>
+        {item.printImage ? (
+          <div className="flex items-center gap-2">
+            <img src={item.printImage} alt="Druck" className="h-16 rounded border border-line object-cover" style={{ aspectRatio: `${item.width} / ${frameHeight}` }} />
+            <div className="flex flex-col gap-1">
+              <label className={`${btn('primaryOutline', 'sm')} cursor-pointer`}>
+                Ersetzen
+                <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+              </label>
+              <button onClick={() => setItemPrint(item.id, null)} className={btn('dangerOutline', 'sm')}>
+                Entfernen
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className={`w-full ${btn('primaryOutline', 'sm')} cursor-pointer`}>
+            Druck hochladen (JPG/PNG)
+            <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+          </label>
+        )}
+        <div className="text-[11px] text-ink3 mt-1">
+          Wird auf die Rahmenfläche ({item.width} × {frameHeight} m) gestreckt – am besten im gleichen Seitenverhältnis anlegen. Die Druckseite zeigt im Plan nach unten (mit 180° Drehen umkehren).
         </div>
       </div>
     </div>
