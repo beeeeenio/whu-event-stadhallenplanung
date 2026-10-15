@@ -5,7 +5,7 @@ import { useEventStore } from '../store/store'
 import type { EventItem, ItemType, PhaseData } from '../types'
 import { DEFAULT_PIXELS_PER_METER, POWER_PLAN_NATIVE_PIXELS_PER_METER } from '../utils/scale'
 import { getDefaultColor } from './EventItemShape'
-import { MAIN_CURTAIN_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
+import { DOORS_PX, MAIN_CURTAIN_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
 
 /** Plan-Abmessungen in Metern (Stromplan 1755×1240px bei 23,6px/m). */
@@ -132,16 +132,70 @@ function segmentBox(seg: [number, number, number, number], y0: number, y1: numbe
   return m
 }
 
-/** Feste Bauteile: Wände (unten Holz, oben weiß), Bühnenpodest, Hauptvorhang. */
+/** Abschnitte [von, bis] (in px entlang der Strecke) ohne die Türöffnungen, die auf ihr liegen. */
+function solidParts(seg: [number, number, number, number]): [number, number][] {
+  const [x1, y1, x2, y2] = seg
+  const len = Math.hypot(x2 - x1, y2 - y1)
+  const ux = (x2 - x1) / len
+  const uy = (y2 - y1) / len
+  const gaps = DOORS_PX.map(([dx, dy, w]) => {
+    const t = (dx - x1) * ux + (dy - y1) * uy
+    const off = Math.abs((dx - x1) * uy - (dy - y1) * ux)
+    return off < 8 && t > 0 && t < len ? ([t - w / 2, t + w / 2] as [number, number]) : null
+  })
+    .filter((g): g is [number, number] => g !== null)
+    .sort((a, b) => a[0] - b[0])
+  const parts: [number, number][] = []
+  let from = 0
+  for (const [a, b] of gaps) {
+    if (a > from) parts.push([from, a])
+    from = Math.max(from, b)
+  }
+  if (from < len) parts.push([from, len])
+  return parts
+}
+
+/** Teilstrecke von t0 bis t1 (px) einer Wand-Strecke. */
+function subSegment(seg: [number, number, number, number], t0: number, t1: number): [number, number, number, number] {
+  const [x1, y1, x2, y2] = seg
+  const len = Math.hypot(x2 - x1, y2 - y1)
+  const p = (t: number): [number, number] => [x1 + ((x2 - x1) * t) / len, y1 + ((y2 - y1) * t) / len]
+  return [...p(t0), ...p(t1)]
+}
+
+/** Feste Bauteile: Wände (unten Holz, oben weiß) mit Türöffnungen, Bühnenpodest. */
 function buildVenue(): THREE.Group {
   const g = new THREE.Group()
+  const t = VENUE.wallThickness
   for (const seg of WALL_SEGMENTS_PX) {
-    g.add(segmentBox(seg, 0, VENUE.woodPanelHeight, VENUE.wallThickness, VENUE.woodColor))
-    g.add(segmentBox(seg, VENUE.woodPanelHeight, VENUE.wallHeight, VENUE.wallThickness, VENUE.upperWallColor))
+    // Unterhalb der Türhöhe nur die geschlossenen Abschnitte, darüber durchgehend
+    for (const [a, b] of solidParts(seg)) {
+      g.add(segmentBox(subSegment(seg, a, b), 0, VENUE.doorHeight, t, VENUE.woodColor))
+    }
+    g.add(segmentBox(seg, VENUE.doorHeight, VENUE.woodPanelHeight, t, VENUE.woodColor))
+    g.add(segmentBox(seg, VENUE.woodPanelHeight, VENUE.wallHeight, t, VENUE.upperWallColor))
   }
   const st = { x: STAGE_PX.x / NP, z: STAGE_PX.y / NP, w: STAGE_PX.w / NP, d: STAGE_PX.h / NP }
   g.add(box(st.w, VENUE.stageHeight, st.d, st.x + st.w / 2, VENUE.stageHeight / 2, st.z + st.d / 2, VENUE.stageColor))
-  g.add(segmentBox(MAIN_CURTAIN_PX, VENUE.stageHeight, VENUE.curtainHeight, 0.1, VENUE.curtainColor))
+  return g
+}
+
+/** Hauptvorhang als zwei Hälften; `open` 0 = zu, 1 = ganz offen (zur Seite gerafft). */
+function buildCurtain(open: number): THREE.Group {
+  const g = new THREE.Group()
+  const [x1, z1, x2, z2] = MAIN_CURTAIN_PX.map((v) => v / NP)
+  const len = Math.hypot(x2 - x1, z2 - z1)
+  const half = len / 2
+  const halfW = half * (1 - 0.8 * open) // gerafft bleiben ca. 20 % der Breite stehen
+  const h = VENUE.curtainHeight - VENUE.stageHeight
+  const angle = -Math.atan2(z2 - z1, x2 - x1)
+  for (const side of [0, 1]) {
+    // Hälfte hängt am jeweiligen Ende und wird zur Mitte hin zugezogen
+    const centerT = side === 0 ? halfW / 2 : len - halfW / 2
+    const m = box(halfW, h, 0.12 + 0.2 * open, x1 + ((x2 - x1) * centerT) / len, VENUE.stageHeight + h / 2, z1 + ((z2 - z1) * centerT) / len, VENUE.curtainColor)
+    m.rotation.y = angle
+    g.add(m)
+  }
   return g
 }
 
@@ -152,13 +206,14 @@ interface Props {
 /** Schlichte 3D-Ansicht der aktuellen Phase: Grundriss am Boden, Objekte als Blöcke mit typischer Höhe. */
 export default function Venue3D({ onClose }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
-  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
+  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
   const items = useEventStore((s) => s.items)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const phaseName = useEventStore((s) => s.phases.find((p) => p.id === s.currentPhaseId)?.name ?? '')
   const hideCodes = useEventStore((s) => !!s.layers.hideCodes)
   const [eye, setEye] = useState(false)
   const [showWalls, setShowWalls] = useState(true)
+  const [curtainOpen, setCurtainOpen] = useState(false)
 
   // Szene einmalig aufbauen
   useEffect(() => {
@@ -194,12 +249,14 @@ export default function Venue3D({ onClose }: Props) {
     const wallGroup = new THREE.Group()
     scene.add(wallGroup)
     wallGroup.add(buildVenue())
+    const curtainGroup = new THREE.Group()
+    scene.add(curtainGroup)
 
     const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 500)
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI / 2 - 0.02
-    sceneRef.current = { items: itemGroup, walls: wallGroup, camera, controls }
+    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, camera, controls }
 
     let raf = 0
     const loop = () => {
@@ -237,6 +294,24 @@ export default function Venue3D({ onClose }: Props) {
     }
   }, [items, currentPhaseId, hideCodes])
 
+  // Vorhang sanft auf-/zufahren (ca. 1,5 s)
+  const curtainPos = useRef(0)
+  useEffect(() => {
+    const target = curtainOpen ? 1 : 0
+    let raf = 0
+    const step = () => {
+      const s = sceneRef.current
+      if (!s) return
+      const diff = target - curtainPos.current
+      curtainPos.current = Math.abs(diff) < 0.02 ? target : curtainPos.current + Math.sign(diff) * 0.02
+      s.curtain.clear()
+      s.curtain.add(buildCurtain(curtainPos.current))
+      if (curtainPos.current !== target) raf = requestAnimationFrame(step)
+    }
+    step()
+    return () => cancelAnimationFrame(raf)
+  }, [curtainOpen, hideCodes])
+
   useEffect(() => {
     if (sceneRef.current) sceneRef.current.walls.visible = showWalls
   }, [showWalls, hideCodes])
@@ -267,6 +342,9 @@ export default function Venue3D({ onClose }: Props) {
         </button>
         <button onClick={() => setEye(true)} className={islandBtn(eye ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
           Augenhöhe
+        </button>
+        <button onClick={() => setCurtainOpen((v) => !v)} className={islandBtn('plain', 'h-8 px-2.5 text-[11px] font-medium')}>
+          {curtainOpen ? 'Vorhang zu' : 'Vorhang auf'}
         </button>
         <button onClick={() => setShowWalls((v) => !v)} className={islandBtn(showWalls ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
           Wände

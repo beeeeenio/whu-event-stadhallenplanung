@@ -13,6 +13,8 @@ export const VENUE = {
   woodColor: '#e0b77f',
   upperWallColor: '#f3f4f6',
   /** Bühne: Podesthöhe und Hauptvorhang (dunkelrot) in der Bühnenöffnung. */
+  /** Lichte Höhe der Türöffnungen. */
+  doorHeight: 2.6,
   stageHeight: 0.9,
   stageColor: '#b98350',
   curtainColor: '#7f1d1d',
@@ -54,3 +56,22 @@ export const WALL_SEGMENTS_PX: [number, number, number, number][] = [
 /** Bühnenpodest (Rechteck in Plan-Pixeln) und Lage des Hauptvorhangs. */
 export const STAGE_PX = { x: 385, y: 290, w: 190, h: 410 }
 export const MAIN_CURTAIN_PX: [number, number, number, number] = [572, 365, 572, 630]
+
+/**
+ * Türöffnungen als [Mitte x, Mitte y, Breite] in Plan-Pixeln. Liegt eine Öffnung auf einer
+ * Wand-Strecke (Abstand < 8 px), wird die Wand dort bis `doorHeight` ausgespart.
+ * Aus den Türbögen im Grundriss abgelesen (Positionen ± ca. 0,5 m).
+ */
+export const DOORS_PX: [number, number, number][] = [
+  // Saal → Terrasse (oben)
+  [628, 268, 38], [790, 268, 38], [890, 268, 38], [1050, 268, 38], [1310, 268, 38],
+  // Saal → Foyer (Doppeltüren)
+  [776, 720, 55], [906, 720, 55], [1036, 720, 55], [1166, 720, 55],
+  // Bühne hinten
+  [380, 491, 40],
+  // Nebenräume links
+  [233, 664, 20],
+  [34, 915, 22], [104, 915, 25], [174, 915, 22],
+  // Foyer → draußen (Glastüren unten)
+  [805, 1040, 36], [841, 1040, 36], [987, 1040, 37], [1026, 1040, 37], [1169, 1040, 37], [1208, 1040, 37],
+]
