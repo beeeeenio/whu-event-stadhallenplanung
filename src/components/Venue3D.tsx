@@ -367,6 +367,35 @@ function buildCurtain(open: number): THREE.Group {
   return g
 }
 
+/** Zuletzt benutzte Kamera (pro Browser; bleibt auch nach Neuladen erhalten). */
+interface SavedView {
+  position: number[]
+  target: number[]
+}
+const VIEW_STORAGE_KEY = 'stadthalle-3d-view'
+let lastViewMemory: SavedView | null = null
+
+function loadLastView(): SavedView | null {
+  if (lastViewMemory) return lastViewMemory
+  try {
+    const raw = localStorage.getItem(VIEW_STORAGE_KEY)
+    const v = raw ? (JSON.parse(raw) as SavedView) : null
+    if (v && v.position?.length === 3 && v.target?.length === 3) lastViewMemory = v
+  } catch {
+    // Speicher nicht verfügbar – dann Standardansicht
+  }
+  return lastViewMemory
+}
+
+function saveLastView(camera: THREE.Camera, controls: OrbitControls) {
+  lastViewMemory = { position: camera.position.toArray(), target: controls.target.toArray() }
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify(lastViewMemory))
+  } catch {
+    // ignorieren
+  }
+}
+
 interface Props {
   onClose: () => void
 }
@@ -380,6 +409,14 @@ export default function Venue3D({ onClose }: Props) {
   const phaseName = useEventStore((s) => s.phases.find((p) => p.id === s.currentPhaseId)?.name ?? '')
   const hideCodes = useEventStore((s) => !!s.layers.hideCodes)
   const [eye, setEye] = useState(false)
+  // Klick auf Übersicht/Augenhöhe: Standardansicht statt gemerkter Ansicht (auch bei erneutem Klick)
+  const [viewNonce, setViewNonce] = useState(0)
+  const viewRequested = useRef(false)
+  const requestView = (eyeView: boolean) => {
+    viewRequested.current = true
+    setEye(eyeView)
+    setViewNonce((n) => n + 1)
+  }
   const [showWalls, setShowWalls] = useState(true)
   const [curtainOpen, setCurtainOpen] = useState(false)
   const [showPartitions, setShowPartitions] = useState(false)
@@ -428,6 +465,8 @@ export default function Venue3D({ onClose }: Props) {
 
     const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 500)
     const controls = new OrbitControls(camera, renderer.domElement)
+    // Jede Kamerabewegung merken, damit die 3D-Ansicht beim nächsten Öffnen dort weitermacht
+    controls.addEventListener('end', () => saveLastView(camera, controls))
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI / 2 - 0.02
     sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, partitions: partitionGroup, upperWalls: wallGroup.getObjectByName('upperWalls'), sun, camera, controls }
@@ -448,6 +487,7 @@ export default function Venue3D({ onClose }: Props) {
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', onResize)
+      saveLastView(camera, controls)
       controls.dispose()
       renderer.dispose()
       mount.removeChild(renderer.domElement)
@@ -503,10 +543,17 @@ export default function Venue3D({ onClose }: Props) {
     if (sceneRef.current) sceneRef.current.walls.visible = showWalls
   }, [showWalls, hideCodes])
 
-  // Kamera: Übersicht über die ganze Halle, oder Augenhöhe hinten im Saal mit Blick zur Bühne
+  // Kamera: zuletzt benutzte Ansicht wiederherstellen; nach Klick auf Übersicht/Augenhöhe deren Standard
   useEffect(() => {
     const s = sceneRef.current
     if (!s) return
+    const last = viewRequested.current ? null : loadLastView()
+    if (last) {
+      s.camera.position.fromArray(last.position)
+      s.controls.target.fromArray(last.target)
+      s.controls.update()
+      return
+    }
     const stageX = (STAGE_PX.x + STAGE_PX.w / 2) / NP
     const stageZ = (STAGE_PX.y + STAGE_PX.h / 2) / NP
     if (eye) {
@@ -527,17 +574,17 @@ export default function Venue3D({ onClose }: Props) {
       }
     }
     s.controls.update()
-  }, [eye, hideCodes, items, currentPhaseId])
+  }, [eye, viewNonce, hideCodes, items, currentPhaseId])
 
   return (
     <div className="absolute inset-0 z-40" style={{ background: VENUE.background }}>
       <div ref={mountRef} className="absolute inset-0" />
       <div className={`absolute top-4 left-4 flex items-center gap-2 p-1.5 pl-3 rounded-xl ${island}`}>
         <span className="text-xs font-semibold text-ink">3D · {phaseName}</span>
-        <button onClick={() => setEye(false)} className={islandBtn(eye ? 'plain' : 'dark', 'h-8 px-2.5 text-[11px] font-medium')}>
+        <button onClick={() => requestView(false)} className={islandBtn(eye ? 'plain' : 'dark', 'h-8 px-2.5 text-[11px] font-medium')}>
           Übersicht
         </button>
-        <button onClick={() => setEye(true)} className={islandBtn(eye ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
+        <button onClick={() => requestView(true)} className={islandBtn(eye ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
           Augenhöhe
         </button>
         <button onClick={() => setCurtainOpen((v) => !v)} className={islandBtn('plain', 'h-8 px-2.5 text-[11px] font-medium')}>
