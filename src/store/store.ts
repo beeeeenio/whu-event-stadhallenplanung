@@ -4,7 +4,6 @@ import type { EventItem, EventState, ForexPanel, ItemType, ItemWithId, NivtecDat
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import { sortPhases } from '../utils/phaseDiff'
 import { sanitizeForexPanels } from '../utils/forex'
-import { DEFAULT_PIXELS_PER_METER as DEFAULT_PPM } from '../utils/scale'
 import { hasDefaultVisiovaLabel, visiovaLabel } from '../utils/visiova'
 
 const PHASE_1 = uuid()
@@ -99,8 +98,8 @@ interface Store extends EventState {
   /** Visiova-Rahmen: Druck (Data-URL) setzen bzw. mit null entfernen. */
   setItemPrint: (itemId: string, image: string | null) => void
   /**
-   * Visiova-Rahmen zu einer Reihe verlängern: der Rahmen bekommt widths[0], für jede weitere
-   * Breite entsteht ein neuer Rahmen direkt daneben (gleiche Drehung/Höhe/Farbe). Ein Undo-Schritt.
+   * Visiova-Rahmen auf eine Reihe aus mehreren Rahmen setzen (bleibt EIN Objekt, das sich als
+   * Ganzes verschieben/drehen lässt; ein Druck läuft über alle Rahmen). Ein Undo-Schritt.
    */
   setVisiovaRun: (itemId: string, widths: number[]) => void
   /** Mehrere Drucke auf einmal setzen (ein Undo-Schritt), z. B. ein Bild über mehrere Rahmen verteilt. */
@@ -169,7 +168,7 @@ export interface CustomItemSpec {
 function patchItemInCurrentPhase(
   state: EventState,
   itemId: string,
-  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'printImage' | 'nivtecData' | 'forexPrints'>>,
+  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'printImage' | 'nivtecData' | 'forexPrints' | 'visiovaFrames'>>,
 ): Pick<EventState, 'items' | 'itemOrder'> {
   const item = state.items[itemId]
   const current = item.phaseData[state.currentPhaseId]
@@ -527,45 +526,15 @@ export const useEventStore = create<Store>((set, get) => {
     setVisiovaRun: (itemId, widths) => {
       set((state) => {
         const item = state.items[itemId]
-        const pd = item?.phaseData[state.currentPhaseId]
-        if (!item || !pd || widths.length === 0) return state
+        if (!item || widths.length === 0) return state
         pushHistory()
-        const autoLabel = hasDefaultVisiovaLabel(item.label)
-        const frameH = item.frameHeight ?? 2.48
-        const labelFor = (w: number) => (autoLabel ? visiovaLabel(w, frameH) : item.label)
-        let next: Pick<EventState, 'items' | 'itemOrder'> = patchItemInCurrentPhase(state, itemId, {
-          width: widths[0],
-          label: labelFor(widths[0]),
+        const total = widths.reduce((s, w) => s + w, 0)
+        const label = hasDefaultVisiovaLabel(item.label) ? visiovaLabel(widths, item.frameHeight ?? 2.48) : item.label
+        return patchItemInCurrentPhase(state, itemId, {
+          width: total,
+          visiovaFrames: widths.length > 1 ? widths : undefined,
+          label,
         })
-        const rad = (pd.rotation * Math.PI) / 180
-        const items = { ...next.items }
-        const itemOrder = [...next.itemOrder]
-        let insertAt = itemOrder.indexOf(itemId) + 1 || itemOrder.length
-        let offsetM = widths[0]
-        for (const w of widths.slice(1)) {
-          const id = uuid()
-          const phaseData: EventItem['phaseData'] = {}
-          for (const p of state.phases) {
-            phaseData[p.id] =
-              p.id === state.currentPhaseId
-                ? { x: pd.x + Math.cos(rad) * offsetM * DEFAULT_PPM, y: pd.y + Math.sin(rad) * offsetM * DEFAULT_PPM, rotation: pd.rotation, visible: true }
-                : { x: 0, y: 0, rotation: 0, visible: false }
-          }
-          items[id] = {
-            id,
-            type: 'visiova_frame',
-            label: labelFor(w),
-            width: w,
-            height: item.height,
-            frameHeight: item.frameHeight,
-            color: item.color,
-            phaseData,
-          }
-          itemOrder.splice(insertAt++, 0, id)
-          offsetM += w
-        }
-        next = { items, itemOrder }
-        return next
       })
     },
 

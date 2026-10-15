@@ -86,11 +86,19 @@ function holeTexture(lengthM: number): THREE.Texture {
 }
 
 /**
- * Visiova V55 Systemrahmen: gelochtes Alu-Profil (55 mm tief), einseitig bespannter Druck
+ * Visiova V55 Systemrahmen: gelochtes Alu-Profil (55 mm tief), optional einseitig bespannter Druck
  * (Vorderseite = Plan-„unten“, also +z lokal), Rückseite offen/weiß, Bodenplatten.
  * Lokaler Ursprung = linke vordere Ecke wie in 2D.
  */
-function buildVisiovaFrame(w: number, h: number, print: string | undefined, aluColor: string): THREE.Group {
+function buildVisiovaFrame(
+  w: number,
+  h: number,
+  print: string | undefined,
+  aluColor: string,
+  /** Ausschnitt des Drucks für diesen Rahmen (Anteil der Wandbreite), damit ein Druck über alle Rahmen läuft */
+  uStart = 0,
+  uLen = 1,
+): THREE.Group {
   const g = new THREE.Group()
   const F = VISIOVA_FACE_M
   const D = VISIOVA_DEPTH_M
@@ -122,17 +130,23 @@ function buildVisiovaFrame(w: number, h: number, print: string | undefined, aluC
       PRINT_TEXTURES.set(print, map)
     }
   }
-  // Textildruck mit Keder: bedeckt die Rahmenfront bis auf einen schmalen Rand
-  const front = new THREE.Mesh(
-    new THREE.PlaneGeometry(w - 0.006, h - 0.006),
-    new THREE.MeshStandardMaterial({ color: map ? '#ffffff' : '#f3f4f6', map, roughness: 0.9 }),
-  )
-  front.position.set(w / 2, lift + h / 2, D + 0.002)
-  g.add(front)
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * F, h - 2 * F), new THREE.MeshStandardMaterial({ color: '#f3f4f6', roughness: 0.9 }))
-  back.rotation.y = Math.PI
-  back.position.set(w / 2, lift + h / 2, 0.01)
-  g.add(back)
+  // Ohne Druck ist der Rahmen offen (nur Profil); mit Druck: Textil mit Keder über die Front,
+  // Rückseite weiß (einseitig bedruckt)
+  if (map) {
+    let part = map
+    if (uLen < 1) {
+      part = map.clone()
+      part.repeat.set(uLen, 1)
+      part.offset.set(uStart, 0)
+    }
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(w - 0.006, h - 0.006), new THREE.MeshStandardMaterial({ map: part, roughness: 0.9 }))
+    front.position.set(w / 2, lift + h / 2, D + 0.002)
+    g.add(front)
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * F, h - 2 * F), new THREE.MeshStandardMaterial({ color: '#f3f4f6', roughness: 0.9 }))
+    back.rotation.y = Math.PI
+    back.position.set(w / 2, lift + h / 2, 0.01)
+    g.add(back)
+  }
   // Bodenplatten an beiden Enden
   for (const x of [F / 2, w - F / 2]) {
     const plate = new THREE.Mesh(new THREE.BoxGeometry(0.12, lift, 0.4), plain)
@@ -184,9 +198,19 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
     case 'area':
       g.add(box(w, 0.02, d, w / 2, 0.01, d / 2, color, 0.45))
       break
-    case 'visiova_frame':
-      g.add(buildVisiovaFrame(w, item.frameHeight ?? 2.48, item.printImage, item.color || VISIOVA_ALU))
+    case 'visiova_frame': {
+      // Wand aus mehreren Rahmen nebeneinander; ein Druck läuft über die ganze Wand
+      const frames = item.visiovaFrames?.length ? item.visiovaFrames : [w]
+      const total = frames.reduce((s, x) => s + x, 0)
+      let at = 0
+      for (const fw of frames) {
+        const f = buildVisiovaFrame(fw, item.frameHeight ?? 2.48, item.printImage, item.color || VISIOVA_ALU, at / total, fw / total)
+        f.position.x = at
+        g.add(f)
+        at += fw
+      }
       break
+    }
     case 'curtain':
       g.add(box(w, hgt, 0.08, w / 2, hgt / 2, 0, item.color || VENUE.curtainColor))
       break

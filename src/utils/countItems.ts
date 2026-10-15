@@ -15,6 +15,8 @@ export interface ItemCounts {
   curtainMeters: number
   /** Forex-Blenden an NivTec-Bühnen (Stück) */
   forexPanels: number
+  /** Visiova-Rahmen insgesamt (Wände zählen je Rahmen) */
+  visiovaFrames: number
 }
 
 function iconForItem(item: EventItem): string {
@@ -28,6 +30,7 @@ export function countVisibleItems(items: Record<string, EventItem>, phaseId: str
   let totalPodiums = 0
   let curtainMeters = 0
   let forexPanels = 0
+  let visiovaFrames = 0
 
   for (const item of Object.values(items)) {
     const pd = item.phaseData[phaseId]
@@ -47,6 +50,7 @@ export function countVisibleItems(items: Record<string, EventItem>, phaseId: str
     if (item.type === 'nivtec_group' && item.nivtecData) totalPodiums += item.nivtecData.pieces.length
     if (item.type === 'curtain') curtainMeters += item.width
     forexPanels += item.nivtecData?.forexPanels?.length ?? 0
+    if (item.type === 'visiova_frame') visiovaFrames += item.visiovaFrames?.length ?? 1
   }
 
   return {
@@ -56,6 +60,7 @@ export function countVisibleItems(items: Record<string, EventItem>, phaseId: str
     totalPodiums,
     curtainMeters,
     forexPanels,
+    visiovaFrames,
   }
 }
 

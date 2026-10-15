@@ -350,6 +350,16 @@ function EventItemShape({
           y={hitY + 1 / zoom}
         />
       )}
+      {/* Visiova-Wand: Fugen zwischen den Rahmen */}
+      {runPx === null &&
+        item.type === 'visiova_frame' &&
+        (item.visiovaFrames?.length ?? 0) > 1 &&
+        item.visiovaFrames!.slice(0, -1).map((_, i) => {
+          const x = metersToPixels(item.visiovaFrames!.slice(0, i + 1).reduce((s, v) => s + v, 0), pixelsPerMeter)
+          return (
+            <Line key={i} points={[x, -3 / zoom, x, h + 3 / zoom]} stroke="#374151" strokeWidth={1 / zoom} listening={false} />
+          )
+        })}
       {runPx !== null && (() => {
         const widths = splitVisiovaRun(runPx / pixelsPerMeter)
         const total = widths.reduce((s, x) => s + x, 0)
