@@ -220,7 +220,12 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
     case 'nivtec_group': {
       const heightM = (item.nivtecData?.heightCm ?? 40) / 100
       // Objektfarbe = Molton rundherum; ohne gesetzte Farbe kein Behang
-      g.add(buildNivtecDeck(item.nivtecData?.pieces ?? [], heightM, item.color ?? null))
+      g.add(
+        buildNivtecDeck(item.nivtecData?.pieces ?? [], heightM, item.color ?? null, {
+          panels: item.nivtecData?.forexPanels ?? [],
+          prints: item.forexPrints,
+        }),
+      )
       break
     }
     default:

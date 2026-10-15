@@ -72,6 +72,10 @@ export function exportPhaseToPdf({ eventName, phase, items, currentPhaseId, plan
   doc.text(`Bühnenpodeste gesamt: ${counts.totalPodiums}`, 14, y)
   y += 5
   doc.text(`Vorhang (lfm): ${counts.curtainMeters.toFixed(1)}`, 14, y)
+  if (counts.forexPanels > 0) {
+    y += 5
+    doc.text(`Forex-Blenden: ${counts.forexPanels}`, 14, y)
+  }
 
   doc.save(`${eventName.replace(/\s+/g, '_')}_${phase?.name.replace(/\s+/g, '_') ?? 'phase'}.pdf`)
 }

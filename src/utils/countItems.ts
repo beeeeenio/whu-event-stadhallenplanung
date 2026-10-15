@@ -13,6 +13,8 @@ export interface ItemCounts {
   totalChairs: number
   totalPodiums: number
   curtainMeters: number
+  /** Forex-Blenden an NivTec-Bühnen (Stück) */
+  forexPanels: number
 }
 
 function iconForItem(item: EventItem): string {
@@ -25,6 +27,7 @@ export function countVisibleItems(items: Record<string, EventItem>, phaseId: str
   let totalChairs = 0
   let totalPodiums = 0
   let curtainMeters = 0
+  let forexPanels = 0
 
   for (const item of Object.values(items)) {
     const pd = item.phaseData[phaseId]
@@ -43,6 +46,7 @@ export function countVisibleItems(items: Record<string, EventItem>, phaseId: str
     if (item.type === 'podium') totalPodiums += 1
     if (item.type === 'nivtec_group' && item.nivtecData) totalPodiums += item.nivtecData.pieces.length
     if (item.type === 'curtain') curtainMeters += item.width
+    forexPanels += item.nivtecData?.forexPanels?.length ?? 0
   }
 
   return {
@@ -51,6 +55,7 @@ export function countVisibleItems(items: Record<string, EventItem>, phaseId: str
     totalChairs,
     totalPodiums,
     curtainMeters,
+    forexPanels,
   }
 }
 

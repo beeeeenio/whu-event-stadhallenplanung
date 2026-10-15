@@ -44,12 +44,27 @@ export interface Piece2D {
   id?: string
 }
 
+export type ForexSide = 'top' | 'right' | 'bottom' | 'left' | 'hyp'
+
+/** Bedruckte Forex-Platte an einer Podestkante; Lage ergibt sich aus Podest + Kante. */
+export interface ForexPanel {
+  id: string
+  /** Piece2D.id des Podests (bei Podesten ohne id: "#<index>") */
+  pieceId: string
+  side: ForexSide
+  thicknessMm?: number
+  /** gleiche Gruppe = ein Druck läuft über diese Platten */
+  printGroup?: string
+}
+
 export interface NivtecData {
   /** NivTec-Exporte haben i.d.R. keinen Namen; wird beim Import ggf. aus dem Dateinamen ergänzt. */
   name?: string
   /** Gesamthöhe in cm, so wie NivTec sie exportiert (Feldname "heightCm"). */
   heightCm?: number
   pieces: Piece2D[]
+  /** Forex-Blenden an Außenkanten (gemeinsames Format mit dem NivTec-Tool, docs/plan-forex.md). */
+  forexPanels?: ForexPanel[]
 }
 
 export interface EventItem {
@@ -70,6 +85,8 @@ export interface EventItem {
   note?: string
   /** Nur 'visiova_frame': Rahmenhöhe in Metern (die 2D-Tiefe `height` ist die Profiltiefe). */
   frameHeight?: number
+  /** Nur 'nivtec_group': Druckbilder der Forex-Blenden je ForexPanel.id (verkleinerte JPEG-Data-URLs). */
+  forexPrints?: Record<string, string>
   /** Nur 'visiova_frame': eingesetzter Druck (Vorderseite) als verkleinertes JPEG-Data-URL. */
   printImage?: string
   /** Gegen versehentliches Verschieben/Drehen gesperrt (z. B. fest stehende Bühne). */

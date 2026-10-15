@@ -1,8 +1,9 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
-import type { EventItem, EventState, ItemType, ItemWithId, NivtecData, Phase } from '../types'
+import type { EventItem, EventState, ForexPanel, ItemType, ItemWithId, NivtecData, Phase } from '../types'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import { sortPhases } from '../utils/phaseDiff'
+import { sanitizeForexPanels } from '../utils/forex'
 
 const PHASE_1 = uuid()
 const MAX_HISTORY = 50
@@ -97,6 +98,8 @@ interface Store extends EventState {
   setItemPrint: (itemId: string, image: string | null) => void
   /** Mehrere Drucke auf einmal setzen (ein Undo-Schritt), z. B. ein Bild über mehrere Rahmen verteilt. */
   setItemPrints: (prints: Record<string, string>) => void
+  /** NivTec-Bühne: Forex-Blenden ersetzen; Drucke entfernter Blenden fallen weg, neue Drucke werden übernommen. */
+  setForex: (itemId: string, panels: ForexPanel[], prints?: Record<string, string>) => void
   /** Visiova-Rahmen: Rahmenhöhe in Metern. */
   setFrameHeight: (itemId: string, heightM: number) => void
   /** Sperrt/entsperrt ein Objekt gegen Verschieben und Drehen (unabhängig von der Phase). */
@@ -159,7 +162,7 @@ export interface CustomItemSpec {
 function patchItemInCurrentPhase(
   state: EventState,
   itemId: string,
-  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'printImage'>>,
+  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'printImage' | 'nivtecData' | 'forexPrints'>>,
 ): Pick<EventState, 'items' | 'itemOrder'> {
   const item = state.items[itemId]
   const current = item.phaseData[state.currentPhaseId]
@@ -525,6 +528,18 @@ export const useEventStore = create<Store>((set, get) => {
       })
     },
 
+    setForex: (itemId, panels, prints) => {
+      set((state) => {
+        const item = state.items[itemId]
+        if (!item?.nivtecData) return state
+        pushHistory()
+        const ids = new Set(panels.map((p) => p.id))
+        const merged = { ...item.forexPrints, ...prints }
+        const forexPrints = Object.fromEntries(Object.entries(merged).filter(([id]) => ids.has(id)))
+        return patchItemInCurrentPhase(state, itemId, { nivtecData: { ...item.nivtecData, forexPanels: panels }, forexPrints })
+      })
+    },
+
     setFrameHeight: (itemId, heightM) => {
       set((state) => {
         const item = state.items[itemId]
@@ -709,7 +724,7 @@ export const useEventStore = create<Store>((set, get) => {
         width: maxX,
         height: maxY,
         phaseData,
-        nivtecData: data,
+        nivtecData: { ...data, forexPanels: sanitizeForexPanels(data.pieces, data.forexPanels) },
       }
       pushHistory()
       set((state) => ({
