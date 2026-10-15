@@ -1,0 +1,54 @@
+name: Deploy to Stadthalle server
+# Baut die App bei jedem Push auf backend-pocketbase und lädt sie per rsync nach
+# /opt/stadthalle/pb_public auf den PocketBase-Server. Einrichtung: docs/server-autodeploy.md
+on:
+  push:
+    branches: [backend-pocketbase]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: server-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Zugangsdaten prüfen
+        id: check
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$HOST" ] || [ -z "$KNOWN_HOSTS" ]; then
+            echo "::notice::Deploy übersprungen – Secrets DEPLOY_SSH_KEY, DEPLOY_HOST, DEPLOY_KNOWN_HOSTS fehlen (siehe docs/server-autodeploy.md)."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.ready == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.ready == 'true'
+        with:
+          node-version: 20
+          cache: npm
+      - name: Bauen
+        if: steps.check.outputs.ready == 'true'
+        run: |
+          npm ci
+          npm run build
+      - name: Hochladen
+        if: steps.check.outputs.ready == 'true'
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # Ziel "/" = pb_public: der Server erzwingt rrsync auf dieses Verzeichnis
+          rsync -rlt --delete -e "ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes" dist/ "stadthalle-deploy@$HOST:/"
