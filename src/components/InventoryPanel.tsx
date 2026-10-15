@@ -30,7 +30,8 @@ function getDefaultColor(type: EventItem['type']): string {
     coat_rack: '#D1D5DB',        // grey
     plant: '#10b981',            // green
     screen: '#D1D5DB',           // grey
-    pipe_drape: '#7c3aed',       // purple
+    pipe_drape: '#7c3aed',
+    visiova_frame: '#9ca3af',       // purple
     text_label: '#1f2937',       // dark grey
     custom_rect: '#94a3b8',
     custom_round: '#94a3b8',

@@ -25,6 +25,7 @@ export const ITEM_LIBRARY: ItemTemplate[] = [
   { type: 'truss', label: 'Traverse (3m)', width: 3, height: 0.3, icon: '═', category: 'infrastructure' },
   { type: 'curtain', label: 'Vorhang/Molton', width: 3, height: 0.1, icon: '╱', category: 'infrastructure' },
   { type: 'pipe_drape', label: 'Pipe & Drape (3x0,2m)', width: 3, height: 0.2, icon: '╫', category: 'infrastructure' },
+  { type: 'visiova_frame', label: 'Visiova-Rahmen 55 (1x2,5m)', width: 1, height: 0.055, icon: '▯', category: 'infrastructure' },
   { type: 'podium', label: 'Bühnenpodest (2x1m)', width: 2, height: 1, icon: '▦', category: 'infrastructure' },
   { type: 'exhibition_stand', label: 'Messestand (2x2m)', width: 2, height: 2, icon: '▧', category: 'infrastructure' },
   { type: 'coat_rack', label: 'Garderobenständer', width: 0.6, height: 0.6, icon: '↟', category: 'infrastructure' },
