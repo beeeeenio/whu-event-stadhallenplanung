@@ -6,7 +6,7 @@ import type { EventItem, ItemType, PhaseData } from '../types'
 import { DEFAULT_PIXELS_PER_METER, POWER_PLAN_NATIVE_PIXELS_PER_METER } from '../utils/scale'
 import { getDefaultColor } from '../utils/itemColors'
 import { buildNivtecDeck } from './nivtec3d'
-import { DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
+import { COLUMNS_PX, DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
 
 /** Plan-Abmessungen in Metern (Stromplan 1755×1240px bei 23,6px/m). */
@@ -303,6 +303,10 @@ function subSegment(seg: [number, number, number, number], t0: number, t1: numbe
 /** Feste Bauteile: Wände (unten Holz, oben weiß) mit Türöffnungen, Bühnenpodest. */
 function buildVenue(): THREE.Group {
   const g = new THREE.Group()
+  // Oberer, weißer Wandteil separat, damit er sich ausblenden lässt (Blick in die Räume)
+  const upper = new THREE.Group()
+  upper.name = 'upperWalls'
+  g.add(upper)
   const t = VENUE.wallThickness
   for (const seg of WALL_SEGMENTS_PX) {
     // Unterhalb der Türhöhe nur die geschlossenen Abschnitte, darüber durchgehend
@@ -310,7 +314,7 @@ function buildVenue(): THREE.Group {
       g.add(segmentBox(subSegment(seg, a, b), 0, VENUE.doorHeight, t, VENUE.woodColor))
     }
     g.add(segmentBox(seg, VENUE.doorHeight, VENUE.woodPanelHeight, t, VENUE.woodColor))
-    g.add(segmentBox(seg, VENUE.woodPanelHeight, VENUE.wallHeight, t, VENUE.upperWallColor))
+    upper.add(segmentBox(seg, VENUE.woodPanelHeight, VENUE.wallHeight, t, VENUE.upperWallColor))
   }
   // Glasfassaden (Terrasse, Foyer): Scheiben mit Türöffnungen, darüber weiße Wand
   const glass = new THREE.MeshStandardMaterial({ color: '#bcd7e6', transparent: true, opacity: 0.28, roughness: 0.1, metalness: 0.1, depthWrite: false })
@@ -321,7 +325,16 @@ function buildVenue(): THREE.Group {
       m.castShadow = false
       g.add(m)
     }
-    g.add(segmentBox(seg, VENUE.glassHeight, VENUE.wallHeight, t, VENUE.upperWallColor))
+    upper.add(segmentBox(seg, VENUE.glassHeight, VENUE.wallHeight, t, VENUE.upperWallColor))
+  }
+  // Feste Säulen (Foyer)
+  for (const [cx, cy, dPx] of COLUMNS_PX) {
+    const r = dPx / NP / 2
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(r, r, VENUE.wallHeight, 24), new THREE.MeshStandardMaterial({ color: VENUE.columnColor, roughness: 0.7 }))
+    col.position.set(cx / NP, VENUE.wallHeight / 2, cy / NP)
+    col.castShadow = true
+    col.receiveShadow = true
+    g.add(col)
   }
   const st = { x: STAGE_PX.x / NP, z: STAGE_PX.y / NP, w: STAGE_PX.w / NP, d: STAGE_PX.h / NP }
   g.add(box(st.w, VENUE.stageHeight, st.d, st.x + st.w / 2, VENUE.stageHeight / 2, st.z + st.d / 2, VENUE.stageColor))
@@ -361,7 +374,7 @@ interface Props {
 /** Schlichte 3D-Ansicht der aktuellen Phase: Grundriss am Boden, Objekte als Blöcke mit typischer Höhe. */
 export default function Venue3D({ onClose }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
-  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; partitions: THREE.Group; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
+  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; partitions: THREE.Group; upperWalls: THREE.Object3D | undefined; sun: THREE.DirectionalLight; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
   const items = useEventStore((s) => s.items)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const phaseName = useEventStore((s) => s.phases.find((p) => p.id === s.currentPhaseId)?.name ?? '')
@@ -370,6 +383,8 @@ export default function Venue3D({ onClose }: Props) {
   const [showWalls, setShowWalls] = useState(true)
   const [curtainOpen, setCurtainOpen] = useState(false)
   const [showPartitions, setShowPartitions] = useState(false)
+  const [shadows, setShadows] = useState(true)
+  const [showUpperWalls, setShowUpperWalls] = useState(true)
 
   // Szene einmalig aufbauen
   useEffect(() => {
@@ -415,7 +430,7 @@ export default function Venue3D({ onClose }: Props) {
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI / 2 - 0.02
-    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, partitions: partitionGroup, camera, controls }
+    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, partitions: partitionGroup, upperWalls: wallGroup.getObjectByName('upperWalls'), sun, camera, controls }
 
     let raf = 0
     const loop = () => {
@@ -476,6 +491,15 @@ export default function Venue3D({ onClose }: Props) {
   }, [showPartitions, hideCodes])
 
   useEffect(() => {
+    if (sceneRef.current?.upperWalls) sceneRef.current.upperWalls.visible = showUpperWalls
+  }, [showUpperWalls, hideCodes])
+
+  // Schatten der Sonne an/aus (Schattenkarte bleibt aktiv, nur die Lichtquelle wirft keinen mehr)
+  useEffect(() => {
+    if (sceneRef.current) sceneRef.current.sun.castShadow = shadows
+  }, [shadows, hideCodes])
+
+  useEffect(() => {
     if (sceneRef.current) sceneRef.current.walls.visible = showWalls
   }, [showWalls, hideCodes])
 
@@ -520,11 +544,25 @@ export default function Venue3D({ onClose }: Props) {
           {curtainOpen ? 'Vorhang zu' : 'Vorhang auf'}
         </button>
         <button
+          onClick={() => setShadows((v) => !v)}
+          className={islandBtn(shadows ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
+          title="Schatten ein-/ausblenden"
+        >
+          Schatten
+        </button>
+        <button
           onClick={() => setShowPartitions((v) => !v)}
           className={islandBtn(showPartitions ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
           title="Mobile Trennwände im großen Saal (teilen ihn in drei Teile)"
         >
           Trennwände
+        </button>
+        <button
+          onClick={() => setShowUpperWalls((v) => !v)}
+          className={islandBtn(showUpperWalls ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
+          title="Oberen, weißen Teil der Wände ein-/ausblenden (Holzverkleidung, Türen und Glas bleiben)"
+        >
+          Obere Wände
         </button>
         <button onClick={() => setShowWalls((v) => !v)} className={islandBtn(showWalls ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
           Wände
