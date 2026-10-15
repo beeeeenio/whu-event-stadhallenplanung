@@ -27,6 +27,9 @@ interface FloatingToolbarProps {
   onExportImage: () => void
   gridEnabled: boolean
   onGridToggle: () => void
+  /** Rasterweite in Pixeln (20 px = 1 m). */
+  gridSize: number
+  onGridSizeChange: (px: number) => void
   codesHidden: boolean
   onCodesToggle: () => void
   on3D?: () => void
@@ -85,6 +88,8 @@ export default function FloatingToolbar({
   onExportImage,
   gridEnabled,
   onGridToggle,
+  gridSize,
+  onGridSizeChange,
   codesHidden,
   onCodesToggle,
   on3D,
@@ -182,7 +187,7 @@ export default function FloatingToolbar({
         <button
           onClick={onZoomReset}
           className={islandBtn('plain', 'h-9 px-2 text-[11px] font-medium')}
-          title="Plan einpassen"
+          title="Plan einpassen (0)"
         >
           Einpassen
         </button>
@@ -196,6 +201,20 @@ export default function FloatingToolbar({
         >
           📐
         </button>
+        {gridEnabled && (
+          <select
+            value={gridSize}
+            onChange={(e) => onGridSizeChange(Number(e.target.value))}
+            className="h-9 rounded-lg bg-chip px-1 text-[11px] font-medium text-ink"
+            title="Rasterweite"
+          >
+            {/* 20 px = 1 m */}
+            <option value={5}>0,25 m</option>
+            <option value={10}>0,5 m</option>
+            <option value={20}>1 m</option>
+            <option value={40}>2 m</option>
+          </select>
+        )}
         <button
           onClick={onCodesToggle}
           className={islandBtn(codesHidden ? 'plain' : 'dark', 'h-9 px-2 text-[11px] font-medium')}

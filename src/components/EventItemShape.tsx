@@ -1,11 +1,13 @@
 import { memo, useRef, useState } from 'react'
-import { Group, Rect, Circle, Line, Text } from 'react-konva'
+import { Group, Rect, Circle, Line, Text, Shape } from 'react-konva'
 import type { EventItem, PhaseData } from '../types'
 import { metersToPixels } from '../utils/scale'
 import { getDefaultColor } from '../utils/itemColors'
 import { forexEdge } from '../utils/forex'
 import { describeVisiovaRun, splitVisiovaRun } from '../utils/visiova'
-import { snapToGrid } from '../utils/snapping'
+import type { DragMods } from '../utils/snapping'
+import { angleDeg, isRoundType, localBounds, positionForRotation, snapAngle, worldCenter, type Pt } from '../utils/geometry'
+import { IS_COARSE_POINTER } from '../utils/viewport'
 import { FOAM_DEFAULT_TEXT, FOAM_LETTER, letterSlots } from '../utils/foamLetters'
 import type Konva from 'konva'
 
@@ -19,6 +21,10 @@ interface Props {
    *  übergeben kann und React.memo unveränderte Objekte beim Re-Render überspringt. */
   /** additive=true (Shift-Klick) fügt zur bestehenden Auswahl hinzu/entfernt daraus, statt zu ersetzen. */
   onSelect: (id: string, additive: boolean) => void
+  /** Beginn des Ziehens der GANZEN Gruppe (nicht der Griffe). */
+  onDragStart?: (id: string) => void
+  /** Während des Ziehens: Parent liefert die korrigierte (eingerastete) Position zurück. */
+  onDragMove?: (id: string, x: number, y: number, mods: DragMods) => { x: number; y: number }
   onDragEnd: (id: string, x: number, y: number) => void
   /** freie 360°-Drehung per Maus-/Touch-Ziehen am Rotationsgriff */
   onRotate?: (id: string, x: number, y: number, rotationDeg: number) => void
@@ -27,8 +33,8 @@ interface Props {
   draggable?: boolean
   /** aktueller Canvas-Zoom, um eine konstante Mindest-Klickfläche auf dem Bildschirm sicherzustellen */
   zoom?: number
-  gridEnabled?: boolean
-  gridSize?: number
+  /** Geisterbild der Vorphase: keine Konva-ID, keine Hover-Effekte. */
+  isGhost?: boolean
 }
 
 /** Mindestgröße der (unsichtbaren) Klick-/Greiffläche in Bildschirm-Pixeln, unabhängig vom Zoom. */
@@ -48,48 +54,92 @@ function EventItemShape({
   pixelsPerMeter,
   isSelected,
   onSelect,
+  onDragStart,
+  onDragMove,
   onDragEnd,
   onRotate,
   onVisiovaRun,
   draggable = true,
   zoom = 1,
-  gridEnabled = false,
-  gridSize = 20,
+  isGhost = false,
 }: Props) {
   const w = metersToPixels(item.width, pixelsPerMeter)
   const h = metersToPixels(item.height, pixelsPerMeter)
-  const isRound = item.type === 'table_round' || item.type === 'table_high' || item.type === 'custom_round'
+  const isRound = isRoundType(item.type)
   const isLabel = item.type === 'text_label'
   const isLocked = !!item.locked
   // Visiova: gerade gezogene Länge in px (null = kein Ziehen)
   const [runPx, setRunPx] = useState<number | null>(null)
+  const [hovered, setHovered] = useState(false)
+  // Gruppe direkt über die Konva-Node drehen bzw. verschieben statt über React-State pro Mausmove-Frame.
+  const groupRef = useRef<Konva.Group>(null)
 
+  // Ziehen der GANZEN Gruppe. Einrasten passiert im Parent (onDragMove), nicht hier.
+  const handleDragStart = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (e.target !== groupRef.current) return
+    onDragStart?.(item.id)
+  }
+  const handleDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
+    if (e.target !== groupRef.current || !onDragMove) return
+    const ev = e.evt as MouseEvent
+    const mods: DragMods = { bypassSnap: !!(ev?.metaKey || ev?.ctrlKey), axisLock: !!ev?.shiftKey }
+    const p = onDragMove(item.id, e.target.x(), e.target.y(), mods)
+    e.target.position(p)
+  }
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
-    let x = e.target.x()
-    let y = e.target.y()
-    // Apply grid snapping if enabled
-    if (gridEnabled) {
-      const snapped = snapToGrid(x, y, gridSize)
-      x = snapped.x
-      y = snapped.y
-      e.target.position({ x, y })
-    }
-    onDragEnd(item.id, x, y)
+    if (e.target !== groupRef.current) return
+    onDragEnd(item.id, e.target.x(), e.target.y())
   }
 
+  // Auswahl beim DRÜCKEN statt erst beim Loslassen. Im Auswahl-Werkzeug (draggable) fängt das Objekt
+  // das Event ab; in Messen/Bereich/Platzieren muss der Klick bei der Stage ankommen.
+  const justSelectedRef = useRef(false)
+  const isAdditive = (ev: Event) => {
+    const m = ev as MouseEvent
+    return !!(m.shiftKey || m.metaKey || m.ctrlKey)
+  }
   // Stage ist ebenfalls draggable (zum Verschieben der Ansicht). Ohne cancelBubble würde ein
   // Mousedown auf dem Objekt gleichzeitig auch die Stage mitziehen (bekannte Konva-Falle).
-  const stopBubble = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+  const stopBubble = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent | PointerEvent>) => {
+    if (draggable) e.cancelBubble = true
+  }
+  // Griffe fangen ihr Event immer ab, unabhängig vom Werkzeug.
+  const cancelBubbleAlways = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent | PointerEvent>) => {
     e.cancelBubble = true
   }
-
-  const handleSelect = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
-    const shift = 'shiftKey' in e.evt && e.evt.shiftKey
-    onSelect(item.id, shift)
+  const handlePointerDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    if (e.evt.button !== 0) return // Mittel-/Rechtsklick an die Stage weiterreichen (Verschieben)
+    stopBubble(e)
+    justSelectedRef.current = false
+    if (!isSelected) {
+      onSelect(item.id, isAdditive(e.evt))
+      justSelectedRef.current = true
+    }
+  }
+  const handleClick = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
+    if (justSelectedRef.current) {
+      justSelectedRef.current = false
+      return
+    }
+    onSelect(item.id, isAdditive(e.evt))
   }
 
-  const stroke = isSelected ? '#2563eb' : '#374151'
+  const handleMouseEnter = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    setHovered(true)
+    const c = e.target.getStage()?.container()
+    if (c) c.style.cursor = isLocked ? 'not-allowed' : draggable ? 'move' : ''
+  }
+  const handleMouseLeave = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    setHovered(false)
+    const c = e.target.getStage()?.container()
+    if (c) c.style.cursor = ''
+  }
+
+  const stroke = isSelected ? '#2563eb' : hovered ? '#60a5fa' : '#374151'
   const strokeWidth = isSelected ? 2 : 1
+  // Detailgrad: Maße erst ab ~70 % Zoom, Beschriftung ab ~40 % (ausgewählte Objekte immer)
+  const showDims = isSelected || zoom >= 0.7
+  const showLabel = isSelected || zoom >= 0.4
 
   const minSize = MIN_HIT_TARGET_PX / zoom
   // Text-Labels wachsen nach rechts/unten ab dem Ursprung (Konva-Text-Standardanker), nicht
@@ -103,61 +153,86 @@ function EventItemShape({
   const hitY = isLabel ? -6 / zoom : isRound ? -hitH / 2 : -(hitH - h) / 2
 
   // Rotationsgriff: fester Punkt oberhalb der Objektmitte, im lokalen (ungedrehten) Koordinatensystem
-  // der Gruppe. Der Griff selbst bleibt an dieser Stelle fixiert — beim Ziehen wird nur der
-  // Zeigerwinkel relativ zum Objektmittelpunkt in Weltkoordinaten berechnet und als neue absolute
-  // Rotation gemeldet (klassischer Konva-"Rotate handle"-Trick).
-  const centerX = isRound ? 0 : w / 2
-  const topY = isRound ? -w / 2 : 0
-  const handleDist = 26 / zoom
+  // der Gruppe. Die Drehung erfolgt um die MITTE des Objekts (x/y wird beim Drehen mitgerechnet).
+  const lb = localBounds(item, pixelsPerMeter)
+  const centerX = lb.x + lb.w / 2
+  const topY = lb.y
   const handleX = centerX
-  const handleY = topY - handleDist
+  const handleY = topY - 26 / zoom
+  const angleTextRef = useRef<Konva.Text>(null)
+  // Start des Ziehens: Mittelpunkt, Zeigerwinkel und Ausgangsrotation. Aus dem Delta ab Griff-Start
+  // folgt die Rotation, dadurch springt der Griff beim Greifen nicht.
+  const rotStartRef = useRef<{ center: Pt; pointerAngle: number; startRotation: number } | null>(null)
+  const pointerWorld = (e: Konva.KonvaEventObject<DragEvent>) => e.target.getLayer()?.getRelativePointerPosition() ?? null
 
-  // Während des Ziehens die Gruppe direkt über die Konva-Node drehen (wie Konva es beim normalen
-  // Verschieben ohnehin intern tut) statt über React-State — ein setState pro Mausmove-Frame würde
-  // jedes Mal die ganze Komponente neu rendern/abgleichen und fühlte sich spürbar träge an. Erst am
-  // Ende wird die Rotation ein einziges Mal an den Store committet (ein Undo-Schritt pro Zug).
-  const groupRef = useRef<Konva.Group>(null)
-
-  const angleFromPointer = (e: Konva.KonvaEventObject<DragEvent>): number | null => {
-    const layer = e.target.getLayer()
-    const pointer = layer?.getRelativePointerPosition()
-    e.target.position({ x: handleX, y: handleY })
-    if (!pointer) return null
-    const dx = pointer.x - phaseData.x
-    const dy = pointer.y - phaseData.y
-    if (dx === 0 && dy === 0) return null
-    return ((Math.atan2(dy, dx) * 180) / Math.PI + 90 + 360) % 360
+  const handleRotateDragStart = (e: Konva.KonvaEventObject<DragEvent>) => {
+    e.cancelBubble = true
+    const p = pointerWorld(e)
+    if (!p) return
+    const center = worldCenter(item, phaseData, pixelsPerMeter)
+    rotStartRef.current = { center, pointerAngle: angleDeg(center, p), startRotation: phaseData.rotation }
   }
-
+  // Während des Ziehens die Gruppe direkt über die Konva-Node drehen statt über React-State pro
+  // Mausmove-Frame. Erst am Ende wird die Rotation ein einziges Mal an den Store committet
+  // (ein Undo-Schritt pro Zug).
+  const computeRotation = (e: Konva.KonvaEventObject<DragEvent>): number | null => {
+    e.target.position({ x: handleX, y: handleY })
+    const s = rotStartRef.current
+    const p = pointerWorld(e)
+    if (!s || !p) return null
+    const raw = s.startRotation + angleDeg(s.center, p) - s.pointerAngle // Delta ab Griff-Start: kein Sprung
+    return snapAngle(raw, !!(e.evt as MouseEvent)?.shiftKey)
+  }
   const handleRotateDragMove = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true
-    const angle = angleFromPointer(e)
-    if (angle === null || !groupRef.current) return
-    groupRef.current.rotation(angle)
-    groupRef.current.getLayer()?.batchDraw()
+    const a = computeRotation(e)
+    const g = groupRef.current
+    if (a === null || !g) return
+    g.rotation(a)
+    g.position(positionForRotation(item, phaseData, a, pixelsPerMeter)) // Mitte bleibt stehen
+    const t = angleTextRef.current
+    if (t) {
+      t.text(`${a}°`)
+      t.rotation(-a) // Gradanzeige bleibt aufrecht lesbar
+      t.visible(true)
+    }
+    g.getLayer()?.batchDraw()
   }
-
   const handleRotateDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true
-    const angle = angleFromPointer(e)
-    if (angle !== null) onRotate?.(item.id, phaseData.x, phaseData.y, angle)
+    const a = computeRotation(e)
+    rotStartRef.current = null
+    angleTextRef.current?.visible(false)
+    if (a === null) return
+    const pos = positionForRotation(item, phaseData, a, pixelsPerMeter)
+    onRotate?.(item.id, pos.x, pos.y, a)
   }
 
   return (
     <Group
       ref={groupRef}
+      id={isGhost ? undefined : item.id}
       x={phaseData.x}
       y={phaseData.y}
       rotation={phaseData.rotation}
       draggable={draggable && !isLocked}
-      onClick={handleSelect}
-      onTap={handleSelect}
-      onDragEnd={handleDragEnd}
+      onPointerDown={handlePointerDown}
       onMouseDown={stopBubble}
       onTouchStart={stopBubble}
+      onClick={handleClick}
+      onTap={handleClick}
+      onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
+      onDragEnd={handleDragEnd}
+      onMouseEnter={isGhost ? undefined : handleMouseEnter}
+      onMouseLeave={isGhost ? undefined : handleMouseLeave}
     >
       {/* Unsichtbare, vergrößerte Trefferfläche für zuverlässiges Greifen auch bei kleinem Zoom */}
-      <Rect x={hitX} y={hitY} width={hitW} height={hitH} fill="rgba(255,255,255,0.001)" />
+      {isRound ? (
+        <Circle radius={Math.max(w / 2, minSize / 2)} fill="rgba(255,255,255,0.001)" />
+      ) : (
+        <Rect x={hitX} y={hitY} width={hitW} height={hitH} fill="rgba(255,255,255,0.001)" />
+      )}
       {isLabel ? null : isRound ? (
         <Circle radius={w / 2} fill={item.color || getDefaultColor(item.type)} stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
       ) : item.type === 'curtain' ? (
@@ -292,27 +367,27 @@ function EventItemShape({
             perfectDrawEnabled={false}
             listening={false}
           />
-          {Array.from({ length: item.grid.rows }).map((_, r) =>
-            Array.from({ length: item.grid!.cols }).map((_, c) => {
-              const seatSize = metersToPixels(0.4, pixelsPerMeter)
-              const cx = metersToPixels((c + 0.5) * item.grid!.spacingM, pixelsPerMeter)
-              const cy = metersToPixels((r + 0.5) * item.grid!.spacingM, pixelsPerMeter)
-              return (
-                <Rect
-                  key={`${r}-${c}`}
-                  x={cx - seatSize / 2}
-                  y={cy - seatSize / 2}
-                  width={seatSize}
-                  height={seatSize}
-                  fill={item.color || getDefaultColor(item.type)}
-                  stroke="#9ca3af"
-                  strokeWidth={0.5}
-                  perfectDrawEnabled={false}
-                  listening={false}
-                />
-              )
-            }),
-          )}
+          {/* Alle Sitze als EINE Shape (ein Pfad) statt vieler Rechtecke – deutlich günstiger zu zeichnen */}
+          <Shape
+            listening={false}
+            perfectDrawEnabled={false}
+            fill={item.color || getDefaultColor(item.type)}
+            stroke="#9ca3af"
+            strokeWidth={0.5}
+            sceneFunc={(ctx, shape) => {
+              const g = item.grid!
+              const seat = metersToPixels(0.4, pixelsPerMeter)
+              ctx.beginPath()
+              for (let r = 0; r < g.rows; r++) {
+                for (let c = 0; c < g.cols; c++) {
+                  const cx = metersToPixels((c + 0.5) * g.spacingM, pixelsPerMeter)
+                  const cy = metersToPixels((r + 0.5) * g.spacingM, pixelsPerMeter)
+                  ctx.rect(cx - seat / 2, cy - seat / 2, seat, seat)
+                }
+              }
+              ctx.fillStrokeShape(shape)
+            }}
+          />
         </>
       ) : (
         <Rect width={w} height={h} fill={item.color || getDefaultColor(item.type)} stroke={stroke} strokeWidth={strokeWidth} perfectDrawEnabled={false} />
@@ -350,7 +425,7 @@ function EventItemShape({
         </>
       ) : (
         <>
-          {item.type !== 'curtain' && item.type !== 'foam_letters' && (
+          {showLabel && item.type !== 'curtain' && item.type !== 'foam_letters' && (
             <Text
               listening={false}
               text={item.label}
@@ -362,16 +437,18 @@ function EventItemShape({
             />
           )}
           {/* Maßangabe (B x H in Metern), wie im Referenz-Tool */}
-          <Text
+          {showDims && (
+            <Text
               listening={false}
-            text={`${item.width.toFixed(2)} × ${item.height.toFixed(2)} m`}
-            fontSize={8}
-            fill="#6b7280"
-            width={Math.max(w, 60)}
-            align="center"
-            y={(isRound ? w / 2 : h) + 3 + (item.type === 'foam_letters' ? metersToPixels(FOAM_LETTER.widthM, pixelsPerMeter) : 0)}
-            x={isRound ? -w / 2 : 0}
-          />
+              text={`${item.width.toFixed(2)} × ${item.height.toFixed(2)} m`}
+              fontSize={8}
+              fill="#6b7280"
+              width={Math.max(w, 60)}
+              align="center"
+              y={(isRound ? w / 2 : h) + 3 + (item.type === 'foam_letters' ? metersToPixels(FOAM_LETTER.widthM, pixelsPerMeter) : 0)}
+              x={isRound ? -w / 2 : 0}
+            />
+          )}
         </>
       )}
       {isLocked && (
@@ -437,9 +514,11 @@ function EventItemShape({
           fill="#2563eb"
           stroke="#ffffff"
           strokeWidth={1.5 / zoom}
+          hitStrokeWidth={(IS_COARSE_POINTER ? 24 : 8) / zoom}
           draggable
-          onMouseDown={stopBubble}
-          onTouchStart={stopBubble}
+          onPointerDown={cancelBubbleAlways}
+          onMouseDown={cancelBubbleAlways}
+          onTouchStart={cancelBubbleAlways}
           onMouseEnter={(e) => {
             const c = e.target.getStage()?.container()
             if (c) c.style.cursor = 'ew-resize'
@@ -479,12 +558,16 @@ function EventItemShape({
             fill="#ffffff"
             stroke="#2563eb"
             strokeWidth={1.5 / zoom}
+            hitStrokeWidth={(IS_COARSE_POINTER ? 30 : 12) / zoom}
             draggable
+            onPointerDown={cancelBubbleAlways}
+            onDragStart={handleRotateDragStart}
             onDragMove={handleRotateDragMove}
             onDragEnd={handleRotateDragEnd}
-            onMouseDown={stopBubble}
-            onTouchStart={stopBubble}
+            onMouseDown={cancelBubbleAlways}
+            onTouchStart={cancelBubbleAlways}
           />
+          <Text ref={angleTextRef} visible={false} listening={false} x={handleX + 12 / zoom} y={handleY - 6 / zoom} fontSize={12 / zoom} fontStyle="bold" fill="#1d4ed8" text="" />
         </>
       )}
     </Group>

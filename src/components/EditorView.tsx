@@ -1,8 +1,7 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Toolbar from './Toolbar'
 import CanvasEditor, { type CanvasEditorHandle, type CanvasViewport, type ToolMode } from './CanvasEditor'
 import InventoryPanel from './InventoryPanel'
-import GridSettingsDialog from './GridSettingsDialog'
 import PhaseTimeline from './PhaseTimeline'
 import PresentationMode from './PresentationMode'
 import ObjectPicker, { type PickerTab } from './ObjectPicker'
@@ -15,6 +14,8 @@ import { useProjectsStore } from '../store/projectsStore'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import type { EventItem, ItemType } from '../types'
 import { DEFAULT_PIXELS_PER_METER, metersToPixels } from '../utils/scale'
+import { isRoundType, originForCenter, snapNewItemToGrid, unionBox, worldBBox, worldCenter } from '../utils/geometry'
+import { IS_MAC } from '../utils/viewport'
 import { exportPhaseToPdf } from '../utils/pdfExport'
 import { buildItemGrid, type Placement } from '../utils/placement'
 import { changedSincePhase, previousPhaseId, sortPhases } from '../utils/phaseDiff'
@@ -29,38 +30,33 @@ const Venue3D = lazy(() => import('./Venue3D'))
 function screenBounds(item: EventItem, phaseId: string, vp: CanvasViewport) {
   const pd = item.phaseData[phaseId]
   if (!pd) return null
-  const w = metersToPixels(item.width, PPM)
-  const h = metersToPixels(item.height, PPM)
-  const isRound = item.type === 'table_round' || item.type === 'table_high'
-  const corners = isRound
-    ? [[-w / 2, -w / 2], [w / 2, -w / 2], [w / 2, w / 2], [-w / 2, w / 2]]
-    : [[0, 0], [w, 0], [w, h], [0, h]]
-  const rad = (pd.rotation * Math.PI) / 180
-  const cos = Math.cos(rad)
-  const sin = Math.sin(rad)
-  const pts = corners.map(([cx, cy]) => ({
-    x: (pd.x + cx * cos - cy * sin) * vp.zoom + vp.x,
-    y: (pd.y + cx * sin + cy * cos) * vp.zoom + vp.y,
-  }))
-  const xs = pts.map((p) => p.x)
-  const ys = pts.map((p) => p.y)
-  return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) }
+  const b = worldBBox(item, pd, PPM)
+  return { minX: b.minX * vp.zoom + vp.x, maxX: b.maxX * vp.zoom + vp.x, minY: b.minY * vp.zoom + vp.y, maxY: b.maxY * vp.zoom + vp.y }
 }
 
+const MOD = IS_MAC ? '⌘' : 'Strg+'
+
 const SHORTCUTS: [string, string][] = [
-  ['Befehlszeile', '⌘K'],
+  ['Befehlszeile', `${MOD}K`],
   ['Auswählen / Messen / Bereich', 'V · M · B'],
   ['Objekte-Blatt', 'O'],
   ['Vorherige / nächste Phase', '[ · ]'],
-  ['Objekt drehen', 'R'],
-  ['... gegen Uhrzeigersinn', '⇧R'],
-  ['Duplizieren', '⌘D'],
+  ['Drehen 90° (auch mehrere)', 'R · ⇧R'],
+  ['Drehgriff: 15°-Schritte', '⇧ halten'],
+  ['Verschieben 10 cm / 1 m', 'Pfeile · ⇧+Pfeile'],
+  ['Beim Ziehen: ohne Einrasten', `${IS_MAC ? '⌘' : 'Strg'} halten`],
+  ['Beim Ziehen: nur gerade', '⇧ halten'],
+  ['Alles auswählen', `${MOD}A`],
+  ['Kopieren / Einfügen (auch in andere Phase)', `${MOD}C · ${MOD}V`],
+  ['Duplizieren', `${MOD}D`],
   ['Zur Auswahl hinzufügen/entfernen', '⇧Klick'],
-  ['Mehrere Objekte per Rechteck wählen', '⇧Ziehen'],
+  ['Mehrere per Rechteck wählen', 'Ziehen auf freie Fläche'],
+  ['Ansicht verschieben', 'Leertaste+Ziehen · 2 Finger'],
+  ['Zoomen', 'Mausrad · Pinch · + / −'],
+  ['Einpassen / Auswahl zeigen', '0 · ⇧2'],
   ['Löschen', '⌫'],
   ['Abwählen / schließen', 'Esc'],
-  ['Rückgängig', '⌘Z'],
-  ['Wiederholen', '⌘⇧Z'],
+  ['Rückgängig / Wiederholen', `${MOD}Z · ${MOD}⇧Z`],
   ['Diese Hilfe', '?'],
 ]
 
@@ -102,9 +98,27 @@ export default function EditorView() {
   const [viewport, setViewport] = useState<CanvasViewport | null>(null)
   const canvasRef = useRef<CanvasEditorHandle>(null)
 
-  /** Kachel aus der Objekt-Bibliothek gezogen: Formvorschau folgt dem Zeiger bis zum Loslassen. */
-  const [dragGhost, setDragGhost] = useState<{ type: ItemType; x: number; y: number } | null>(null)
-  const dragStateRef = useRef<{ type: ItemType; startX: number; startY: number; dragging: boolean } | null>(null)
+  /** Kachel aus der Objekt-Bibliothek gezogen: Formvorschau folgt dem Zeiger bis zum Loslassen.
+   *  Die Position wird direkt am DOM-Element gesetzt (ohne React-Re-Render pro Bewegung). */
+  const [dragGhostType, setDragGhostType] = useState<ItemType | null>(null)
+  const ghostElRef = useRef<HTMLDivElement>(null)
+  const ghostPosRef = useRef({ x: 0, y: 0 })
+  const moveGhost = useCallback((x: number, y: number) => {
+    ghostPosRef.current = { x, y }
+    const el = ghostElRef.current
+    if (el) el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`
+  }, [])
+  // Beim Erscheinen sofort an die Zeigerposition setzen
+  useLayoutEffect(() => {
+    if (dragGhostType) moveGhost(ghostPosRef.current.x, ghostPosRef.current.y)
+  }, [dragGhostType, moveGhost])
+
+  /** Während einer Canvas-Geste (Ziehen, Zoomen, Pinch) bleiben die Kontextleisten ausgeblendet. */
+  const [gestureActive, setGestureActive] = useState(false)
+  /** Eigene Zwischenablage für ⌘C / ⌘V (auch über Phasen hinweg). */
+  const clipboardRef = useRef<{ items: EventItem[]; phaseId: string; pastes: number } | null>(null)
+  /** Stabile Funktion, damit der memoisierte Canvas nicht bei jedem Render neu rendert. */
+  const clearPlacement = useCallback(() => setPlacement(null), [])
 
   const phases = useEventStore((s) => s.phases)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
@@ -112,8 +126,10 @@ export default function EditorView() {
   const itemOrder = useEventStore((s) => s.itemOrder)
   const removeItems = useEventStore((s) => s.removeItems)
   const eventName = useEventStore((s) => s.eventName)
-  const rotateItem = useEventStore((s) => s.rotateItem)
-  const duplicateItem = useEventStore((s) => s.duplicateItem)
+  const rotateItems = useEventStore((s) => s.rotateItems)
+  const duplicateItems = useEventStore((s) => s.duplicateItems)
+  const nudgeItems = useEventStore((s) => s.nudgeItems)
+  const pasteItems = useEventStore((s) => s.pasteItems)
   const copyItemsToLaterPhases = useEventStore((s) => s.copyItemsToLaterPhases)
   const allItems = useEventStore((s) => s.items)
   // Ausgewählte Visiova-Rahmen entlang ihrer Ausrichtung sortiert (links → rechts aus Sicht der Druckseite)
@@ -211,10 +227,8 @@ export default function EditorView() {
       const item = all[id]
       const pd = item?.phaseData[cur]
       if (!item || !pd) return
-      const isRound = item.type === 'table_round' || item.type === 'table_high'
-      const cx = isRound ? pd.x : pd.x + metersToPixels(item.width, PPM) / 2
-      const cy = isRound ? pd.y : pd.y + metersToPixels(item.height, PPM) / 2
-      canvasRef.current?.panToItem(cx, cy)
+      const c = worldCenter(item, pd, PPM)
+      canvasRef.current?.panToItem(c.x, c.y)
     },
     [select],
   )
@@ -224,12 +238,23 @@ export default function EditorView() {
     setPlacement(null)
   }, [])
 
+  /** Ursprung (x/y) für ein neues Objekt, dessen MITTE bei (cx, cy) liegt; bei aktivem Raster
+   *  rastet die Box-Ecke ein. */
+  const placeOrigin = useCallback((type: ItemType, cx: number, cy: number, size?: { width: number; height: number }) => {
+    const o = originForCenter(type, cx, cy, PPM, size)
+    const { gridEnabled: ge, gridSize: gs } = useEventStore.getState()
+    return ge ? snapNewItemToGrid(type, o, PPM, gs, size) : o
+  }, [])
+
   /** Bibliotheksobjekt(e) setzen: per Tippen in den Plan oder sofort in der Bildmitte. */
   const placeType = useCallback(
     (type: ItemType, quantity: number, mode: 'tap' | 'center') => {
       const tpl = ITEM_LIBRARY.find((t) => t.type === type)
       const create = (x: number, y: number): string | null => {
-        if (quantity <= 1) return addItem(type, x, y)
+        if (quantity <= 1) {
+          const o = placeOrigin(type, x, y)
+          return addItem(type, o.x, o.y)
+        }
         const { phases: ph, currentPhaseId: cur } = useEventStore.getState()
         const batch = buildItemGrid(type, quantity, x, y, ph, cur, PPM)
         addItemsBatch(batch)
@@ -250,23 +275,32 @@ export default function EditorView() {
         once: quantity > 1,
       })
     },
-    [addItem, addItemsBatch, viewCenter, select],
+    [addItem, addItemsBatch, viewCenter, select, placeOrigin],
   )
 
   const placeCustom = useCallback(
     (spec: CustomItemSpec, mode: 'tap' | 'center') => {
       setTool('select')
+      const t = spec.shape === 'round' ? 'custom_round' : 'custom_rect'
+      const size = { width: spec.width, height: spec.shape === 'round' ? spec.width : spec.height }
       if (mode === 'center') {
         const c = viewCenter()
-        select(addCustomItem(c.x, c.y, spec))
+        const o = placeOrigin(t, c.x, c.y, size)
+        select(addCustomItem(o.x, o.y, spec))
         setPlacement(null)
         setActivePanel(null)
         return
       }
-      setPlacement({ label: spec.label, place: (x, y) => addCustomItem(x, y, spec) })
+      setPlacement({
+        label: spec.label,
+        place: (x, y) => {
+          const o = placeOrigin(t, x, y, size)
+          return addCustomItem(o.x, o.y, spec)
+        },
+      })
       setActivePanel(null)
     },
-    [addCustomItem, viewCenter, select],
+    [addCustomItem, viewCenter, select, placeOrigin],
   )
 
   const placeChairRows = useCallback(
@@ -309,34 +343,51 @@ export default function EditorView() {
    *  nativen HTML5-Drag-Ghosts, Objekt wird erst beim Loslassen über dem Plan angelegt. */
   const handleTileDragStart = useCallback(
     (e: React.PointerEvent, type: ItemType) => {
-      if (e.button !== 0) return
-      dragStateRef.current = { type, startX: e.clientX, startY: e.clientY, dragging: false }
-
+      // Nur Maus: auf Touch scrollt die Kachelliste; dort gilt „antippen, dann in den Plan tippen“.
+      if (e.pointerType !== 'mouse' || e.button !== 0) return
+      const startX = e.clientX
+      const startY = e.clientY
+      let dragging = false
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', cleanup)
+        window.removeEventListener('keydown', onKey, true)
+        setDragGhostType(null)
+      }
       const onMove = (ev: PointerEvent) => {
-        const st = dragStateRef.current
-        if (!st) return
-        if (!st.dragging) {
-          if (Math.hypot(ev.clientX - st.startX, ev.clientY - st.startY) < 5) return
-          st.dragging = true
+        if (!dragging) {
+          if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return
+          dragging = true
+          ghostPosRef.current = { x: ev.clientX, y: ev.clientY }
+          setDragGhostType(type)
         }
-        setDragGhost({ type: st.type, x: ev.clientX, y: ev.clientY })
+        moveGhost(ev.clientX, ev.clientY)
       }
       const onUp = (ev: PointerEvent) => {
-        window.removeEventListener('pointermove', onMove)
-        const st = dragStateRef.current
-        dragStateRef.current = null
-        setDragGhost(null)
-        if (!st?.dragging) return
+        cleanup()
+        if (!dragging) return
+        // Nur annehmen, wenn direkt über dem Plan-Canvas losgelassen (nicht über Panels/Dock)
+        const el = document.elementFromPoint(ev.clientX, ev.clientY)
+        if (!el || el.tagName !== 'CANVAS') return
         const pos = canvasRef.current?.screenToCanvas(ev.clientX, ev.clientY)
         if (!pos) return
-        const id = addItem(st.type, pos.x, pos.y)
-        select(id)
+        const o = placeOrigin(type, pos.x, pos.y)
+        select(addItem(type, o.x, o.y))
         setActivePanel((p) => (p === 'picker' ? null : p))
       }
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key !== 'Escape') return
+        ev.preventDefault()
+        ev.stopPropagation()
+        cleanup()
+      }
       window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp, { once: true })
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', cleanup)
+      window.addEventListener('keydown', onKey, true) // capture: vor dem globalen Esc-Handler
     },
-    [addItem, select],
+    [addItem, select, placeOrigin, moveGhost],
   )
 
   const handleExportPdf = useCallback(async () => {
@@ -346,11 +397,12 @@ export default function EditorView() {
     exportPhaseToPdf({ eventName: s.eventName, phase, items: s.items, currentPhaseId: s.currentPhaseId, planImageDataUrl })
   }, [])
 
+  /** Dupliziert die komplette Auswahl in EINEM Schritt und wählt die Kopien aus. */
   const duplicateSelected = useCallback(() => {
-    if (!selectedId) return
-    const newId = duplicateItem(selectedId)
-    if (newId) select(newId)
-  }, [selectedId, duplicateItem, select])
+    if (selectedIds.length === 0) return
+    const ids = duplicateItems(selectedIds)
+    if (ids.length > 0) selectMany(ids, false)
+  }, [selectedIds, duplicateItems, selectMany])
 
   /** Löscht die komplette Auswahl (ein Objekt oder mehrere) als EIN Undo-Schritt. */
   const deleteSelection = useCallback(() => {
@@ -412,17 +464,84 @@ export default function EditorView() {
         else undo()
         return
       }
-      if (isMod && e.key.toLowerCase() === 'd' && selectedId) {
+      const key = e.key.toLowerCase()
+      if (isMod && key === 'y') {
+        e.preventDefault()
+        redo()
+        return
+      }
+      if (isMod && key === 'a') {
+        e.preventDefault()
+        const s = useEventStore.getState()
+        selectMany(s.itemOrder.filter((id) => s.items[id]?.phaseData[s.currentPhaseId]?.visible), false)
+        return
+      }
+      if (isMod && key === 'c' && selectedIds.length > 0) {
+        e.preventDefault()
+        const s = useEventStore.getState()
+        clipboardRef.current = {
+          items: selectedIds.map((id) => s.items[id]).filter((it): it is EventItem => !!it),
+          phaseId: s.currentPhaseId,
+          pastes: 0,
+        }
+        return
+      }
+      if (isMod && key === 'v' && clipboardRef.current) {
+        e.preventDefault()
+        const cb = clipboardRef.current
+        // Gleiche Phase: versetzt einfügen; andere Phase: an derselben Stelle (Aufbau → Event übernehmen)
+        const samePhase = cb.phaseId === currentPhaseId
+        if (samePhase) cb.pastes += 1
+        const ids = pasteItems(cb.items, cb.phaseId, samePhase ? 20 * cb.pastes : 0)
+        if (ids.length > 0) selectMany(ids, false)
+        return
+      }
+      if (isMod && key === 'd' && selectedIds.length > 0) {
         e.preventDefault()
         duplicateSelected()
         return
       }
       if (isMod || e.altKey) return
 
-      const key = e.key.toLowerCase()
-      if (key === 'r' && selectedId) {
+      const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
+      const arrow = ARROWS[e.key]
+      if (arrow && selectedIds.length > 0) {
         e.preventDefault()
-        rotateItem(selectedId, e.shiftKey ? -90 : 90)
+        // Ohne Raster: 10 cm (⇧: 1 m). Mit Raster: ein Rasterschritt (⇧: 5 Schritte).
+        const step = gridEnabled ? (e.shiftKey ? gridSize * 5 : gridSize) : e.shiftKey ? PPM : PPM * 0.1
+        nudgeItems(selectedIds, arrow[0] * step, arrow[1] * step)
+        return
+      }
+      if (key === 'r' && selectedIds.length > 0) {
+        e.preventDefault()
+        rotateItems(selectedIds, e.shiftKey ? -90 : 90)
+        return
+      }
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault()
+        canvasRef.current?.zoomIn()
+        return
+      }
+      if (e.key === '-') {
+        e.preventDefault()
+        canvasRef.current?.zoomOut()
+        return
+      }
+      if (e.key === '0' || (e.shiftKey && e.code === 'Digit1')) {
+        e.preventDefault()
+        canvasRef.current?.fitToView()
+        return
+      }
+      if (e.shiftKey && e.code === 'Digit2' && selectedIds.length > 0) {
+        e.preventDefault()
+        const s = useEventStore.getState()
+        const box = unionBox(
+          selectedIds
+            .map((id) => s.items[id])
+            .filter((it): it is EventItem => !!it?.phaseData[s.currentPhaseId])
+            .map((it) => worldBBox(it, it.phaseData[s.currentPhaseId], PPM)),
+        )
+        if (box) canvasRef.current?.zoomToBounds(box)
         return
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
@@ -467,8 +586,8 @@ export default function EditorView() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
-    undo, redo, rotateItem, selectedId, selectedIds, duplicateSelected, deleteSelection, changeTool, select,
-    activePanel, placement, tool, phases, currentPhaseId, setCurrentPhase, togglePanel, show3D,
+    undo, redo, rotateItems, nudgeItems, pasteItems, selectedIds, selectMany, duplicateSelected, deleteSelection, changeTool,
+    select, activePanel, placement, tool, phases, currentPhaseId, setCurrentPhase, togglePanel, show3D, gridEnabled, gridSize,
   ])
 
   // Kontextleiste an der Auswahl ausrichten. Über dem Objekt braucht es genug Abstand, um den
@@ -476,7 +595,7 @@ export default function EditorView() {
   // freizulassen — sonst legt sich die Leiste über den Griff und man kommt nicht mehr an ihn heran.
   const ROTATE_HANDLE_CLEARANCE = 40
   let barStyle: React.CSSProperties | null = null
-  if (selectedItem && selectedVisible && viewport && !placement && tool === 'select') {
+  if (selectedItem && selectedVisible && viewport && !placement && tool === 'select' && !gestureActive) {
     const b = screenBounds(selectedItem, currentPhaseId, viewport)
     if (b) {
       const cx = Math.min(Math.max((b.minX + b.maxX) / 2, 230), viewport.width - 230)
@@ -490,7 +609,7 @@ export default function EditorView() {
   // Kontextleiste für die Mehrfachauswahl: an der gemeinsamen Bounding-Box aller ausgewählten,
   // in dieser Phase sichtbaren Objekte ausgerichtet.
   let multiBarStyle: React.CSSProperties | null = null
-  if (selectedIds.length > 1 && viewport && !placement && tool === 'select') {
+  if (selectedIds.length > 1 && viewport && !placement && tool === 'select' && !gestureActive) {
     const boxes = selectedIds
       .map((id) => items[id])
       .filter((it): it is EventItem => !!it && !!it.phaseData[currentPhaseId]?.visible)
@@ -522,7 +641,8 @@ export default function EditorView() {
         tool={tool}
         onToolChange={changeTool}
         placement={placement}
-        onPlacementDone={() => setPlacement(null)}
+        onPlacementDone={clearPlacement}
+        onGestureChange={setGestureActive}
         ghostPhaseId={onionSkin ? prevPhaseId : null}
         ghostItemIds={ghostItemIds}
         onViewportChange={setViewport}
@@ -555,6 +675,8 @@ export default function EditorView() {
         <div className="absolute z-10" style={multiBarStyle}>
           <MultiSelectionBar
             count={selectedIds.length}
+            ids={selectedIds}
+            onDuplicate={duplicateSelected}
             visiovaFrames={selectedVisiovaFrames}
             onCopyToLaterPhases={hasLaterPhases ? () => copyItemsToLaterPhases(selectedIds) : undefined}
             onHide={hideSelection} onDelete={deleteSelection} />
@@ -650,7 +772,7 @@ export default function EditorView() {
         tool={tool}
         onToolChange={changeTool}
         placement={placement}
-        onPlacementDone={() => setPlacement(null)}
+        onPlacementDone={clearPlacement}
         activePanel={activePanel}
         onPanelChange={setActivePanel}
         pickerTab={pickerTab}
@@ -662,6 +784,8 @@ export default function EditorView() {
         onZoomSet={(percent) => canvasRef.current?.setZoomPercent(percent)}
         onExportImage={() => void handleExportPdf()}
         gridEnabled={gridEnabled}
+        gridSize={gridSize}
+        onGridSizeChange={setGridSize}
         onGridToggle={() => setGridEnabled(!gridEnabled)}
         codesHidden={codesHidden}
         onCodesToggle={() => toggleLayer('hideCodes')}
@@ -677,7 +801,7 @@ export default function EditorView() {
         ?
       </button>
       {activePanel === 'shortcuts' && (
-        <div className={`absolute bottom-[160px] left-4 z-30 p-3.5 w-72 text-xs space-y-2 ${island}`}>
+        <div className={`absolute bottom-[160px] left-4 z-30 p-3.5 w-80 text-xs space-y-2 ${island}`}>
           <div className="flex items-center justify-between gap-2 pb-1 border-b border-chip">
             <span className="font-bold text-ink text-sm">Tastatur-Shortcuts</span>
             <button onClick={() => setActivePanel(null)} className="text-ink3 hover:text-ink leading-none text-base px-1 -mr-1">
@@ -696,36 +820,21 @@ export default function EditorView() {
       )}
 
       {activePanel === 'command' && <CommandBar onClose={() => setActivePanel(null)} actions={commandActions} />}
-      {activePanel === 'grid' && (
-        <GridSettingsDialog
-          isOpen={true}
-          gridEnabled={gridEnabled}
-          gridSize={gridSize}
-          onGridEnabledChange={setGridEnabled}
-          onGridSizeChange={setGridSize}
-          onClose={() => setActivePanel(null)}
-        />
-      )}
       {nivtec.inputElement}
 
       {/* Formvorschau beim Ziehen einer Kachel aus der Objekt-Bibliothek: nimmt sofort die
           echte Größe/Form des Objekts an und folgt dem Zeiger, statt des trägen Browser-Ghosts. */}
-      {dragGhost && (() => {
-        const tpl = ITEM_LIBRARY.find((t) => t.type === dragGhost.type)
-        const isRound = dragGhost.type === 'table_round' || dragGhost.type === 'table_high'
+      {dragGhostType && (() => {
+        const tpl = ITEM_LIBRARY.find((t) => t.type === dragGhostType)
         const zoom = viewport?.zoom ?? 1
         const w = Math.max(metersToPixels(tpl?.width ?? 1, PPM) * zoom, 22)
         const h = Math.max(metersToPixels(tpl?.height ?? 1, PPM) * zoom, 22)
+        // Position kommt über moveGhost per transform (kein left/top/transform im style).
         return (
           <div
-            className="fixed z-50 pointer-events-none flex items-center justify-center text-lg bg-accent-soft/90 border-2 border-accent shadow-lg text-ink"
-            style={{
-              left: dragGhost.x - w / 2,
-              top: dragGhost.y - h / 2,
-              width: w,
-              height: h,
-              borderRadius: isRound ? '9999px' : '10px',
-            }}
+            ref={ghostElRef}
+            className="fixed left-0 top-0 z-50 pointer-events-none flex items-center justify-center text-lg bg-accent-soft/90 border-2 border-accent shadow-lg text-ink"
+            style={{ width: w, height: h, borderRadius: isRoundType(dragGhostType) ? '9999px' : '10px' }}
           >
             {tpl?.icon}
           </div>
