@@ -6,6 +6,7 @@ import type { EventItem, ItemType, PhaseData } from '../types'
 import { DEFAULT_PIXELS_PER_METER, POWER_PLAN_NATIVE_PIXELS_PER_METER } from '../utils/scale'
 import { getDefaultColor } from '../utils/itemColors'
 import { buildNivtecDeck } from './nivtec3d'
+import { MODELS } from './models3d'
 import { COLUMNS_PX, DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
 
@@ -16,32 +17,6 @@ const PX = DEFAULT_PIXELS_PER_METER
 const EYE_HEIGHT = 1.65
 /** Standpunkt „Augenhöhe“: hinten im großen Saal (x in Metern, nahe der rechten Saalwand). */
 const VIEW_FROM_BACK_X = 1340 / POWER_PLAN_NATIVE_PIXELS_PER_METER
-
-/** Typische Höhen in Metern — bewusst grob, es geht um Proportionen und Sichtlinien. */
-const HEIGHTS: Partial<Record<ItemType, number>> = {
-  table_round: 0.75,
-  table_rect: 0.75,
-  table_high: 1.1,
-  table_low_round: 0.45,
-  chair: 0.9,
-  bar: 1.1,
-  truss: 0.3,
-  curtain: VENUE.woodPanelHeight,
-  pipe_drape: 3,
-  podium: 1.2,
-  exhibition_stand: 2.5,
-  sofa_3: 0.8,
-  sofa_2: 0.8,
-  sofa_corner: 0.8,
-  armchair: 0.8,
-  coat_rack: 1.8,
-  plant: 1.5,
-  screen: 3,
-  custom_rect: 1,
-  custom_round: 1,
-}
-/** Traversen hängen typischerweise über den Köpfen. */
-const TRUSS_ELEVATION = 5
 
 function mesh(geo: THREE.BufferGeometry, color: string, opacity = 1) {
   const mat = new THREE.MeshStandardMaterial({ color, transparent: opacity < 1, opacity, roughness: 0.8 })
@@ -157,47 +132,23 @@ function buildVisiovaFrame(
   return g
 }
 
-/** Stuhlfarbe wie im Saal (schwarze Bankettstühle mit Chromgestell). */
-const CHAIR_COLOR = '#1f2937'
-const CHROME = new THREE.MeshStandardMaterial({ color: '#c0c4c8', metalness: 0.9, roughness: 0.3 })
-
-/** Einzelner Stuhl (ca. 45 × 45 cm), Lehne hinten (+z), Mittelpunkt im Ursprung. */
-function buildChair(color: string): THREE.Group {
-  const c = new THREE.Group()
-  c.add(box(0.44, 0.05, 0.42, 0, 0.46, 0, color))
-  c.add(box(0.44, 0.42, 0.04, 0, 0.74, 0.2, color))
-  const leg = new THREE.CylinderGeometry(0.012, 0.012, 0.45, 6)
-  for (const [x, z] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) {
-    const m = new THREE.Mesh(leg, CHROME)
-    m.position.set(x, 0.225, z)
-    c.add(m)
-  }
-  return c
+/** Standardfarben in 3D, wo die 2D-Farbe nicht passt (Stühle schwarz wie im Saal, Vorhang wie der Bühnenvorhang). */
+const DEFAULT_3D_COLOR: Partial<Record<ItemType, string>> = {
+  chair: '#1f2937',
+  chair_row_group: '#1f2937',
+  curtain: VENUE.curtainColor,
 }
 
-/** Ein Objekt als einfache Geometrie; lokaler Ursprung = Konva-Ursprung (oben links bzw. Mitte bei runden). */
+/** Ein Objekt als 3D-Modell; lokaler Ursprung = Konva-Ursprung (oben links bzw. Mitte bei runden). */
 function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
   if (item.type === 'text_label') return null
   const g = new THREE.Group()
   g.position.set(pd.x / PX, 0, pd.y / PX)
   g.rotation.y = -(pd.rotation * Math.PI) / 180
-  const color = item.color || getDefaultColor(item.type)
+  const color = item.color || DEFAULT_3D_COLOR[item.type] || getDefaultColor(item.type)
   const w = item.width
-  const d = item.height
-  const hgt = HEIGHTS[item.type] ?? 1
 
   switch (item.type) {
-    case 'table_round':
-    case 'table_high':
-    case 'custom_round': {
-      const r = w / 2
-      g.add(mesh(new THREE.CylinderGeometry(r, r, 0.04, 32), color).translateY(hgt - 0.02))
-      g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, hgt, 8), '#6b7280').translateY(hgt / 2))
-      break
-    }
-    case 'area':
-      g.add(box(w, 0.02, d, w / 2, 0.01, d / 2, color, 0.45))
-      break
     case 'visiova_frame': {
       // Wand aus mehreren Rahmen nebeneinander; ein Druck läuft über die ganze Wand
       const frames = item.visiovaFrames?.length ? item.visiovaFrames : [w]
@@ -211,36 +162,6 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
       }
       break
     }
-    case 'curtain':
-      g.add(box(w, hgt, 0.08, w / 2, hgt / 2, 0, item.color || VENUE.curtainColor))
-      break
-    case 'truss':
-      g.add(box(w, Math.min(d, 0.4), d, w / 2, TRUSS_ELEVATION, d / 2, '#9ca3af'))
-      break
-    case 'screen':
-      // Leinwand: dünne Fläche, Unterkante auf 1 m
-      g.add(box(w, hgt - 1, Math.min(d, 0.1), w / 2, 1 + (hgt - 1) / 2, d / 2, '#f9fafb'))
-      g.add(box(0.05, 1, 0.05, 0.1, 0.5, d / 2, '#374151'))
-      g.add(box(0.05, 1, 0.05, w - 0.1, 0.5, d / 2, '#374151'))
-      break
-    case 'chair_row_group': {
-      const grid = item.grid
-      if (!grid) break
-      for (let r = 0; r < grid.rows; r++) {
-        for (let c = 0; c < grid.cols; c++) {
-          const chair = buildChair(item.color || CHAIR_COLOR)
-          chair.position.set((c + 0.5) * grid.spacingM, 0, (r + 0.5) * grid.spacingM)
-          g.add(chair)
-        }
-      }
-      break
-    }
-    case 'chair': {
-      const chair = buildChair(item.color || CHAIR_COLOR)
-      chair.position.set(w / 2, 0, d / 2)
-      g.add(chair)
-      break
-    }
     case 'nivtec_group': {
       const heightM = (item.nivtecData?.heightCm ?? 40) / 100
       // Objektfarbe = Molton rundherum; ohne gesetzte Farbe kein Behang
@@ -252,8 +173,10 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
       )
       break
     }
-    default:
-      g.add(box(w, hgt, d, w / 2, hgt / 2, d / 2, color))
+    default: {
+      const model = MODELS[item.type]
+      g.add(model ? model(item, color) : box(w, 1, item.height, w / 2, 0.5, item.height / 2, color))
+    }
   }
   return g
 }
@@ -499,6 +422,10 @@ export default function Venue3D({ onClose }: Props) {
   useEffect(() => {
     const s = sceneRef.current
     if (!s) return
+    // Geometrien/Materialien der Modelle sind geteilt; nur die Instanz-Puffer der Stuhlreihen freigeben
+    s.items.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh) o.dispose()
+    })
     s.items.clear()
     for (const item of Object.values(items)) {
       const pd = item.phaseData[currentPhaseId]
