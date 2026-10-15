@@ -1,9 +1,10 @@
-import { memo, useRef } from 'react'
+import { memo, useRef, useState } from 'react'
 import { Group, Rect, Circle, Line, Text } from 'react-konva'
 import type { EventItem, PhaseData } from '../types'
 import { metersToPixels } from '../utils/scale'
 import { getDefaultColor } from '../utils/itemColors'
 import { forexEdge } from '../utils/forex'
+import { describeVisiovaRun, splitVisiovaRun } from '../utils/visiova'
 import { snapToGrid } from '../utils/snapping'
 import type Konva from 'konva'
 
@@ -20,6 +21,8 @@ interface Props {
   onDragEnd: (id: string, x: number, y: number) => void
   /** freie 360°-Drehung per Maus-/Touch-Ziehen am Rotationsgriff */
   onRotate?: (id: string, x: number, y: number, rotationDeg: number) => void
+  /** Visiova-Rahmen am Endgriff auf eine Länge ziehen (Meter) → Reihe aus lieferbaren Rahmen */
+  onVisiovaRun?: (id: string, lengthM: number) => void
   draggable?: boolean
   /** aktueller Canvas-Zoom, um eine konstante Mindest-Klickfläche auf dem Bildschirm sicherzustellen */
   zoom?: number
@@ -46,6 +49,7 @@ function EventItemShape({
   onSelect,
   onDragEnd,
   onRotate,
+  onVisiovaRun,
   draggable = true,
   zoom = 1,
   gridEnabled = false,
@@ -56,6 +60,8 @@ function EventItemShape({
   const isRound = item.type === 'table_round' || item.type === 'table_high' || item.type === 'custom_round'
   const isLabel = item.type === 'text_label'
   const isLocked = !!item.locked
+  // Visiova: gerade gezogene Länge in px (null = kein Ziehen)
+  const [runPx, setRunPx] = useState<number | null>(null)
 
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     let x = e.target.x()
@@ -342,6 +348,77 @@ function EventItemShape({
           fontSize={12 / zoom}
           x={hitX + 2 / zoom}
           y={hitY + 1 / zoom}
+        />
+      )}
+      {runPx !== null && (() => {
+        const widths = splitVisiovaRun(runPx / pixelsPerMeter)
+        const total = widths.reduce((s, x) => s + x, 0)
+        let at = 0
+        return (
+          <Group listening={false}>
+            {widths.map((fw, i) => {
+              const x0 = metersToPixels(at, pixelsPerMeter)
+              at += fw
+              return (
+                <Rect
+                  key={i}
+                  x={x0}
+                  y={-2 / zoom}
+                  width={metersToPixels(fw, pixelsPerMeter)}
+                  height={Math.max(h, 4 / zoom) + 4 / zoom}
+                  stroke="#2563eb"
+                  strokeWidth={1.5 / zoom}
+                  dash={[4 / zoom, 3 / zoom]}
+                  fill="rgba(37,99,235,0.15)"
+                />
+              )
+            })}
+            <Text
+              x={0}
+              y={-22 / zoom}
+              text={`${widths.length} Rahmen · ${describeVisiovaRun(widths)} · ${total.toFixed(2).replace('.', ',')} m`}
+              fontSize={12 / zoom}
+              fontStyle="bold"
+              fill="#1d4ed8"
+            />
+          </Group>
+        )
+      })()}
+      {isSelected && onVisiovaRun && item.type === 'visiova_frame' && !isLocked && (
+        <Rect
+          x={w - 6 / zoom}
+          y={h / 2 - 6 / zoom}
+          width={12 / zoom}
+          height={12 / zoom}
+          cornerRadius={2 / zoom}
+          fill="#2563eb"
+          stroke="#ffffff"
+          strokeWidth={1.5 / zoom}
+          draggable
+          onMouseDown={stopBubble}
+          onTouchStart={stopBubble}
+          onMouseEnter={(e) => {
+            const c = e.target.getStage()?.container()
+            if (c) c.style.cursor = 'ew-resize'
+          }}
+          onMouseLeave={(e) => {
+            const c = e.target.getStage()?.container()
+            if (c) c.style.cursor = ''
+          }}
+          onDragMove={(e) => {
+            e.cancelBubble = true
+            // nur entlang der Rahmenachse ziehen
+            const x = Math.max(e.target.x() + 6 / zoom, metersToPixels(0.31, pixelsPerMeter))
+            e.target.position({ x: x - 6 / zoom, y: h / 2 - 6 / zoom })
+            setRunPx(x)
+          }}
+          onDragEnd={(e) => {
+            e.cancelBubble = true
+            const x = runPx ?? w
+            setRunPx(null)
+            e.target.position({ x: w - 6 / zoom, y: h / 2 - 6 / zoom })
+            onVisiovaRun(item.id, x / pixelsPerMeter)
+          }}
         />
       )}
       {isSelected && onRotate && !isLocked && (
