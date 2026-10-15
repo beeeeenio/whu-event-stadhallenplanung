@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useEventStore, AREA_COLORS, NIVTEC_COLORS, OBJECT_COLORS } from '../store/store'
-import { getDefaultColor } from './EventItemShape'
+import { getDefaultColor } from '../utils/itemColors'
 import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
 import { btn, input as inputCls, island } from '../utils/ui'
