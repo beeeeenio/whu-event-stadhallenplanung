@@ -169,11 +169,12 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
             />
           </label>
         </div>
-      ) : item.type !== 'text_label' ? (
+      ) : item.type !== 'text_label' && item.type !== 'visiova_frame' ? (
         <div className="text-ink3">
           Größe: {item.width}m × {item.height}m
         </div>
       ) : null}
+      {item.type === 'visiova_frame' && <VisiovaFields item={item} />}
       <RotationField item={item} currentPhaseId={currentPhaseId} />
       <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
         <span className="text-ink3">Gegen Verschieben/Drehen per Maus sperren</span>
@@ -351,6 +352,99 @@ function ColorSwatches({ item }: { item: EventItem }) {
               </button>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Druck auf max. 1600 px (lange Kante) als JPEG verkleinern, damit das Projekt klein bleibt. */
+function downscaleImage(file: File, maxPx = 1600): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
+      const c = document.createElement('canvas')
+      c.width = Math.round(img.width * scale)
+      c.height = Math.round(img.height * scale)
+      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+      URL.revokeObjectURL(url)
+      resolve(c.toDataURL('image/jpeg', 0.85))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Bild konnte nicht gelesen werden'))
+    }
+    img.src = url
+  })
+}
+
+/** Visiova-Rahmen: Breite/Höhe und eingesetzter Druck (einseitig). */
+function VisiovaFields({ item }: { item: EventItem }) {
+  const resizeItem = useEventStore((s) => s.resizeItem)
+  const setFrameHeight = useEventStore((s) => s.setFrameHeight)
+  const setItemPrint = useEventStore((s) => s.setItemPrint)
+  const frameHeight = item.frameHeight ?? 2.5
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      setItemPrint(item.id, await downscaleImage(file))
+    } catch (err) {
+      alert((err as Error).message)
+    }
+  }
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <label className="flex-1 space-y-1">
+          <span className="text-ink3">Breite (m)</span>
+          <input
+            type="number"
+            step={0.1}
+            min={0.3}
+            value={Math.round(item.width * 100) / 100}
+            onChange={(e) => resizeItem(item.id, Number(e.target.value), item.height)}
+            className={`w-full ${inputCls}`}
+          />
+        </label>
+        <label className="flex-1 space-y-1">
+          <span className="text-ink3">Höhe (m)</span>
+          <input
+            type="number"
+            step={0.1}
+            min={0.3}
+            value={Math.round(frameHeight * 100) / 100}
+            onChange={(e) => setFrameHeight(item.id, Number(e.target.value))}
+            className={`w-full ${inputCls}`}
+          />
+        </label>
+      </div>
+      <div>
+        <div className="text-ink3 mb-1">Druck (Vorderseite)</div>
+        {item.printImage ? (
+          <div className="flex items-center gap-2">
+            <img src={item.printImage} alt="Druck" className="h-16 rounded border border-line object-cover" style={{ aspectRatio: `${item.width} / ${frameHeight}` }} />
+            <div className="flex flex-col gap-1">
+              <label className={`${btn('primaryOutline', 'sm')} cursor-pointer`}>
+                Ersetzen
+                <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+              </label>
+              <button onClick={() => setItemPrint(item.id, null)} className={btn('dangerOutline', 'sm')}>
+                Entfernen
+              </button>
+            </div>
+          </div>
+        ) : (
+          <label className={`w-full ${btn('primaryOutline', 'sm')} cursor-pointer`}>
+            Druck hochladen (JPG/PNG)
+            <input type="file" accept="image/*" className="hidden" onChange={onFile} />
+          </label>
+        )}
+        <div className="text-[11px] text-ink3 mt-1">
+          Wird auf die Rahmenfläche ({item.width} × {frameHeight} m) gestreckt – am besten im gleichen Seitenverhältnis anlegen. Die Druckseite zeigt im Plan nach unten (mit 180° Drehen umkehren).
         </div>
       </div>
     </div>

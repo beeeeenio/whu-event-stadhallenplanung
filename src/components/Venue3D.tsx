@@ -57,6 +57,62 @@ function box(w: number, hgt: number, d: number, x: number, y: number, z: number,
   return m
 }
 
+const VISIOVA_ALU = '#d4d6d8'
+const VISIOVA_PROFILE_M = 0.055
+const PRINT_TEXTURES = new Map<string, THREE.Texture>()
+
+/**
+ * Visiova-Rahmen 55: Alu-Profil 55 mm, einseitig bespannter Druck (Vorderseite = Plan-„unten“,
+ * also +z lokal), Rückseite weiß, zwei Standfüße. Lokaler Ursprung = linke vordere Ecke wie in 2D.
+ */
+function buildVisiovaFrame(w: number, h: number, print: string | undefined, aluColor: string): THREE.Group {
+  const g = new THREE.Group()
+  const P = VISIOVA_PROFILE_M
+  const D = VISIOVA_PROFILE_M
+  const lift = 0.05 // Rahmen steht auf den Füßen etwas über dem Boden
+  const alu = new THREE.MeshStandardMaterial({ color: aluColor, metalness: 0.8, roughness: 0.35 })
+  const bar = (bw: number, bh: number, x: number, y: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, D), alu)
+    m.position.set(x, y, D / 2)
+    m.castShadow = true
+    g.add(m)
+  }
+  bar(w, P, w / 2, lift + h - P / 2)
+  bar(w, P, w / 2, lift + P / 2)
+  bar(P, h - 2 * P, P / 2, lift + h / 2)
+  bar(P, h - 2 * P, w - P / 2, lift + h / 2)
+  let map: THREE.Texture | undefined
+  if (print) {
+    map = PRINT_TEXTURES.get(print)
+    if (!map) {
+      map = new THREE.TextureLoader().load(print)
+      map.colorSpace = THREE.SRGBColorSpace
+      map.anisotropy = 8
+      PRINT_TEXTURES.set(print, map)
+    }
+  }
+  const front = new THREE.Mesh(
+    new THREE.PlaneGeometry(w - 2 * P + 0.01, h - 2 * P + 0.01),
+    new THREE.MeshStandardMaterial({ color: map ? '#ffffff' : '#f3f4f6', map, roughness: 0.9 }),
+  )
+  front.position.set(w / 2, lift + h / 2, D + 0.001) // Druckseite zeigt nach +z (im Plan „unten“)
+  g.add(front)
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * P, h - 2 * P), new THREE.MeshStandardMaterial({ color: '#f3f4f6', roughness: 0.9 }))
+  back.rotation.y = Math.PI
+  back.position.set(w / 2, lift + h / 2, -0.001)
+  g.add(back)
+  for (const x of [0.06, w - 0.06]) {
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.45), alu)
+    foot.position.set(x, 0.015, D / 2)
+    foot.castShadow = true
+    g.add(foot)
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.04, lift, 0.04), alu)
+    post.position.set(x, lift / 2, D / 2)
+    g.add(post)
+  }
+  return g
+}
+
 /** Stuhlfarbe wie im Saal (schwarze Bankettstühle mit Chromgestell). */
 const CHAIR_COLOR = '#1f2937'
 const CHROME = new THREE.MeshStandardMaterial({ color: '#c0c4c8', metalness: 0.9, roughness: 0.3 })
@@ -97,6 +153,9 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
     }
     case 'area':
       g.add(box(w, 0.02, d, w / 2, 0.01, d / 2, color, 0.45))
+      break
+    case 'visiova_frame':
+      g.add(buildVisiovaFrame(w, item.frameHeight ?? 2.5, item.printImage, item.color || VISIOVA_ALU))
       break
     case 'curtain':
       g.add(box(w, hgt, 0.08, w / 2, hgt / 2, 0, item.color || VENUE.curtainColor))

@@ -93,6 +93,10 @@ interface Store extends EventState {
   setItemNote: (itemId: string, note: string) => void
   resizeItem: (itemId: string, width: number, height: number) => void
   setItemColor: (itemId: string, color: string | null) => void
+  /** Visiova-Rahmen: Druck (Data-URL) setzen bzw. mit null entfernen. */
+  setItemPrint: (itemId: string, image: string | null) => void
+  /** Visiova-Rahmen: Rahmenhöhe in Metern. */
+  setFrameHeight: (itemId: string, heightM: number) => void
   /** Sperrt/entsperrt ein Objekt gegen Verschieben und Drehen (unabhängig von der Phase). */
   toggleItemLocked: (itemId: string, locked?: boolean) => void
 
@@ -153,7 +157,7 @@ export interface CustomItemSpec {
 function patchItemInCurrentPhase(
   state: EventState,
   itemId: string,
-  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color'>>,
+  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'printImage'>>,
 ): Pick<EventState, 'items' | 'itemOrder'> {
   const item = state.items[itemId]
   const current = item.phaseData[state.currentPhaseId]
@@ -497,6 +501,23 @@ export const useEventStore = create<Store>((set, get) => {
         if (item.color === newColor) return state
         pushHistory()
         return patchItemInCurrentPhase(state, itemId, { color: newColor })
+      })
+    },
+
+    setItemPrint: (itemId, image) => {
+      set((state) => {
+        if (!state.items[itemId]) return state
+        pushHistory()
+        return patchItemInCurrentPhase(state, itemId, { printImage: image ?? undefined })
+      })
+    },
+
+    setFrameHeight: (itemId, heightM) => {
+      set((state) => {
+        const item = state.items[itemId]
+        if (!item || item.frameHeight === heightM) return state
+        pushHistory()
+        return patchItemInCurrentPhase(state, itemId, { frameHeight: heightM })
       })
     },
 
