@@ -54,7 +54,9 @@ export const WALL_SEGMENTS_PX: [number, number, number, number][] = [
   [1232, 1085, 1432, 1085],
   [515, 1040, 515, 1085],
   [0, 1085, 515, 1085],
-  [0, 915, 660, 915],
+  [0, 915, 675, 915],
+  // Raum neben dem Haupteingang (4F4): rechte Wand zum Foyer
+  [673, 915, 673, 1040],
 ]
 
 /** Bühnenpodest (Rechteck in Plan-Pixeln) und Lage des Hauptvorhangs. */
@@ -76,6 +78,8 @@ export const DOORS_PX: [number, number, number][] = [
   // Nebenräume links
   [233, 664, 20],
   [34, 915, 22], [104, 915, 25], [174, 915, 22],
+  // Raum neben dem Haupteingang (4F4) → Foyer: 2 Doppeltüren
+  [551, 915, 66], [625, 915, 64],
   // Foyer ↔ kleiner Saal (Raum 1): 2 Doppeltüren
   [1238, 834, 63], [1238, 964, 64],
   // Foyer-Glasfassade unten: Haupteingang (Windfang, 2 Türen) und 3 Doppeltüren nach draußen
