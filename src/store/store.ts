@@ -5,6 +5,7 @@ import { ITEM_LIBRARY } from '../data/itemLibrary'
 import { sortPhases } from '../utils/phaseDiff'
 import { sanitizeForexPanels } from '../utils/forex'
 import { hasDefaultVisiovaLabel, visiovaLabel } from '../utils/visiova'
+import { FOAM_DEFAULT_TEXT, foamLettersLabel, foamLettersWidth, hasDefaultFoamLabel } from '../utils/foamLetters'
 
 const PHASE_1 = uuid()
 const MAX_HISTORY = 50
@@ -108,6 +109,8 @@ interface Store extends EventState {
   setForex: (itemId: string, panels: ForexPanel[], prints?: Record<string, string>) => void
   /** Visiova-Rahmen: Rahmenhöhe in Metern. */
   setFrameHeight: (itemId: string, heightM: number) => void
+  /** Styropor-Buchstaben: Text setzen; Breite (und Standard-Bezeichnung) passen sich an. Ein Undo-Schritt. */
+  setLetterText: (itemId: string, text: string) => void
   /** Sperrt/entsperrt ein Objekt gegen Verschieben und Drehen (unabhängig von der Phase). */
   toggleItemLocked: (itemId: string, locked?: boolean) => void
 
@@ -168,7 +171,7 @@ export interface CustomItemSpec {
 function patchItemInCurrentPhase(
   state: EventState,
   itemId: string,
-  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'printImage' | 'nivtecData' | 'forexPrints' | 'visiovaFrames'>>,
+  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'printImage' | 'nivtecData' | 'forexPrints' | 'visiovaFrames' | 'letterText'>>,
 ): Pick<EventState, 'items' | 'itemOrder'> {
   const item = state.items[itemId]
   const current = item.phaseData[state.currentPhaseId]
@@ -292,6 +295,7 @@ export const useEventStore = create<Store>((set, get) => {
         height: template?.height ?? 1,
         seats: template?.seats,
         phaseData,
+        ...(type === 'foam_letters' ? { letterText: FOAM_DEFAULT_TEXT } : {}),
       }
       pushHistory()
       set((state) => ({
@@ -567,6 +571,20 @@ export const useEventStore = create<Store>((set, get) => {
         if (!item || item.frameHeight === heightM) return state
         pushHistory()
         return patchItemInCurrentPhase(state, itemId, { frameHeight: heightM })
+      })
+    },
+
+    setLetterText: (itemId, text) => {
+      set((state) => {
+        const item = state.items[itemId]
+        const clean = text.replace(/\s+/g, ' ').trim()
+        if (!item || !clean || item.letterText === clean) return state
+        pushHistory()
+        return patchItemInCurrentPhase(state, itemId, {
+          letterText: clean,
+          width: foamLettersWidth(clean),
+          ...(hasDefaultFoamLabel(item.label) ? { label: foamLettersLabel(clean) } : {}),
+        })
       })
     },
 

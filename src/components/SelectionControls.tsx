@@ -5,6 +5,7 @@ import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
 import { downscaleImage, slicePrint } from '../utils/printImage'
 import { describeVisiovaRun } from '../utils/visiova'
+import { FOAM_DEFAULT_TEXT, FOAM_LETTER, foamLettersWidth, letterSlots } from '../utils/foamLetters'
 import { FOREX_SIDE_LABEL, forexEdge, freeEdgesWithoutPanel, frontEdgePanels, pieceKey, sortPanelsForPrint } from '../utils/forex'
 import type { ForexPanel } from '../types'
 import { btn, input as inputCls, island } from '../utils/ui'
@@ -166,7 +167,7 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
           ×
         </button>
       </div>
-      <LabelField item={item} />
+      <LabelField key={`${item.id}:${item.label}`} item={item} />
 
       {item.type === 'area' ? (
         <div className="flex gap-2">
@@ -199,6 +200,7 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
         </div>
       ) : null}
       {item.type === 'visiova_frame' && <VisiovaFields item={item} />}
+      {item.type === 'foam_letters' && <FoamLetterField key={`${item.id}:${item.letterText ?? ''}`} item={item} />}
       <RotationField item={item} currentPhaseId={currentPhaseId} />
       <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
         <span className="text-ink3">Gegen Verschieben/Drehen per Maus sperren</span>
@@ -238,6 +240,30 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
         </button>
       </div>
     </div>
+  )
+}
+
+/** Styropor-Buchstaben: Text des Schriftzugs, beim Verlassen/Enter gespeichert (ein Undo-Schritt). */
+function FoamLetterField({ item }: { item: EventItem }) {
+  const setLetterText = useEventStore((s) => s.setLetterText)
+  const [value, setValue] = useState(item.letterText ?? FOAM_DEFAULT_TEXT)
+  const slots = letterSlots(value)
+  return (
+    <label className="block space-y-1">
+      <span className="text-ink3">Schriftzug</span>
+      <input
+        className={`w-full font-bold tracking-widest ${inputCls}`}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => setLetterText(item.id, value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        }}
+      />
+      <span className="block text-[11px] text-ink3">
+        {slots.length} Buchstaben à {FOAM_LETTER.widthM * 100} × {FOAM_LETTER.heightM * 100} cm · {foamLettersWidth(value).toFixed(2).replace('.', ',')} m breit
+      </span>
+    </label>
   )
 }
 

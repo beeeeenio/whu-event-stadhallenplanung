@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import type { EventItem, Phase } from '../types'
-import { countVisibleItems } from './countItems'
+import { countVisibleItems, describeFoamLetters } from './countItems'
 
 interface ExportArgs {
   eventName: string
@@ -75,6 +75,10 @@ export function exportPhaseToPdf({ eventName, phase, items, currentPhaseId, plan
   if (counts.forexPanels > 0) {
     y += 5
     doc.text(`Forex-Blenden: ${counts.forexPanels}`, 14, y)
+  }
+  if (Object.keys(counts.foamLetters).length > 0) {
+    y += 5
+    doc.text(`Styropor-Buchstaben: ${describeFoamLetters(counts.foamLetters)}`, 14, y)
   }
 
   doc.save(`${eventName.replace(/\s+/g, '_')}_${phase?.name.replace(/\s+/g, '_') ?? 'phase'}.pdf`)

@@ -6,6 +6,7 @@ import { getDefaultColor } from '../utils/itemColors'
 import { forexEdge } from '../utils/forex'
 import { describeVisiovaRun, splitVisiovaRun } from '../utils/visiova'
 import { snapToGrid } from '../utils/snapping'
+import { FOAM_DEFAULT_TEXT, FOAM_LETTER, letterSlots } from '../utils/foamLetters'
 import type Konva from 'konva'
 
 
@@ -236,6 +237,38 @@ function EventItemShape({
             )
           })}
         </>
+      ) : item.type === 'foam_letters' ? (
+        <>
+          {/* Jeder Styropor-Buchstabe als eigener Block, das Zeichen steht davor (Leserichtung) */}
+          {letterSlots(item.letterText ?? FOAM_DEFAULT_TEXT).map((slot, i) => {
+            const x = metersToPixels(slot.x, pixelsPerMeter)
+            const sw = metersToPixels(FOAM_LETTER.widthM, pixelsPerMeter)
+            return (
+              <Group key={i}>
+                <Rect
+                  x={x}
+                  width={sw}
+                  height={h}
+                  fill={item.color || getDefaultColor(item.type)}
+                  stroke={stroke}
+                  strokeWidth={strokeWidth}
+                  perfectDrawEnabled={false}
+                />
+                <Text
+                  listening={false}
+                  text={slot.char}
+                  x={x}
+                  y={h + 1}
+                  width={sw}
+                  align="center"
+                  fontSize={sw * 0.9}
+                  fontStyle="bold"
+                  fill={isSelected ? '#2563eb' : '#1f2937'}
+                />
+              </Group>
+            )
+          })}
+        </>
       ) : item.type === 'area' ? (
         <Rect
           width={w}
@@ -317,7 +350,7 @@ function EventItemShape({
         </>
       ) : (
         <>
-          {item.type !== 'curtain' && (
+          {item.type !== 'curtain' && item.type !== 'foam_letters' && (
             <Text
               listening={false}
               text={item.label}
@@ -336,7 +369,7 @@ function EventItemShape({
             fill="#6b7280"
             width={Math.max(w, 60)}
             align="center"
-            y={(isRound ? w / 2 : h) + 3}
+            y={(isRound ? w / 2 : h) + 3 + (item.type === 'foam_letters' ? metersToPixels(FOAM_LETTER.widthM, pixelsPerMeter) : 0)}
             x={isRound ? -w / 2 : 0}
           />
         </>

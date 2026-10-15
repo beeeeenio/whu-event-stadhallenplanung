@@ -1,5 +1,6 @@
 import type { EventItem } from '../types'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
+import { FOAM_DEFAULT_TEXT, letterSlots } from './foamLetters'
 
 export interface SummaryRow {
   label: string
@@ -17,6 +18,8 @@ export interface ItemCounts {
   forexPanels: number
   /** Visiova-Rahmen insgesamt (Wände zählen je Rahmen) */
   visiovaFrames: number
+  /** Styropor-Buchstaben je Zeichen (z. B. { W: 1, H: 1, U: 1 }) */
+  foamLetters: Record<string, number>
 }
 
 function iconForItem(item: EventItem): string {
@@ -31,6 +34,7 @@ export function countVisibleItems(items: Record<string, EventItem>, phaseId: str
   let curtainMeters = 0
   let forexPanels = 0
   let visiovaFrames = 0
+  const foamLetters: Record<string, number> = {}
 
   for (const item of Object.values(items)) {
     const pd = item.phaseData[phaseId]
@@ -51,6 +55,12 @@ export function countVisibleItems(items: Record<string, EventItem>, phaseId: str
     if (item.type === 'curtain') curtainMeters += item.width
     forexPanels += item.nivtecData?.forexPanels?.length ?? 0
     if (item.type === 'visiova_frame') visiovaFrames += item.visiovaFrames?.length ?? 1
+    if (item.type === 'foam_letters') {
+      for (const { char } of letterSlots(item.letterText ?? FOAM_DEFAULT_TEXT)) {
+        const key = char.toUpperCase()
+        foamLetters[key] = (foamLetters[key] ?? 0) + 1
+      }
+    }
   }
 
   return {
@@ -61,7 +71,16 @@ export function countVisibleItems(items: Record<string, EventItem>, phaseId: str
     curtainMeters,
     forexPanels,
     visiovaFrames,
+    foamLetters,
   }
+}
+
+/** „W 2 · H 1 · U 1“, alphabetisch. */
+export function describeFoamLetters(letters: Record<string, number>): string {
+  return Object.entries(letters)
+    .sort(([a], [b]) => a.localeCompare(b, 'de'))
+    .map(([c, n]) => `${c} ${n}`)
+    .join(' · ')
 }
 
 export function visibleItemList(items: Record<string, EventItem>, itemOrder: string[], phaseId: string) {
