@@ -37,12 +37,15 @@ export function describeVisiovaRun(widths: number[]): string {
     .join(' + ') + ' mm'
 }
 
-/** Standard-Bezeichnung eines Rahmens, z. B. „Visiova V55 (496x2480mm)“. */
-export function visiovaLabel(widthM: number, heightM: number): string {
-  return `Visiova V55 (${Math.round(widthM * 1000)}x${Math.round(heightM * 1000)}mm)`
+/** Standard-Bezeichnung, z. B. „Visiova V55 (496x2480mm)“ bzw. „Visiova-Wand 5 Rahmen (4,46 m)“. */
+export function visiovaLabel(widths: number | number[], heightM: number): string {
+  const ws = Array.isArray(widths) ? widths : [widths]
+  if (ws.length === 1) return `Visiova V55 (${Math.round(ws[0] * 1000)}x${Math.round(heightM * 1000)}mm)`
+  const total = ws.reduce((s, w) => s + w, 0)
+  return `Visiova-Wand ${ws.length} Rahmen (${total.toFixed(2).replace('.', ',')} m)`
 }
 
-/** Hat der Rahmen noch die automatische Bezeichnung (dann darf sie mit den Maßen mitgehen)? */
+/** Hat das Objekt noch die automatische Bezeichnung (dann darf sie mit den Maßen mitgehen)? */
 export function hasDefaultVisiovaLabel(label: string): boolean {
-  return /^Visiova V55 \(\d+x\d+mm\)$/.test(label)
+  return /^Visiova V55 \(\d+x\d+mm\)$/.test(label) || /^Visiova-Wand \d+ Rahmen \([\d,]+ m\)$/.test(label)
 }

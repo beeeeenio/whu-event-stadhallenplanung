@@ -280,6 +280,9 @@ export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props
             <div className="flex justify-between"><span>Stühle gesamt</span><span className="font-mono text-ink">{counts.totalChairs}</span></div>
             <div className="flex justify-between"><span>Bühnenpodeste gesamt</span><span className="font-mono text-ink">{counts.totalPodiums}</span></div>
             <div className="flex justify-between"><span>Vorhang (lfm)</span><span className="font-mono text-ink">{counts.curtainMeters.toFixed(1)}</span></div>
+            {counts.visiovaFrames > 0 && (
+              <div className="flex justify-between"><span>Visiova-Rahmen</span><span className="font-mono text-ink">{counts.visiovaFrames}</span></div>
+            )}
             {counts.forexPanels > 0 && (
               <div className="flex justify-between"><span>Forex-Blenden</span><span className="font-mono text-ink">{counts.forexPanels}</span></div>
             )}

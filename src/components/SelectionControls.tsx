@@ -4,6 +4,7 @@ import { getDefaultColor } from '../utils/itemColors'
 import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
 import { downscaleImage, slicePrint } from '../utils/printImage'
+import { describeVisiovaRun } from '../utils/visiova'
 import { FOREX_SIDE_LABEL, forexEdge, freeEdgesWithoutPanel, frontEdgePanels, pieceKey, sortPanelsForPrint } from '../utils/forex'
 import type { ForexPanel } from '../types'
 import { btn, input as inputCls, island } from '../utils/ui'
@@ -487,7 +488,7 @@ const VISIOVA_DEFAULT_HEIGHT_M = 2.48
 
 /** Visiova-Rahmen: Breite/Höhe und eingesetzter Druck (einseitig). */
 function VisiovaFields({ item }: { item: EventItem }) {
-  const resizeItem = useEventStore((s) => s.resizeItem)
+  const setVisiovaRun = useEventStore((s) => s.setVisiovaRun)
   const setFrameHeight = useEventStore((s) => s.setFrameHeight)
   const setItemPrint = useEventStore((s) => s.setItemPrint)
   const frameHeight = item.frameHeight ?? VISIOVA_DEFAULT_HEIGHT_M
@@ -504,11 +505,19 @@ function VisiovaFields({ item }: { item: EventItem }) {
   return (
     <div className="space-y-2">
       <div className="flex gap-2">
+        {(item.visiovaFrames?.length ?? 0) > 1 ? (
+          <div className="flex-1 space-y-1">
+            <span className="text-ink3">Wand</span>
+            <div className="text-ink" title="Länge mit dem blauen Griff am rechten Ende ändern">
+              {describeVisiovaRun(item.visiovaFrames!)}
+            </div>
+          </div>
+        ) : (
         <label className="flex-1 space-y-1">
           <span className="text-ink3">Breite</span>
           <select
             value={VISIOVA_WIDTHS_MM.includes(Math.round(item.width * 1000)) ? Math.round(item.width * 1000) : ''}
-            onChange={(e) => resizeItem(item.id, Number(e.target.value) / 1000, item.height)}
+            onChange={(e) => setVisiovaRun(item.id, [Number(e.target.value) / 1000])}
             className={`w-full ${inputCls}`}
           >
             {!VISIOVA_WIDTHS_MM.includes(Math.round(item.width * 1000)) && <option value="">{item.width} m</option>}
@@ -519,6 +528,7 @@ function VisiovaFields({ item }: { item: EventItem }) {
             ))}
           </select>
         </label>
+        )}
         <label className="flex-1 space-y-1">
           <span className="text-ink3">Höhe</span>
           <select
