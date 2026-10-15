@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Toolbar from './Toolbar'
 import CanvasEditor, { type CanvasEditorHandle, type CanvasViewport, type ToolMode } from './CanvasEditor'
 import InventoryPanel from './InventoryPanel'
@@ -21,6 +21,9 @@ import { changedSincePhase, previousPhaseId, sortPhases } from '../utils/phaseDi
 import { btn, input as inputCls, island, kbd } from '../utils/ui'
 
 const PPM = DEFAULT_PIXELS_PER_METER
+
+// Three.js wird erst geladen, wenn die 3D-Ansicht geöffnet wird (eigener Chunk).
+const Venue3D = lazy(() => import('./Venue3D'))
 
 /** Bildschirm-Rechteck eines (ggf. gedrehten) Objekts, um die Kontextleiste daran auszurichten. */
 function screenBounds(item: EventItem, phaseId: string, vp: CanvasViewport) {
@@ -376,6 +379,11 @@ export default function EditorView() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      // Solange die 3D-Ansicht offen ist, gehören alle Tasten ihr: nur Esc schließt sie.
+      if (show3D) {
+        if (e.key === 'Escape') setShow3D(false)
+        return
+      }
       const isMod = e.ctrlKey || e.metaKey
       if (isMod && e.key.toLowerCase() === 'k') {
         e.preventDefault()
@@ -448,7 +456,7 @@ export default function EditorView() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
     undo, redo, rotateItem, selectedId, selectedIds, duplicateSelected, deleteSelection, changeTool, select,
-    activePanel, placement, tool, phases, currentPhaseId, setCurrentPhase, togglePanel,
+    activePanel, placement, tool, phases, currentPhaseId, setCurrentPhase, togglePanel, show3D,
   ])
 
   // Kontextleiste an der Auswahl ausrichten. Über dem Objekt braucht es genug Abstand, um den
@@ -710,6 +718,13 @@ export default function EditorView() {
           </div>
         )
       })()}
+
+      {/* 3D-Ansicht der aktuellen Phase als Overlay */}
+      {show3D && (
+        <Suspense fallback={null}>
+          <Venue3D onClose={() => setShow3D(false)} />
+        </Suspense>
+      )}
     </div>
   )
 }

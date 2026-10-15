@@ -5,6 +5,7 @@ import { useEventStore } from '../store/store'
 import type { EventItem, ItemType, PhaseData } from '../types'
 import { DEFAULT_PIXELS_PER_METER, POWER_PLAN_NATIVE_PIXELS_PER_METER } from '../utils/scale'
 import { getDefaultColor } from './EventItemShape'
+import { MAIN_CURTAIN_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
 
 /** Plan-Abmessungen in Metern (Stromplan 1755×1240px bei 23,6px/m). */
@@ -12,6 +13,8 @@ const PLAN_W = 1755 / POWER_PLAN_NATIVE_PIXELS_PER_METER
 const PLAN_D = 1240 / POWER_PLAN_NATIVE_PIXELS_PER_METER
 const PX = DEFAULT_PIXELS_PER_METER
 const EYE_HEIGHT = 1.65
+/** Standpunkt „Augenhöhe“: hinten im großen Saal (x in Metern, nahe der rechten Saalwand). */
+const VIEW_FROM_BACK_X = 1340 / POWER_PLAN_NATIVE_PIXELS_PER_METER
 
 /** Typische Höhen in Metern — bewusst grob, es geht um Proportionen und Sichtlinien. */
 const HEIGHTS: Partial<Record<ItemType, number>> = {
@@ -22,7 +25,7 @@ const HEIGHTS: Partial<Record<ItemType, number>> = {
   chair: 0.9,
   bar: 1.1,
   truss: 0.3,
-  curtain: 3.5,
+  curtain: VENUE.woodPanelHeight,
   pipe_drape: 3,
   podium: 1.2,
   exhibition_stand: 2.5,
@@ -77,7 +80,7 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
       g.add(box(w, 0.02, d, w / 2, 0.01, d / 2, color, 0.45))
       break
     case 'curtain':
-      g.add(box(w, hgt, 0.08, w / 2, hgt / 2, 0, color))
+      g.add(box(w, hgt, 0.08, w / 2, hgt / 2, 0, item.color || VENUE.curtainColor))
       break
     case 'truss':
       g.add(box(w, Math.min(d, 0.4), d, w / 2, TRUSS_ELEVATION, d / 2, '#9ca3af'))
@@ -118,6 +121,30 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
   return g
 }
 
+const NP = POWER_PLAN_NATIVE_PIXELS_PER_METER
+
+/** Wand-Strecke als Quader zwischen zwei Plan-Punkten (in Metern), von y0 bis y1 hoch. */
+function segmentBox(seg: [number, number, number, number], y0: number, y1: number, thickness: number, color: string) {
+  const [x1, z1, x2, z2] = seg.map((v) => v / NP)
+  const len = Math.hypot(x2 - x1, z2 - z1)
+  const m = box(len + thickness, y1 - y0, thickness, (x1 + x2) / 2, (y0 + y1) / 2, (z1 + z2) / 2, color)
+  m.rotation.y = -Math.atan2(z2 - z1, x2 - x1)
+  return m
+}
+
+/** Feste Bauteile: Wände (unten Holz, oben weiß), Bühnenpodest, Hauptvorhang. */
+function buildVenue(): THREE.Group {
+  const g = new THREE.Group()
+  for (const seg of WALL_SEGMENTS_PX) {
+    g.add(segmentBox(seg, 0, VENUE.woodPanelHeight, VENUE.wallThickness, VENUE.woodColor))
+    g.add(segmentBox(seg, VENUE.woodPanelHeight, VENUE.wallHeight, VENUE.wallThickness, VENUE.upperWallColor))
+  }
+  const st = { x: STAGE_PX.x / NP, z: STAGE_PX.y / NP, w: STAGE_PX.w / NP, d: STAGE_PX.h / NP }
+  g.add(box(st.w, VENUE.stageHeight, st.d, st.x + st.w / 2, VENUE.stageHeight / 2, st.z + st.d / 2, VENUE.stageColor))
+  g.add(segmentBox(MAIN_CURTAIN_PX, VENUE.stageHeight, VENUE.curtainHeight, 0.1, VENUE.curtainColor))
+  return g
+}
+
 interface Props {
   onClose: () => void
 }
@@ -125,12 +152,13 @@ interface Props {
 /** Schlichte 3D-Ansicht der aktuellen Phase: Grundriss am Boden, Objekte als Blöcke mit typischer Höhe. */
 export default function Venue3D({ onClose }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
-  const sceneRef = useRef<{ items: THREE.Group; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
+  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
   const items = useEventStore((s) => s.items)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const phaseName = useEventStore((s) => s.phases.find((p) => p.id === s.currentPhaseId)?.name ?? '')
   const hideCodes = useEventStore((s) => !!s.layers.hideCodes)
   const [eye, setEye] = useState(false)
+  const [showWalls, setShowWalls] = useState(true)
 
   // Szene einmalig aufbauen
   useEffect(() => {
@@ -142,9 +170,9 @@ export default function Venue3D({ onClose }: Props) {
     mount.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color('#e5e7eb')
-    scene.add(new THREE.HemisphereLight('#ffffff', '#9ca3af', 1.6))
-    const sun = new THREE.DirectionalLight('#ffffff', 1.4)
+    scene.background = new THREE.Color(VENUE.background)
+    scene.add(new THREE.HemisphereLight('#ffffff', '#d1d5db', 2.2))
+    const sun = new THREE.DirectionalLight('#ffffff', 1.2)
     sun.position.set(PLAN_W * 0.3, 40, PLAN_D * 0.2)
     sun.target.position.set(PLAN_W / 2, 0, PLAN_D / 2)
     sun.castShadow = true
@@ -163,12 +191,15 @@ export default function Venue3D({ onClose }: Props) {
 
     const itemGroup = new THREE.Group()
     scene.add(itemGroup)
+    const wallGroup = new THREE.Group()
+    scene.add(wallGroup)
+    wallGroup.add(buildVenue())
 
     const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 500)
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI / 2 - 0.02
-    sceneRef.current = { items: itemGroup, camera, controls }
+    sceneRef.current = { items: itemGroup, walls: wallGroup, camera, controls }
 
     let raf = 0
     const loop = () => {
@@ -206,25 +237,28 @@ export default function Venue3D({ onClose }: Props) {
     }
   }, [items, currentPhaseId, hideCodes])
 
-  // Kamera: Übersicht schräg von oben, oder Augenhöhe in der Mitte der belegten Fläche
+  useEffect(() => {
+    if (sceneRef.current) sceneRef.current.walls.visible = showWalls
+  }, [showWalls, hideCodes])
+
+  // Kamera: Übersicht über die ganze Halle, oder Augenhöhe hinten im Saal mit Blick zur Bühne
   useEffect(() => {
     const s = sceneRef.current
     if (!s) return
-    const bounds = new THREE.Box3().setFromObject(s.items)
-    const center = bounds.isEmpty() ? new THREE.Vector3(PLAN_W / 2, 0, PLAN_D / 2) : bounds.getCenter(new THREE.Vector3())
+    const stageX = (STAGE_PX.x + STAGE_PX.w / 2) / NP
+    const stageZ = (STAGE_PX.y + STAGE_PX.h / 2) / NP
     if (eye) {
-      s.camera.position.set(center.x, EYE_HEIGHT, (bounds.isEmpty() ? center.z : bounds.max.z) + 4)
-      s.controls.target.set(center.x, EYE_HEIGHT, center.z)
+      s.camera.position.set(VIEW_FROM_BACK_X, EYE_HEIGHT, stageZ)
+      s.controls.target.set(stageX, EYE_HEIGHT, stageZ)
     } else {
-      const size = bounds.isEmpty() ? 40 : Math.max(bounds.getSize(new THREE.Vector3()).length(), 15)
-      s.camera.position.set(center.x + size * 0.4, size * 0.8, center.z + size * 0.9)
-      s.controls.target.set(center.x, 0, center.z)
+      s.camera.position.set(PLAN_W * 0.55, 45, PLAN_D * 1.05)
+      s.controls.target.set(PLAN_W * 0.5, 0, PLAN_D * 0.45)
     }
     s.controls.update()
   }, [eye, hideCodes])
 
   return (
-    <div className="absolute inset-0 z-40 bg-[#e5e7eb]">
+    <div className="absolute inset-0 z-40" style={{ background: VENUE.background }}>
       <div ref={mountRef} className="absolute inset-0" />
       <div className={`absolute top-4 left-4 flex items-center gap-2 p-1.5 pl-3 rounded-xl ${island}`}>
         <span className="text-xs font-semibold text-ink">3D · {phaseName}</span>
@@ -233,6 +267,9 @@ export default function Venue3D({ onClose }: Props) {
         </button>
         <button onClick={() => setEye(true)} className={islandBtn(eye ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
           Augenhöhe
+        </button>
+        <button onClick={() => setShowWalls((v) => !v)} className={islandBtn(showWalls ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
+          Wände
         </button>
         <button onClick={onClose} className={islandBtn('plain', 'h-8 px-2.5 text-[11px] font-medium')}>
           ✕ Zurück zu 2D
