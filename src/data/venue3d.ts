@@ -13,6 +13,8 @@ export const VENUE = {
   woodColor: '#e0b77f',
   upperWallColor: '#f3f4f6',
   /** Bühne: Podesthöhe und Hauptvorhang (dunkelrot) in der Bühnenöffnung. */
+  /** Höhe der Verglasung zur Terrasse (Schätzung, darüber Wand). */
+  glassHeight: 3.8,
   /** Lichte Höhe der Türöffnungen. */
   doorHeight: 2.6,
   stageHeight: 0.9,
@@ -27,8 +29,11 @@ export const VENUE = {
  * 23,6 px/m) — von Hand aus power-plan-simple.png nachgezeichnet, nur die Hauptwände.
  */
 export const WALL_SEGMENTS_PX: [number, number, number, number][] = [
-  // Großer Saal
-  [375, 268, 1372, 268],
+  // Großer Saal (Terrassenseite: massiv nur bis zur Glasfassade und an den Pfeilern, siehe GLASS_SEGMENTS_PX)
+  [375, 268, 615, 268],
+  [807, 268, 875, 268],
+  [1069, 268, 1136, 268],
+  [1330, 268, 1372, 268],
   [1368, 268, 1368, 545],
   [1368, 540, 1432, 540],
   [1432, 540, 1432, 690],
@@ -63,10 +68,10 @@ export const MAIN_CURTAIN_PX: [number, number, number, number] = [572, 365, 572,
  * Aus den Türbögen im Grundriss abgelesen (Positionen ± ca. 0,5 m).
  */
 export const DOORS_PX: [number, number, number][] = [
-  // Saal → Terrasse (oben)
-  [628, 268, 38], [790, 268, 38], [890, 268, 38], [1050, 268, 38], [1310, 268, 38],
-  // Saal → Foyer (Doppeltüren)
-  [776, 720, 55], [906, 720, 55], [1036, 720, 55], [1166, 720, 55],
+  // Saal → Terrasse: 6 Einzeltüren in der Glasfassade (Türbögen im Grundriss)
+  [631, 268, 32], [788, 268, 32], [894, 268, 32], [1050, 268, 32], [1155, 268, 32], [1312, 268, 32],
+  // Saal → Foyer: 4 Doppeltüren (Öffnungen zwischen den Wandscheiben)
+  [775, 720, 63], [905, 720, 63], [1037, 720, 63], [1168, 720, 63],
   // Bühne hinten
   [380, 491, 40],
   // Nebenräume links
@@ -74,4 +79,23 @@ export const DOORS_PX: [number, number, number][] = [
   [34, 915, 22], [104, 915, 25], [174, 915, 22],
   // Foyer → draußen (Glastüren unten)
   [805, 1040, 36], [841, 1040, 36], [987, 1040, 37], [1026, 1040, 37], [1169, 1040, 37], [1208, 1040, 37],
+]
+
+/**
+ * Glasfassade zur Terrasse (Strecken in Plan-Pixeln): verglast bis `glassHeight`, darüber Wand.
+ * Türen aus DOORS_PX werden auch hier ausgespart.
+ */
+export const GLASS_SEGMENTS_PX: [number, number, number, number][] = [
+  [615, 268, 807, 268],
+  [875, 268, 1069, 268],
+  [1136, 268, 1330, 268],
+]
+
+/**
+ * Mobile Trennwände im großen Saal (teilen ihn in drei Teile, laut Werkplan und Fluchtplan).
+ * In 3D ein-/ausblendbar, standardmäßig offen (eingefahren).
+ */
+export const PARTITIONS_PX: [number, number, number, number][] = [
+  [842, 275, 842, 716],
+  [1102, 275, 1102, 716],
 ]

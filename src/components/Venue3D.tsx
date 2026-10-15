@@ -6,7 +6,7 @@ import type { EventItem, ItemType, PhaseData } from '../types'
 import { DEFAULT_PIXELS_PER_METER, POWER_PLAN_NATIVE_PIXELS_PER_METER } from '../utils/scale'
 import { getDefaultColor } from '../utils/itemColors'
 import { buildNivtecDeck } from './nivtec3d'
-import { DOORS_PX, MAIN_CURTAIN_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
+import { DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
 
 /** Plan-Abmessungen in Metern (Stromplan 1755×1240px bei 23,6px/m). */
@@ -283,8 +283,26 @@ function buildVenue(): THREE.Group {
     g.add(segmentBox(seg, VENUE.doorHeight, VENUE.woodPanelHeight, t, VENUE.woodColor))
     g.add(segmentBox(seg, VENUE.woodPanelHeight, VENUE.wallHeight, t, VENUE.upperWallColor))
   }
+  // Glasfassade zur Terrasse: Scheiben (mit Türöffnungen), darüber weiße Wand
+  const glass = new THREE.MeshStandardMaterial({ color: '#bcd7e6', transparent: true, opacity: 0.28, roughness: 0.1, metalness: 0.1, depthWrite: false })
+  for (const seg of GLASS_SEGMENTS_PX) {
+    for (const [a, b] of solidParts(seg)) {
+      const m = segmentBox(subSegment(seg, a, b), 0, VENUE.glassHeight, 0.04, '#ffffff')
+      m.material = glass
+      m.castShadow = false
+      g.add(m)
+    }
+    g.add(segmentBox(seg, VENUE.glassHeight, VENUE.wallHeight, t, VENUE.upperWallColor))
+  }
   const st = { x: STAGE_PX.x / NP, z: STAGE_PX.y / NP, w: STAGE_PX.w / NP, d: STAGE_PX.h / NP }
   g.add(box(st.w, VENUE.stageHeight, st.d, st.x + st.w / 2, VENUE.stageHeight / 2, st.z + st.d / 2, VENUE.stageColor))
+  return g
+}
+
+/** Mobile Trennwände im Saal (Holzoptik, volle Höhe). */
+function buildPartitions(): THREE.Group {
+  const g = new THREE.Group()
+  for (const seg of PARTITIONS_PX) g.add(segmentBox(seg, 0, VENUE.wallHeight - 0.3, 0.12, VENUE.woodColor))
   return g
 }
 
@@ -314,7 +332,7 @@ interface Props {
 /** Schlichte 3D-Ansicht der aktuellen Phase: Grundriss am Boden, Objekte als Blöcke mit typischer Höhe. */
 export default function Venue3D({ onClose }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
-  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
+  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; partitions: THREE.Group; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
   const items = useEventStore((s) => s.items)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const phaseName = useEventStore((s) => s.phases.find((p) => p.id === s.currentPhaseId)?.name ?? '')
@@ -322,6 +340,7 @@ export default function Venue3D({ onClose }: Props) {
   const [eye, setEye] = useState(false)
   const [showWalls, setShowWalls] = useState(true)
   const [curtainOpen, setCurtainOpen] = useState(false)
+  const [showPartitions, setShowPartitions] = useState(false)
 
   // Szene einmalig aufbauen
   useEffect(() => {
@@ -359,12 +378,15 @@ export default function Venue3D({ onClose }: Props) {
     wallGroup.add(buildVenue())
     const curtainGroup = new THREE.Group()
     scene.add(curtainGroup)
+    const partitionGroup = buildPartitions()
+    partitionGroup.visible = false
+    scene.add(partitionGroup)
 
     const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.1, 500)
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI / 2 - 0.02
-    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, camera, controls }
+    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, partitions: partitionGroup, camera, controls }
 
     let raf = 0
     const loop = () => {
@@ -421,6 +443,10 @@ export default function Venue3D({ onClose }: Props) {
   }, [curtainOpen, hideCodes])
 
   useEffect(() => {
+    if (sceneRef.current) sceneRef.current.partitions.visible = showPartitions
+  }, [showPartitions, hideCodes])
+
+  useEffect(() => {
     if (sceneRef.current) sceneRef.current.walls.visible = showWalls
   }, [showWalls, hideCodes])
 
@@ -463,6 +489,13 @@ export default function Venue3D({ onClose }: Props) {
         </button>
         <button onClick={() => setCurtainOpen((v) => !v)} className={islandBtn('plain', 'h-8 px-2.5 text-[11px] font-medium')}>
           {curtainOpen ? 'Vorhang zu' : 'Vorhang auf'}
+        </button>
+        <button
+          onClick={() => setShowPartitions((v) => !v)}
+          className={islandBtn(showPartitions ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
+          title="Mobile Trennwände im großen Saal (teilen ihn in drei Teile)"
+        >
+          Trennwände
         </button>
         <button onClick={() => setShowWalls((v) => !v)} className={islandBtn(showWalls ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
           Wände
