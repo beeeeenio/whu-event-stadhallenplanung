@@ -3,6 +3,7 @@ import { Group, Rect, Circle, Line, Text } from 'react-konva'
 import type { EventItem, PhaseData } from '../types'
 import { metersToPixels } from '../utils/scale'
 import { getDefaultColor } from '../utils/itemColors'
+import { forexEdge } from '../utils/forex'
 import { snapToGrid } from '../utils/snapping'
 import type Konva from 'konva'
 
@@ -203,6 +204,26 @@ function EventItemShape({
                 fill={lightColor}
                 stroke={isSelected ? '#2563eb' : baseColor}
                 strokeWidth={isSelected ? 2 : 1}
+                perfectDrawEnabled={false}
+                listening={false}
+              />
+            )
+          })}
+          {/* Forex-Blenden: kräftige Linie außen an der Kante */}
+          {(item.nivtecData?.forexPanels ?? []).map((panel) => {
+            const e = forexEdge(item.nivtecData!.pieces, panel)
+            if (!e) return null
+            const off = 0.06
+            const pts = [e.a.x + e.nx * off, e.a.y + e.ny * off, e.b.x + e.nx * off, e.b.y + e.ny * off].map((v) =>
+              metersToPixels(v, pixelsPerMeter),
+            )
+            return (
+              <Line
+                key={panel.id}
+                points={pts}
+                stroke={item.forexPrints?.[panel.id] ? '#f59e0b' : '#94a3b8'}
+                strokeWidth={Math.max(3, metersToPixels(0.08, pixelsPerMeter))}
+                lineCap="butt"
                 perfectDrawEnabled={false}
                 listening={false}
               />
