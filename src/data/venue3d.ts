@@ -52,7 +52,6 @@ export const WALL_SEGMENTS_PX: [number, number, number, number][] = [
   [1432, 720, 1432, 1085],
   [1238, 728, 1238, 1085],
   [1232, 1085, 1432, 1085],
-  [515, 1040, 1232, 1040],
   [515, 1040, 515, 1085],
   [0, 1085, 515, 1085],
   [0, 915, 660, 915],
@@ -77,18 +76,22 @@ export const DOORS_PX: [number, number, number][] = [
   // Nebenräume links
   [233, 664, 20],
   [34, 915, 22], [104, 915, 25], [174, 915, 22],
-  // Foyer → draußen (Glastüren unten)
-  [805, 1040, 36], [841, 1040, 36], [987, 1040, 37], [1026, 1040, 37], [1169, 1040, 37], [1208, 1040, 37],
+  // Foyer ↔ kleiner Saal (Raum 1): 2 Doppeltüren
+  [1238, 834, 63], [1238, 964, 64],
+  // Foyer-Glasfassade unten: Haupteingang (Windfang, 2 Türen) und 3 Doppeltüren nach draußen
+  [553, 1040, 60], [622, 1040, 60], [734, 1040, 63], [916, 1040, 63], [1099, 1040, 63],
 ]
 
 /**
- * Glasfassade zur Terrasse (Strecken in Plan-Pixeln): verglast bis `glassHeight`, darüber Wand.
+ * Glasfassaden (Terrasse oben, Foyer unten) (Strecken in Plan-Pixeln): verglast bis `glassHeight`, darüber Wand.
  * Türen aus DOORS_PX werden auch hier ausgespart.
  */
 export const GLASS_SEGMENTS_PX: [number, number, number, number][] = [
   [615, 268, 807, 268],
   [875, 268, 1069, 268],
   [1136, 268, 1330, 268],
+  // Foyer-Fassade unten (Haupteingang und Ausgänge)
+  [515, 1040, 1232, 1040],
 ]
 
 /**
