@@ -280,6 +280,9 @@ export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props
             <div className="flex justify-between"><span>Stühle gesamt</span><span className="font-mono text-ink">{counts.totalChairs}</span></div>
             <div className="flex justify-between"><span>Bühnenpodeste gesamt</span><span className="font-mono text-ink">{counts.totalPodiums}</span></div>
             <div className="flex justify-between"><span>Vorhang (lfm)</span><span className="font-mono text-ink">{counts.curtainMeters.toFixed(1)}</span></div>
+            {counts.forexPanels > 0 && (
+              <div className="flex justify-between"><span>Forex-Blenden</span><span className="font-mono text-ink">{counts.forexPanels}</span></div>
+            )}
           </div>
           <div className="border-t border-line px-4 py-2.5 flex items-center justify-between">
             <span className="text-xs text-ink3">Total <strong className="text-ink">{counts.total}</strong> Objekte</span>

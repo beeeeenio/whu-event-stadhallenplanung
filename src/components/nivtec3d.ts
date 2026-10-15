@@ -1,5 +1,6 @@
 import * as THREE from 'three'
-import type { Piece2D } from '../types'
+import type { ForexPanel, Piece2D } from '../types'
+import { forexEdge } from '../utils/forex'
 
 /**
  * NivTec-Podest in 3D — Darstellung übernommen aus dem NivTec-Konfigurator
@@ -144,6 +145,45 @@ function extrudeXZ(pts: Pt[], holes: Pt[][], h: number, deckY: number, mat: THRE
   return m
 }
 
+const FOREX_THICKNESS_MM = 5
+const FOREX_PRINT_TEXTURES = new Map<string, THREE.Texture>()
+const FOREX_EDGE = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.6 })
+
+function midKey(x: number, y: number): string {
+  return `${Math.round(x * 100)}|${Math.round(y * 100)}`
+}
+
+/** Forex-Platte direkt vor der Kante, vom Boden bis 1 cm unter Belag-Oberkante, Druck nach außen. */
+function buildForexPanel(
+  e: { a: Pt; b: Pt; nx: number; ny: number; length: number },
+  heightM: number,
+  thicknessMm: number,
+  print: string | undefined,
+): THREE.Mesh {
+  const h = Math.max(heightM - 0.01, 0.05)
+  const t = thicknessMm / 1000
+  let map: THREE.Texture | undefined
+  if (print) {
+    map = FOREX_PRINT_TEXTURES.get(print)
+    if (!map) {
+      map = new THREE.TextureLoader().load(print)
+      map.colorSpace = THREE.SRGBColorSpace
+      map.anisotropy = 8
+      FOREX_PRINT_TEXTURES.set(print, map)
+    }
+  }
+  const front = new THREE.MeshStandardMaterial({ color: map ? '#ffffff' : '#f8fafc', map, roughness: 0.5 })
+  // Box-Flächen: +x, -x, +y, -y, +z (außen, bedruckt), -z
+  const m = new THREE.Mesh(new THREE.BoxGeometry(e.length - 0.004, h, t), [FOREX_EDGE, FOREX_EDGE, FOREX_EDGE, FOREX_EDGE, front, FOREX_EDGE])
+  const off = MOLTON_OFFSET_M + t / 2
+  m.position.set((e.a.x + e.b.x) / 2 + e.nx * off, h / 2, (e.a.y + e.b.y) / 2 + e.ny * off)
+  // lokales +z soll entlang der Außennormale (nx, ny) zeigen
+  m.rotation.y = Math.atan2(e.nx, e.ny)
+  m.castShadow = true
+  m.receiveShadow = true
+  return m
+}
+
 function pointInPolygon(pt: Pt, poly: Pt[]): boolean {
   let inside = false
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -157,9 +197,22 @@ function pointInPolygon(pt: Pt, poly: Pt[]): boolean {
 /**
  * Baut das Podest im lokalen Koordinatensystem des Objekts (Meter, x rechts, z = Plan-y).
  * `heightM` = Oberkante Belag über Boden. `moltonColor` = Behang an freien Außenkanten (null = keiner).
+ * `forex` = bedruckte Forex-Blenden an einzelnen Kanten; dort entfällt der Molton.
  */
-export function buildNivtecDeck(pieces: Piece2D[], heightM: number, moltonColor: string | null): THREE.Group {
+export function buildNivtecDeck(
+  pieces: Piece2D[],
+  heightM: number,
+  moltonColor: string | null,
+  forex?: { panels: ForexPanel[]; prints?: Record<string, string> },
+): THREE.Group {
   const g = new THREE.Group()
+  const forexMidpoints = new Set<string>()
+  for (const panel of forex?.panels ?? []) {
+    const e = forexEdge(pieces, panel)
+    if (!e) continue
+    forexMidpoints.add(midKey((e.a.x + e.b.x) / 2, (e.a.y + e.b.y) / 2))
+    g.add(buildForexPanel(e, heightM, panel.thicknessMm ?? FOREX_THICKNESS_MM, forex?.prints?.[panel.id]))
+  }
   const deckY = Math.max(heightM - PANEL_THICKNESS_M, 0.02)
   const polys = pieces.map(piecePolygon)
 
@@ -208,6 +261,7 @@ export function buildNivtecDeck(pieces: Piece2D[], heightM: number, moltonColor:
           nx = -nx
           ny = -ny
         }
+        if (forexMidpoints.has(midKey(mx, my))) continue
         const probe = { x: mx + nx * 0.05, y: my + ny * 0.05 }
         if (polys.some((other, oi) => oi !== pi && pointInPolygon(probe, other))) continue
         const h = deckY

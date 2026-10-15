@@ -4,6 +4,8 @@ import { getDefaultColor } from '../utils/itemColors'
 import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
 import { downscaleImage, slicePrint } from '../utils/printImage'
+import { FOREX_SIDE_LABEL, forexEdge, freeEdgesWithoutPanel, frontEdgePanels, pieceKey, sortPanelsForPrint } from '../utils/forex'
+import type { ForexPanel } from '../types'
 import { btn, input as inputCls, island } from '../utils/ui'
 
 interface ActionProps {
@@ -206,6 +208,7 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
       {item.type !== 'text_label' && (
         <ColorSwatches item={item} />
       )}
+      {item.type === 'nivtec_group' && item.nivtecData && <ForexFields item={item} />}
       <div className="flex flex-col gap-1.5 pt-1">
         <button
           onClick={() => {
@@ -375,6 +378,104 @@ function ColorSwatches({ item }: { item: EventItem }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+/** NivTec-Bühne: Forex-Blenden an Außenkanten verwalten und bedrucken (Format: docs/plan-forex.md). */
+function ForexFields({ item }: { item: EventItem }) {
+  const setForex = useEventStore((s) => s.setForex)
+  const pieces = item.nivtecData?.pieces ?? []
+  const panels = item.nivtecData?.forexPanels ?? []
+  const free = freeEdgesWithoutPanel(pieces, panels)
+  const pieceNo = (pieceId: string) => pieces.findIndex((p, i) => pieceKey(p, i) === pieceId) + 1
+  const lengthOf = (ps: ForexPanel[]) => ps.reduce((s, p) => s + (forexEdge(pieces, p)?.length ?? 0), 0)
+
+  // Platten mit gleicher printGroup bilden eine Gruppe (ein Druck darüber), sonst je Platte
+  const groups = new Map<string, ForexPanel[]>()
+  for (const p of panels) {
+    const key = p.printGroup ?? `#${p.id}`
+    groups.set(key, [...(groups.get(key) ?? []), p])
+  }
+
+  const nextId = () => {
+    let n = 1
+    while (panels.some((p) => p.id === `fx-${n}`)) n++
+    return `fx-${n}`
+  }
+  const upload = async (group: ForexPanel[], e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const ordered = sortPanelsForPrint(pieces, group)
+      const parts = await slicePrint(file, ordered.map((p) => forexEdge(pieces, p)?.length ?? 1))
+      setForex(item.id, panels, Object.fromEntries(ordered.map((p, i) => [p.id, parts[i]])))
+    } catch (err) {
+      alert((err as Error).message)
+    }
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-ink3">Forex-Blenden ({panels.length})</span>
+        <button
+          onClick={() => setForex(item.id, [...panels, ...frontEdgePanels(pieces, panels)])}
+          className={btn('primaryOutline', 'sm')}
+          title="An alle freien Vorderkanten eine Forex-Platte setzen (ein gemeinsamer Druck)"
+        >
+          ＋ Vorderkanten
+        </button>
+      </div>
+      {[...groups.entries()].map(([key, group]) => {
+        const thumb = item.forexPrints?.[sortPanelsForPrint(pieces, group)[0].id]
+        const label =
+          group.length > 1
+            ? `${key === 'vorne' ? 'Vorderkante' : key} · ${group.length} Platten`
+            : `Podest ${pieceNo(group[0].pieceId)} · ${FOREX_SIDE_LABEL[group[0].side]}`
+        return (
+          <div key={key} className="flex items-center gap-2 rounded-lg bg-chip/60 p-1.5">
+            {thumb ? (
+              <img src={thumb} alt="Druck" className="h-6 w-12 rounded object-cover border border-line" />
+            ) : (
+              <div className="h-6 w-12 rounded bg-white border border-line" />
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="truncate text-ink">{label}</div>
+              <div className="text-[10px] text-ink3">{lengthOf(group).toFixed(1)} m breit</div>
+            </div>
+            <label className="text-accent cursor-pointer hover:underline" title="Ein Bild über diese Platten verteilen">
+              Druck
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => upload(group, e)} />
+            </label>
+            <button
+              onClick={() => setForex(item.id, panels.filter((p) => !group.includes(p)))}
+              className="text-red-700 hover:underline"
+              title="Blende(n) entfernen"
+            >
+              ✕
+            </button>
+          </div>
+        )
+      })}
+      {free.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => {
+            const f = free[Number(e.target.value)]
+            if (f) setForex(item.id, [...panels, { id: nextId(), pieceId: f.pieceId, side: f.side }])
+          }}
+          className={`w-full ${inputCls}`}
+        >
+          <option value="">Blende an weitere Kante …</option>
+          {free.map((f, i) => (
+            <option key={`${f.pieceId}|${f.side}`} value={i}>
+              Podest {f.index + 1} · {FOREX_SIDE_LABEL[f.side]} ({f.length.toFixed(1)} m)
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   )
 }
