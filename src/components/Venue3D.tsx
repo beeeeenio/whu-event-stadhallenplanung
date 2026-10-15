@@ -58,29 +58,60 @@ function box(w: number, hgt: number, d: number, x: number, y: number, z: number,
 }
 
 const VISIOVA_ALU = '#d4d6d8'
-const VISIOVA_PROFILE_M = 0.055
+/** V55: 55 mm Profiltiefe; sichtbare Profilbreite geschätzt ca. 30 mm. Lochraster 62 mm (visiova.de). */
+const VISIOVA_DEPTH_M = 0.055
+const VISIOVA_FACE_M = 0.03
+const VISIOVA_HOLE_PITCH_M = 0.062
 const PRINT_TEXTURES = new Map<string, THREE.Texture>()
 
+let holeCanvas: HTMLCanvasElement | null = null
+/** Profilseite mit Lochreihe (ein Loch je Kachel); wird in Profil-Längsrichtung wiederholt. */
+function holeTexture(lengthM: number): THREE.Texture {
+  if (!holeCanvas) {
+    holeCanvas = document.createElement('canvas')
+    holeCanvas.width = 64
+    holeCanvas.height = 64
+    const ctx = holeCanvas.getContext('2d')!
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, 64, 64)
+    ctx.fillStyle = '#3f3f46'
+    ctx.beginPath()
+    ctx.arc(32, 32, 13, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  const t = new THREE.CanvasTexture(holeCanvas)
+  t.wrapS = t.wrapT = THREE.RepeatWrapping
+  t.repeat.set(lengthM / VISIOVA_HOLE_PITCH_M, 1)
+  return t
+}
+
 /**
- * Visiova-Rahmen 55: Alu-Profil 55 mm, einseitig bespannter Druck (Vorderseite = Plan-„unten“,
- * also +z lokal), Rückseite weiß, zwei Standfüße. Lokaler Ursprung = linke vordere Ecke wie in 2D.
+ * Visiova V55 Systemrahmen: gelochtes Alu-Profil (55 mm tief), einseitig bespannter Druck
+ * (Vorderseite = Plan-„unten“, also +z lokal), Rückseite offen/weiß, Bodenplatten.
+ * Lokaler Ursprung = linke vordere Ecke wie in 2D.
  */
 function buildVisiovaFrame(w: number, h: number, print: string | undefined, aluColor: string): THREE.Group {
   const g = new THREE.Group()
-  const P = VISIOVA_PROFILE_M
-  const D = VISIOVA_PROFILE_M
-  const lift = 0.05 // Rahmen steht auf den Füßen etwas über dem Boden
-  const alu = new THREE.MeshStandardMaterial({ color: aluColor, metalness: 0.8, roughness: 0.35 })
-  const bar = (bw: number, bh: number, x: number, y: number) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, D), alu)
+  const F = VISIOVA_FACE_M
+  const D = VISIOVA_DEPTH_M
+  const lift = 0.01 // Bodenplatte
+  const plain = new THREE.MeshStandardMaterial({ color: aluColor, metalness: 0.8, roughness: 0.35 })
+  /** Profilstab: Seitenflächen (Tiefe) mit Lochreihe, Vorder-/Rückkante glatt. */
+  const bar = (len: number, horizontal: boolean, x: number, y: number) => {
+    const holed = new THREE.MeshStandardMaterial({ color: aluColor, metalness: 0.7, roughness: 0.4, map: holeTexture(len) })
+    if (!horizontal) holed.map!.rotation = Math.PI / 2
+    const geo = horizontal ? new THREE.BoxGeometry(len, F, D) : new THREE.BoxGeometry(F, len, D)
+    // Box-Flächen: +x, -x, +y, -y, +z, -z → Lochreihe auf den Flächen quer zur Rahmenebene
+    const mats = horizontal ? [plain, plain, holed, holed, plain, plain] : [holed, holed, plain, plain, plain, plain]
+    const m = new THREE.Mesh(geo, mats)
     m.position.set(x, y, D / 2)
     m.castShadow = true
     g.add(m)
   }
-  bar(w, P, w / 2, lift + h - P / 2)
-  bar(w, P, w / 2, lift + P / 2)
-  bar(P, h - 2 * P, P / 2, lift + h / 2)
-  bar(P, h - 2 * P, w - P / 2, lift + h / 2)
+  bar(w, true, w / 2, lift + h - F / 2)
+  bar(w, true, w / 2, lift + F / 2)
+  bar(h - 2 * F, false, F / 2, lift + h / 2)
+  bar(h - 2 * F, false, w - F / 2, lift + h / 2)
   let map: THREE.Texture | undefined
   if (print) {
     map = PRINT_TEXTURES.get(print)
@@ -91,24 +122,23 @@ function buildVisiovaFrame(w: number, h: number, print: string | undefined, aluC
       PRINT_TEXTURES.set(print, map)
     }
   }
+  // Textildruck mit Keder: bedeckt die Rahmenfront bis auf einen schmalen Rand
   const front = new THREE.Mesh(
-    new THREE.PlaneGeometry(w - 2 * P + 0.01, h - 2 * P + 0.01),
+    new THREE.PlaneGeometry(w - 0.006, h - 0.006),
     new THREE.MeshStandardMaterial({ color: map ? '#ffffff' : '#f3f4f6', map, roughness: 0.9 }),
   )
-  front.position.set(w / 2, lift + h / 2, D + 0.001) // Druckseite zeigt nach +z (im Plan „unten“)
+  front.position.set(w / 2, lift + h / 2, D + 0.002)
   g.add(front)
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * P, h - 2 * P), new THREE.MeshStandardMaterial({ color: '#f3f4f6', roughness: 0.9 }))
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * F, h - 2 * F), new THREE.MeshStandardMaterial({ color: '#f3f4f6', roughness: 0.9 }))
   back.rotation.y = Math.PI
-  back.position.set(w / 2, lift + h / 2, -0.001)
+  back.position.set(w / 2, lift + h / 2, 0.01)
   g.add(back)
-  for (const x of [0.06, w - 0.06]) {
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.03, 0.45), alu)
-    foot.position.set(x, 0.015, D / 2)
-    foot.castShadow = true
-    g.add(foot)
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.04, lift, 0.04), alu)
-    post.position.set(x, lift / 2, D / 2)
-    g.add(post)
+  // Bodenplatten an beiden Enden
+  for (const x of [F / 2, w - F / 2]) {
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.12, lift, 0.4), plain)
+    plate.position.set(x, lift / 2, D / 2)
+    plate.receiveShadow = true
+    g.add(plate)
   }
   return g
 }
@@ -155,7 +185,7 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
       g.add(box(w, 0.02, d, w / 2, 0.01, d / 2, color, 0.45))
       break
     case 'visiova_frame':
-      g.add(buildVisiovaFrame(w, item.frameHeight ?? 2.5, item.printImage, item.color || VISIOVA_ALU))
+      g.add(buildVisiovaFrame(w, item.frameHeight ?? 2.48, item.printImage, item.color || VISIOVA_ALU))
       break
     case 'curtain':
       g.add(box(w, hgt, 0.08, w / 2, hgt / 2, 0, item.color || VENUE.curtainColor))

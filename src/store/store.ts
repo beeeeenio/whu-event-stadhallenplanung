@@ -95,6 +95,8 @@ interface Store extends EventState {
   setItemColor: (itemId: string, color: string | null) => void
   /** Visiova-Rahmen: Druck (Data-URL) setzen bzw. mit null entfernen. */
   setItemPrint: (itemId: string, image: string | null) => void
+  /** Mehrere Drucke auf einmal setzen (ein Undo-Schritt), z. B. ein Bild über mehrere Rahmen verteilt. */
+  setItemPrints: (prints: Record<string, string>) => void
   /** Visiova-Rahmen: Rahmenhöhe in Metern. */
   setFrameHeight: (itemId: string, heightM: number) => void
   /** Sperrt/entsperrt ein Objekt gegen Verschieben und Drehen (unabhängig von der Phase). */
@@ -509,6 +511,17 @@ export const useEventStore = create<Store>((set, get) => {
         if (!state.items[itemId]) return state
         pushHistory()
         return patchItemInCurrentPhase(state, itemId, { printImage: image ?? undefined })
+      })
+    },
+
+    setItemPrints: (prints) => {
+      set((state) => {
+        const ids = Object.keys(prints).filter((id) => state.items[id])
+        if (ids.length === 0) return state
+        pushHistory()
+        let next: Pick<EventState, 'items' | 'itemOrder'> = { items: state.items, itemOrder: state.itemOrder }
+        for (const id of ids) next = patchItemInCurrentPhase({ ...state, ...next }, id, { printImage: prints[id] })
+        return next
       })
     },
 

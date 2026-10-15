@@ -3,6 +3,7 @@ import { useEventStore, AREA_COLORS, NIVTEC_COLORS, OBJECT_COLORS } from '../sto
 import { getDefaultColor } from '../utils/itemColors'
 import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
+import { downscaleImage, slicePrint } from '../utils/printImage'
 import { btn, input as inputCls, island } from '../utils/ui'
 
 interface ActionProps {
@@ -86,6 +87,8 @@ export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpe
 
 interface MultiActionProps {
   count: number
+  /** Ausgewählte Visiova-Rahmen in Reihenfolge entlang der Wand (ab 2 Stück: Druck verteilen). */
+  visiovaFrames?: EventItem[]
   onCopyToLaterPhases?: () => void
   onHide: () => void
   onDelete: () => void
@@ -93,13 +96,31 @@ interface MultiActionProps {
 
 /** Leiste für die Mehrfachauswahl: nur die gemeinsamen Aktionen (Verschieben passiert direkt per
  *  Ziehen eines der ausgewählten Objekte, dafür braucht es keinen eigenen Button). */
-export function MultiSelectionBar({ count, onCopyToLaterPhases, onHide, onDelete }: MultiActionProps) {
+export function MultiSelectionBar({ count, visiovaFrames, onCopyToLaterPhases, onHide, onDelete }: MultiActionProps) {
+  const setItemPrints = useEventStore((s) => s.setItemPrints)
+  const onSpreadPrint = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !visiovaFrames) return
+    try {
+      const parts = await slicePrint(file, visiovaFrames.map((f) => f.width))
+      setItemPrints(Object.fromEntries(visiovaFrames.map((f, i) => [f.id, parts[i]])))
+    } catch (err) {
+      alert((err as Error).message)
+    }
+  }
   const cell = 'h-9 px-2.5 rounded-lg text-xs font-medium text-ink hover:bg-chip inline-flex items-center gap-1 whitespace-nowrap'
   return (
     <div className={`flex items-center gap-0.5 p-1 rounded-xl ${island}`} onMouseDown={(e) => e.stopPropagation()}>
       <span className="h-9 px-2.5 rounded-lg text-[11px] font-semibold font-mono bg-accent-soft text-accent inline-flex items-center whitespace-nowrap">
         {count} Objekte ausgewählt
       </span>
+      {visiovaFrames && visiovaFrames.length >= 2 && (
+        <label className={`${cell} cursor-pointer`} title="Ein Bild über alle ausgewählten Visiova-Rahmen verteilen (von links nach rechts, Anteile nach Rahmenbreite)">
+          🖼 Druck über {visiovaFrames.length} Rahmen
+          <input type="file" accept="image/*" className="hidden" onChange={onSpreadPrint} />
+        </label>
+      )}
       {onCopyToLaterPhases && (
         <button onClick={onCopyToLaterPhases} className={cell} title="Alle so, wie sie hier sind, als eigenständige Kopien in alle folgenden Phasen übernehmen">
           ⇥ In folgende Phasen
@@ -358,34 +379,17 @@ function ColorSwatches({ item }: { item: EventItem }) {
   )
 }
 
-/** Druck auf max. 1600 px (lange Kante) als JPEG verkleinern, damit das Projekt klein bleibt. */
-function downscaleImage(file: File, maxPx = 1600): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      const scale = Math.min(1, maxPx / Math.max(img.width, img.height))
-      const c = document.createElement('canvas')
-      c.width = Math.round(img.width * scale)
-      c.height = Math.round(img.height * scale)
-      c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
-      URL.revokeObjectURL(url)
-      resolve(c.toDataURL('image/jpeg', 0.85))
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error('Bild konnte nicht gelesen werden'))
-    }
-    img.src = url
-  })
-}
+/** Visiova V55: lieferbare Rahmenmaße (visiova.de, 62-mm-Lochraster). */
+const VISIOVA_WIDTHS_MM = [310, 496, 744, 992]
+const VISIOVA_HEIGHTS_MM = [992, 1488, 1984, 2480, 2976]
+const VISIOVA_DEFAULT_HEIGHT_M = 2.48
 
 /** Visiova-Rahmen: Breite/Höhe und eingesetzter Druck (einseitig). */
 function VisiovaFields({ item }: { item: EventItem }) {
   const resizeItem = useEventStore((s) => s.resizeItem)
   const setFrameHeight = useEventStore((s) => s.setFrameHeight)
   const setItemPrint = useEventStore((s) => s.setItemPrint)
-  const frameHeight = item.frameHeight ?? 2.5
+  const frameHeight = item.frameHeight ?? VISIOVA_DEFAULT_HEIGHT_M
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -400,26 +404,34 @@ function VisiovaFields({ item }: { item: EventItem }) {
     <div className="space-y-2">
       <div className="flex gap-2">
         <label className="flex-1 space-y-1">
-          <span className="text-ink3">Breite (m)</span>
-          <input
-            type="number"
-            step={0.1}
-            min={0.3}
-            value={Math.round(item.width * 100) / 100}
-            onChange={(e) => resizeItem(item.id, Number(e.target.value), item.height)}
+          <span className="text-ink3">Breite</span>
+          <select
+            value={VISIOVA_WIDTHS_MM.includes(Math.round(item.width * 1000)) ? Math.round(item.width * 1000) : ''}
+            onChange={(e) => resizeItem(item.id, Number(e.target.value) / 1000, item.height)}
             className={`w-full ${inputCls}`}
-          />
+          >
+            {!VISIOVA_WIDTHS_MM.includes(Math.round(item.width * 1000)) && <option value="">{item.width} m</option>}
+            {VISIOVA_WIDTHS_MM.map((mm) => (
+              <option key={mm} value={mm}>
+                {mm} mm
+              </option>
+            ))}
+          </select>
         </label>
         <label className="flex-1 space-y-1">
-          <span className="text-ink3">Höhe (m)</span>
-          <input
-            type="number"
-            step={0.1}
-            min={0.3}
-            value={Math.round(frameHeight * 100) / 100}
-            onChange={(e) => setFrameHeight(item.id, Number(e.target.value))}
+          <span className="text-ink3">Höhe</span>
+          <select
+            value={VISIOVA_HEIGHTS_MM.includes(Math.round(frameHeight * 1000)) ? Math.round(frameHeight * 1000) : ''}
+            onChange={(e) => setFrameHeight(item.id, Number(e.target.value) / 1000)}
             className={`w-full ${inputCls}`}
-          />
+          >
+            {!VISIOVA_HEIGHTS_MM.includes(Math.round(frameHeight * 1000)) && <option value="">{frameHeight} m</option>}
+            {VISIOVA_HEIGHTS_MM.map((mm) => (
+              <option key={mm} value={mm}>
+                {mm} mm
+              </option>
+            ))}
+          </select>
         </label>
       </div>
       <div>

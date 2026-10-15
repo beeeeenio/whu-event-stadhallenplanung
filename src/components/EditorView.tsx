@@ -115,6 +115,18 @@ export default function EditorView() {
   const rotateItem = useEventStore((s) => s.rotateItem)
   const duplicateItem = useEventStore((s) => s.duplicateItem)
   const copyItemsToLaterPhases = useEventStore((s) => s.copyItemsToLaterPhases)
+  const allItems = useEventStore((s) => s.items)
+  // Ausgewählte Visiova-Rahmen entlang ihrer Ausrichtung sortiert (links → rechts aus Sicht der Druckseite)
+  const selectedVisiovaFrames = useMemo(() => {
+    const frames = selectedIds.map((id) => allItems[id]).filter((it) => it?.type === 'visiova_frame')
+    if (frames.length < 2) return undefined
+    const rot = ((frames[0].phaseData[currentPhaseId]?.rotation ?? 0) * Math.PI) / 180
+    const along = (it: EventItem) => {
+      const pd = it.phaseData[currentPhaseId]
+      return pd ? pd.x * Math.cos(rot) + pd.y * Math.sin(rot) : 0
+    }
+    return [...frames].sort((a, b) => along(a) - along(b))
+  }, [selectedIds, allItems, currentPhaseId])
   const hasLaterPhases = useEventStore((s) => {
     const sorted = sortPhases(s.phases)
     return sorted[sorted.length - 1]?.id !== s.currentPhaseId
@@ -543,6 +555,7 @@ export default function EditorView() {
         <div className="absolute z-10" style={multiBarStyle}>
           <MultiSelectionBar
             count={selectedIds.length}
+            visiovaFrames={selectedVisiovaFrames}
             onCopyToLaterPhases={hasLaterPhases ? () => copyItemsToLaterPhases(selectedIds) : undefined}
             onHide={hideSelection} onDelete={deleteSelection} />
         </div>
