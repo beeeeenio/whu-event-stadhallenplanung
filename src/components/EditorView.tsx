@@ -77,6 +77,7 @@ export default function EditorView() {
   const setGridEnabled = useEventStore((s) => s.setGridEnabled)
   const setGridSize = useEventStore((s) => s.setGridSize)
   const codesHidden = useEventStore((s) => !!s.layers.hideCodes)
+  const [show3D, setShow3D] = useState(false)
   const toggleLayer = useEventStore((s) => s.toggleLayer)
 
   // Restore grid settings from localStorage on mount
@@ -643,6 +644,7 @@ export default function EditorView() {
         onGridToggle={() => setGridEnabled(!gridEnabled)}
         codesHidden={codesHidden}
         onCodesToggle={() => toggleLayer('hideCodes')}
+        on3D={() => setShow3D(true)}
       />
 
       {/* Tastatur-Hilfe */}

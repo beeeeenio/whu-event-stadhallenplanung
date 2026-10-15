@@ -29,6 +29,7 @@ interface FloatingToolbarProps {
   onGridToggle: () => void
   codesHidden: boolean
   onCodesToggle: () => void
+  on3D?: () => void
 }
 
 // Helper functions for dock tools
@@ -86,6 +87,7 @@ export default function FloatingToolbar({
   onGridToggle,
   codesHidden,
   onCodesToggle,
+  on3D,
 }: FloatingToolbarProps) {
 
   return (
@@ -201,6 +203,11 @@ export default function FloatingToolbar({
         >
           Codes
         </button>
+        {on3D && (
+          <button onClick={on3D} className={islandBtn('plain', 'h-9 px-2 text-[11px] font-medium')} title="Aktuelle Phase in 3D ansehen">
+            3D
+          </button>
+        )}
         <button
           onClick={onExportImage}
           className={islandBtn('plain', 'h-9 w-9 p-0 text-lg')}

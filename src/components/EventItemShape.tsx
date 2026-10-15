@@ -6,7 +6,7 @@ import { snapToGrid } from '../utils/snapping'
 import type Konva from 'konva'
 
 /** Default colors for each item type */
-function getDefaultColor(type: ItemType): string {
+export function getDefaultColor(type: ItemType): string {
   const defaults: Record<ItemType, string> = {
     table_round: '#FCD34D',      // yellow
     table_rect: '#FCD34D',       // yellow

@@ -16,6 +16,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-konva": "^19.3.0",
+    "three": "^0.180.0",
     "use-image": "^1.1.4",
     "uuid": "^14.0.2",
     "zustand": "^5.0.15"
@@ -25,6 +26,7 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "@types/three": "^0.186.0",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^6.1.1",
     "autoprefixer": "^10.6.1",
