@@ -83,6 +83,8 @@ export interface EventItem {
   grid?: { rows: number; cols: number; spacingM: number }
   /** Freitext-Notiz zum Objekt (z. B. „Kabel bis Bühne legen”). */
   note?: string
+  /** Nur 'visiova_frame': Breiten der Rahmen einer Wand (m), links → rechts; fehlt = ein Rahmen mit `width`. */
+  visiovaFrames?: number[]
   /** Nur 'visiova_frame': Rahmenhöhe in Metern (die 2D-Tiefe `height` ist die Profiltiefe). */
   frameHeight?: number
   /** Nur 'nivtec_group': Druckbilder der Forex-Blenden je ForexPanel.id (verkleinerte JPEG-Data-URLs). */
