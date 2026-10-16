@@ -21,6 +21,7 @@ export type ItemType =
   | 'screen'
   | 'pipe_drape'
   | 'visiova_frame'
+  | 'foam_letters'
   | 'text_label'
   | 'custom_rect'
   | 'custom_round'
@@ -91,6 +92,8 @@ export interface EventItem {
   forexPrints?: Record<string, string>
   /** Nur 'visiova_frame': eingesetzter Druck (Vorderseite) als verkleinertes JPEG-Data-URL. */
   printImage?: string
+  /** Nur 'foam_letters': Text des Schriftzugs (ein Styropor-Buchstabe je Zeichen). */
+  letterText?: string
   /** Gegen versehentliches Verschieben/Drehen gesperrt (z. B. fest stehende Bühne). */
   locked?: boolean
 }

@@ -26,6 +26,7 @@ export const ITEM_LIBRARY: ItemTemplate[] = [
   { type: 'curtain', label: 'Vorhang/Molton', width: 3, height: 0.1, icon: '╱', category: 'infrastructure' },
   { type: 'pipe_drape', label: 'Pipe & Drape (3x0,2m)', width: 3, height: 0.2, icon: '╫', category: 'infrastructure' },
   { type: 'visiova_frame', label: 'Visiova V55 (992x2480mm)', width: 0.992, height: 0.055, icon: '▯', category: 'infrastructure' },
+  { type: 'foam_letters', label: 'Styropor-Buchstaben „WHU“', width: 1.6, height: 0.2, icon: 'A', category: 'infrastructure' },
   { type: 'podium', label: 'Bühnenpodest (2x1m)', width: 2, height: 1, icon: '▦', category: 'infrastructure' },
   { type: 'exhibition_stand', label: 'Messestand (2x2m)', width: 2, height: 2, icon: '▧', category: 'infrastructure' },
   { type: 'coat_rack', label: 'Garderobenständer', width: 0.6, height: 0.6, icon: '↟', category: 'infrastructure' },
