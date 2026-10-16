@@ -317,7 +317,7 @@ function EventItemShape({
           {/* Jeder Styropor-Buchstabe als eigener Block, das Zeichen steht davor (Leserichtung) */}
           {letterSlots(item.letterText ?? FOAM_DEFAULT_TEXT).map((slot, i) => {
             const x = metersToPixels(slot.x, pixelsPerMeter)
-            const sw = metersToPixels(FOAM_LETTER.widthM, pixelsPerMeter)
+            const sw = metersToPixels(slot.w, pixelsPerMeter)
             return (
               <Group key={i}>
                 <Rect
@@ -336,7 +336,7 @@ function EventItemShape({
                   y={h + 1}
                   width={sw}
                   align="center"
-                  fontSize={sw * 0.9}
+                  fontSize={metersToPixels(FOAM_LETTER.widthM, pixelsPerMeter) * 0.9}
                   fontStyle="bold"
                   fill={isSelected ? '#2563eb' : '#1f2937'}
                 />
