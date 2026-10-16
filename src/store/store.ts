@@ -188,6 +188,19 @@ export interface CustomItemSpec {
  * aufgeteilt: Die anderen Phasen behalten eine Kopie mit den alten Eigenschaften, das
  * Objekt selbst (gleiche ID, Auswahl bleibt erhalten) gilt danach nur noch für diese Phase.
  */
+/** Styropor-Schriftzüge aus älteren Ständen: Breite an die aktuelle Buchstabenbreite anpassen. */
+function normalizeFoamLetters(items: Record<string, EventItem>): Record<string, EventItem> {
+  let changed: Record<string, EventItem> | null = null
+  for (const [id, item] of Object.entries(items)) {
+    if (item.type !== 'foam_letters') continue
+    const width = foamLettersWidth(item.letterText ?? FOAM_DEFAULT_TEXT)
+    if (Math.abs(item.width - width) < 1e-6) continue
+    changed ??= { ...items }
+    changed[id] = { ...item, width }
+  }
+  return changed ?? items
+}
+
 function patchItemInCurrentPhase(
   state: EventState,
   itemId: string,
@@ -1048,6 +1061,7 @@ export const useEventStore = create<Store>((set, get) => {
     importProject: (data) =>
       set({
         ...data,
+        items: normalizeFoamLetters(data.items),
         historyPast: [],
         historyFuture: [],
       }),
@@ -1055,6 +1069,7 @@ export const useEventStore = create<Store>((set, get) => {
     hydrate: (data) =>
       set({
         ...data,
+        items: normalizeFoamLetters(data.items),
         historyPast: [],
         historyFuture: [],
       }),
