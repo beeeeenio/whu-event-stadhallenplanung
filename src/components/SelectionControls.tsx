@@ -5,6 +5,7 @@ import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
 import { downscaleImage, slicePrint } from '../utils/printImage'
 import { describeVisiovaRun } from '../utils/visiova'
+import { FOAM_DEFAULT_TEXT, FOAM_LETTER, foamLettersWidth, letterSlots } from '../utils/foamLetters'
 import { FOREX_SIDE_LABEL, forexEdge, freeEdgesWithoutPanel, frontEdgePanels, pieceKey, sortPanelsForPrint } from '../utils/forex'
 import type { ForexPanel } from '../types'
 import { btn, input as inputCls, island } from '../utils/ui'
@@ -90,17 +91,26 @@ export function SelectionBar({ item, onDuplicate, onDelete, onHideInPhase, onOpe
 
 interface MultiActionProps {
   count: number
+  /** IDs der ausgewählten Objekte (Grundlage für Drehen, Ausrichten, Verteilen, Sperren). */
+  ids: string[]
   /** Ausgewählte Visiova-Rahmen in Reihenfolge entlang der Wand (ab 2 Stück: Druck verteilen). */
   visiovaFrames?: EventItem[]
   onCopyToLaterPhases?: () => void
+  onDuplicate: () => void
   onHide: () => void
   onDelete: () => void
 }
 
-/** Leiste für die Mehrfachauswahl: nur die gemeinsamen Aktionen (Verschieben passiert direkt per
- *  Ziehen eines der ausgewählten Objekte, dafür braucht es keinen eigenen Button). */
-export function MultiSelectionBar({ count, visiovaFrames, onCopyToLaterPhases, onHide, onDelete }: MultiActionProps) {
+/** Leiste für die Mehrfachauswahl: gemeinsame Aktionen (Duplizieren, Drehen, Ausrichten, Verteilen,
+ *  Sperren). Verschieben passiert direkt per Ziehen eines der ausgewählten Objekte. */
+export function MultiSelectionBar({ count, ids, visiovaFrames, onCopyToLaterPhases, onDuplicate, onHide, onDelete }: MultiActionProps) {
   const setItemPrints = useEventStore((s) => s.setItemPrints)
+  const rotateItems = useEventStore((s) => s.rotateItems)
+  const alignItems = useEventStore((s) => s.alignItems)
+  const distributeItems = useEventStore((s) => s.distributeItems)
+  const setItemsLocked = useEventStore((s) => s.setItemsLocked)
+  const allLocked = useEventStore((s) => ids.every((id) => !!s.items[id]?.locked))
+  const [showAlign, setShowAlign] = useState(false)
   const onSpreadPrint = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -113,28 +123,78 @@ export function MultiSelectionBar({ count, visiovaFrames, onCopyToLaterPhases, o
     }
   }
   const cell = 'h-9 px-2.5 rounded-lg text-xs font-medium text-ink hover:bg-chip inline-flex items-center gap-1 whitespace-nowrap'
+  const alignCell = 'h-9 w-9 rounded-lg text-sm font-medium text-ink hover:bg-chip inline-flex items-center justify-center'
+  const alignButtons: { text: string; title: string; mode: 'left' | 'centerX' | 'right' | 'top' | 'centerY' | 'bottom' }[] = [
+    { text: '⇤', title: 'Links ausrichten', mode: 'left' },
+    { text: '↔', title: 'Waagrecht mittig', mode: 'centerX' },
+    { text: '⇥', title: 'Rechts ausrichten', mode: 'right' },
+    { text: '⤒', title: 'Oben ausrichten', mode: 'top' },
+    { text: '↕', title: 'Senkrecht mittig', mode: 'centerY' },
+    { text: '⤓', title: 'Unten ausrichten', mode: 'bottom' },
+  ]
   return (
-    <div className={`flex items-center gap-0.5 p-1 rounded-xl ${island}`} onMouseDown={(e) => e.stopPropagation()}>
-      <span className="h-9 px-2.5 rounded-lg text-[11px] font-semibold font-mono bg-accent-soft text-accent inline-flex items-center whitespace-nowrap">
-        {count} Objekte ausgewählt
-      </span>
-      {visiovaFrames && visiovaFrames.length >= 2 && (
-        <label className={`${cell} cursor-pointer`} title="Ein Bild über alle ausgewählten Visiova-Rahmen verteilen (von links nach rechts, Anteile nach Rahmenbreite)">
-          🖼 Druck über {visiovaFrames.length} Rahmen
-          <input type="file" accept="image/*" className="hidden" onChange={onSpreadPrint} />
-        </label>
-      )}
-      {onCopyToLaterPhases && (
-        <button onClick={onCopyToLaterPhases} className={cell} title="Alle so, wie sie hier sind, als eigenständige Kopien in alle folgenden Phasen übernehmen">
-          ⇥ In folgende Phasen
+    <div className="flex flex-col items-center gap-1" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={`flex items-center gap-0.5 p-1 rounded-xl ${island}`} onMouseDown={(e) => e.stopPropagation()}>
+        <span className="h-9 px-2.5 rounded-lg text-[11px] font-semibold font-mono bg-accent-soft text-accent inline-flex items-center whitespace-nowrap">
+          {count} Objekte ausgewählt
+        </span>
+        <button onClick={onDuplicate} className={cell} title="Alle duplizieren (Strg/Cmd+D)">
+          ⧉ Duplizieren
         </button>
+        <button onClick={() => rotateItems(ids, 90)} className={cell} title="Jedes Objekt um 90° drehen (R)">
+          ⟳ 90°
+        </button>
+        <button
+          onClick={() => setShowAlign((v) => !v)}
+          className={`${cell} ${showAlign ? 'text-accent bg-accent-soft' : ''}`}
+          title="Ausrichten und Verteilen"
+        >
+          ⇹ Ausrichten
+        </button>
+        <button
+          onClick={() => setItemsLocked(ids, !allLocked)}
+          className={`${cell} ${allLocked ? 'text-accent bg-accent-soft hover:bg-accent-soft' : ''}`}
+          title={allLocked ? 'Alle entsperren (wieder verschieb-/drehbar per Maus)' : 'Alle sperren (gegen versehentliches Verschieben/Drehen per Maus)'}
+        >
+          {allLocked ? '🔓 Entsperren' : '🔒 Sperren'}
+        </button>
+        {visiovaFrames && visiovaFrames.length >= 2 && (
+          <label className={`${cell} cursor-pointer`} title="Ein Bild über alle ausgewählten Visiova-Rahmen verteilen (von links nach rechts, Anteile nach Rahmenbreite)">
+            🖼 Druck über {visiovaFrames.length} Rahmen
+            <input type="file" accept="image/*" className="hidden" onChange={onSpreadPrint} />
+          </label>
+        )}
+        {onCopyToLaterPhases && (
+          <button onClick={onCopyToLaterPhases} className={cell} title="Alle so, wie sie hier sind, als eigenständige Kopien in alle folgenden Phasen übernehmen">
+            ⇥ In folgende Phasen
+          </button>
+        )}
+        <button onClick={onHide} className={cell} title="Alle in dieser Phase ausblenden">
+          ◌ Ausblenden
+        </button>
+        <button onClick={onDelete} className={`${cell} text-red-700 hover:bg-red-50`} title="Alle löschen (Entf/⌫)">
+          Löschen
+        </button>
+      </div>
+      {showAlign && (
+        <div className={`flex items-center gap-0.5 p-1 rounded-xl ${island}`} onMouseDown={(e) => e.stopPropagation()}>
+          {alignButtons.map((b) => (
+            <button key={b.mode} onClick={() => alignItems(ids, b.mode)} className={alignCell} title={b.title}>
+              {b.text}
+            </button>
+          ))}
+          {ids.length >= 3 && (
+            <>
+              <button onClick={() => distributeItems(ids, 'horizontal')} className={cell} title="Gleiche Abstände waagrecht">
+                Verteilen ↔
+              </button>
+              <button onClick={() => distributeItems(ids, 'vertical')} className={cell} title="Gleiche Abstände senkrecht">
+                Verteilen ↕
+              </button>
+            </>
+          )}
+        </div>
       )}
-      <button onClick={onHide} className={cell} title="Alle in dieser Phase ausblenden">
-        ◌ Ausblenden
-      </button>
-      <button onClick={onDelete} className={`${cell} text-red-700 hover:bg-red-50`} title="Alle löschen (Entf/⌫)">
-        Löschen
-      </button>
     </div>
   )
 }
@@ -149,7 +209,6 @@ interface PanelProps {
 
 /** Vollständige Objekt-Eigenschaften (Bezeichnung, Größe, Drehung, Farbe). */
 export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, onDelete }: PanelProps) {
-  const resizeItem = useEventStore((s) => s.resizeItem)
   const toggleItemLocked = useEventStore((s) => s.toggleItemLocked)
   const copyItemsToLaterPhases = useEventStore((s) => s.copyItemsToLaterPhases)
   const [copied, setCopied] = useState(false)
@@ -166,40 +225,18 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
           ×
         </button>
       </div>
-      <LabelField item={item} />
+      <LabelField key={`${item.id}:${item.label}`} item={item} />
 
       {item.type === 'area' ? (
-        <div className="flex gap-2">
-          <label className="flex-1 space-y-1">
-            <span className="text-ink3">Breite (m)</span>
-            <input
-              type="number"
-              step={0.1}
-              min={0.1}
-              value={Math.round(item.width * 100) / 100}
-              onChange={(e) => resizeItem(item.id, Number(e.target.value), item.height)}
-              className={`w-full ${inputCls}`}
-            />
-          </label>
-          <label className="flex-1 space-y-1">
-            <span className="text-ink3">Tiefe (m)</span>
-            <input
-              type="number"
-              step={0.1}
-              min={0.1}
-              value={Math.round(item.height * 100) / 100}
-              onChange={(e) => resizeItem(item.id, item.width, Number(e.target.value))}
-              className={`w-full ${inputCls}`}
-            />
-          </label>
-        </div>
+        <AreaSizeFields key={`${item.id}:${item.width}:${item.height}`} item={item} />
       ) : item.type !== 'text_label' && item.type !== 'visiova_frame' ? (
         <div className="text-ink3">
           Größe: {item.width}m × {item.height}m
         </div>
       ) : null}
       {item.type === 'visiova_frame' && <VisiovaFields item={item} />}
-      <RotationField item={item} currentPhaseId={currentPhaseId} />
+      {item.type === 'foam_letters' && <FoamLetterField key={`${item.id}:${item.letterText ?? ''}`} item={item} />}
+      <RotationField key={`${item.id}:${Math.round(item.phaseData[currentPhaseId]?.rotation ?? 0)}`} item={item} currentPhaseId={currentPhaseId} />
       <label className="flex items-center justify-between gap-2 cursor-pointer select-none">
         <span className="text-ink3">Gegen Verschieben/Drehen per Maus sperren</span>
         <input type="checkbox" checked={!!item.locked} onChange={() => toggleItemLocked(item.id)} className="accent-accent w-4 h-4" />
@@ -238,6 +275,73 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
         </button>
       </div>
     </div>
+  )
+}
+
+/** Breite/Tiefe eines Bereichs: lokal tippen, bei Enter/Verlassen EIN Undo-Schritt, nie 0. */
+function AreaSizeFields({ item }: { item: EventItem }) {
+  const resizeItem = useEventStore((s) => s.resizeItem)
+  const fmt = (v: number) => String(Math.round(v * 100) / 100).replace('.', ',')
+  const [w, setW] = useState(fmt(item.width))
+  const [h, setH] = useState(fmt(item.height))
+  const commit = () => {
+    const nw = parseFloat(w.replace(',', '.'))
+    const nh = parseFloat(h.replace(',', '.'))
+    if (nw > 0 && nh > 0 && Number.isFinite(nw) && Number.isFinite(nh)) {
+      if (nw !== item.width || nh !== item.height) resizeItem(item.id, nw, nh)
+    } else {
+      setW(fmt(item.width))
+      setH(fmt(item.height))
+    }
+  }
+  const field = (label: string, value: string, set: (v: string) => void) => (
+    <label className="flex-1 space-y-1">
+      <span className="text-ink3">{label}</span>
+      <input
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => set(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          if (e.key === 'Escape') {
+            setW(fmt(item.width))
+            setH(fmt(item.height))
+          }
+        }}
+        className={`w-full ${inputCls}`}
+      />
+    </label>
+  )
+  return (
+    <div className="flex gap-2">
+      {field('Breite (m)', w, setW)}
+      {field('Tiefe (m)', h, setH)}
+    </div>
+  )
+}
+
+/** Styropor-Buchstaben: Text des Schriftzugs, beim Verlassen/Enter gespeichert (ein Undo-Schritt). */
+function FoamLetterField({ item }: { item: EventItem }) {
+  const setLetterText = useEventStore((s) => s.setLetterText)
+  const [value, setValue] = useState(item.letterText ?? FOAM_DEFAULT_TEXT)
+  const slots = letterSlots(value)
+  return (
+    <label className="block space-y-1">
+      <span className="text-ink3">Schriftzug</span>
+      <input
+        className={`w-full font-bold tracking-widest ${inputCls}`}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => setLetterText(item.id, value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        }}
+      />
+      <span className="block text-[11px] text-ink3">
+        {slots.length} Buchstaben à {FOAM_LETTER.widthM * 100} × {FOAM_LETTER.heightM * 100} cm · {foamLettersWidth(value).toFixed(2).replace('.', ',')} m breit
+      </span>
+    </label>
   )
 }
 

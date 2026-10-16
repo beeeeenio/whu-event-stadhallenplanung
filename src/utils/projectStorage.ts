@@ -21,11 +21,14 @@ export function loadProjectData(id: string): ProjectData | null {
   }
 }
 
-export function saveProjectData(id: string, data: ProjectData) {
+/** Gibt `true` zurück, wenn der Stand gespeichert werden konnte. */
+export function saveProjectData(id: string, data: ProjectData): boolean {
   try {
     localStorage.setItem(dataKey(id), JSON.stringify(data))
+    return true
   } catch {
     // localStorage voll oder nicht verfügbar – stiller Fehlschlag, Projekt bleibt im Speicher erhalten
+    return false
   }
 }
 
@@ -53,10 +56,13 @@ export function loadProjectVersions(id: string): ProjectVersion[] {
   }
 }
 
-export function saveProjectVersions(id: string, versions: ProjectVersion[]) {
+/** Gibt `true` zurück, wenn die Versionen gespeichert werden konnten. */
+export function saveProjectVersions(id: string, versions: ProjectVersion[]): boolean {
   try {
     localStorage.setItem(versionsKey(id), JSON.stringify(versions))
+    return true
   } catch {
     // localStorage voll oder nicht verfügbar – stiller Fehlschlag
+    return false
   }
 }
