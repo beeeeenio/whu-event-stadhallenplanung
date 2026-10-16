@@ -5,6 +5,7 @@ import { useEventStore } from '../store/store'
 import type { EventItem, ItemType, PhaseData } from '../types'
 import { DEFAULT_PIXELS_PER_METER, POWER_PLAN_NATIVE_PIXELS_PER_METER } from '../utils/scale'
 import { getDefaultColor } from '../utils/itemColors'
+import { worldCenter } from '../utils/geometry'
 import { buildNivtecDeck } from './nivtec3d'
 import { MODELS } from './models3d'
 import { COLUMNS_PX, DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
@@ -139,12 +140,23 @@ const DEFAULT_3D_COLOR: Partial<Record<ItemType, string>> = {
   curtain: VENUE.curtainColor,
 }
 
+/** Objekt steht auf der festen Bühne (Mittelpunkt innerhalb der Bühnenfläche) → auf Bühnenhöhe stellen. */
+function isOnStage(item: EventItem, pd: PhaseData): boolean {
+  const c = worldCenter(item, pd, PX)
+  const x = c.x / PX
+  const z = c.y / PX
+  return (
+    x >= STAGE_PX.x / NP && x <= (STAGE_PX.x + STAGE_PX.w) / NP && z >= STAGE_PX.y / NP && z <= (STAGE_PX.y + STAGE_PX.h) / NP
+  )
+}
+
 /** Ein Objekt als 3D-Modell; lokaler Ursprung = Konva-Ursprung (oben links bzw. Mitte bei runden). */
 function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
   if (item.type === 'text_label') return null
   const g = new THREE.Group()
   g.position.set(pd.x / PX, 0, pd.y / PX)
   g.rotation.y = -(pd.rotation * Math.PI) / 180
+  if (item.type !== 'truss' && isOnStage(item, pd)) g.position.y = VENUE.stageHeight
   const color = item.color || DEFAULT_3D_COLOR[item.type] || getDefaultColor(item.type)
   const w = item.width
 
