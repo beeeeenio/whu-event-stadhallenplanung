@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { onOpenMenu } from '../utils/uiEvents'
 import { v4 as uuid } from 'uuid'
 import { useEventStore } from '../store/store'
 import { useProjectsStore } from '../store/projectsStore'
@@ -12,6 +13,7 @@ export default function VersionsMenu() {
   const projectId = useProjectsStore((s) => s.currentProjectId)
   const restoreVersion = useEventStore((s) => s.restoreVersion)
   const [open, setOpen] = useState(false)
+  useEffect(() => onOpenMenu('versions', () => setOpen(true)), [])
   const [versions, setVersions] = useState<ProjectVersion[]>([])
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')

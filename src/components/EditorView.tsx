@@ -38,7 +38,7 @@ function screenBounds(item: EventItem, phaseId: string, vp: CanvasViewport) {
 const MOD = IS_MAC ? '⌘' : 'Strg+'
 
 const SHORTCUTS: [string, string][] = [
-  ['Befehlszeile', `${MOD}K`],
+  ['Befehlszeile (findet alle Funktionen)', `${MOD}K`],
   ['Auswählen / Messen / Bereich', 'V · M · B'],
   ['Objekte-Blatt', 'O'],
   ['Vorherige / nächste Phase', '[ · ]'],
@@ -51,9 +51,8 @@ const SHORTCUTS: [string, string][] = [
   ['Kopieren / Einfügen (auch in andere Phase)', `${MOD}C · ${MOD}V`],
   ['Duplizieren', `${MOD}D`],
   ['Zur Auswahl hinzufügen/entfernen', '⇧Klick'],
-  ['Mehrere per Rechteck wählen', '⇧ oder ⌥ + Ziehen auf freie Fläche'],
-  ['Ansicht verschieben', 'Ziehen auf freie Fläche · Leertaste+Ziehen · 2 Finger'],
-  ['Hand-Werkzeug (nur verschieben)', 'H'],
+  ['Alles in einem Bereich auswählen', 'Auswahl: Rahmen ziehen (⇧ ergänzt)'],
+  ['Ansicht verschieben', 'Hand (H) · Leertaste+Ziehen · 2 Finger'],
   ['Zoomen', 'Mausrad · Pinch · + / −'],
   ['Einpassen / Auswahl zeigen', '0 · ⇧2'],
   ['Löschen', '⌫'],
@@ -77,9 +76,7 @@ export default function EditorView() {
   const gridSize = useEventStore((s) => s.gridSize)
   const setGridEnabled = useEventStore((s) => s.setGridEnabled)
   const setGridSize = useEventStore((s) => s.setGridSize)
-  const codesHidden = useEventStore((s) => !!s.layers.hideCodes)
   const [show3D, setShow3D] = useState(false)
-  const toggleLayer = useEventStore((s) => s.toggleLayer)
 
   // Restore grid settings from localStorage on mount
   useEffect(() => {
@@ -405,6 +402,26 @@ export default function EditorView() {
     exportPhaseToPdf({ eventName: s.eventName, phase, items: s.items, currentPhaseId: s.currentPhaseId, planImageDataUrl })
   }, [])
 
+  const copySelection = useCallback(() => {
+    if (selectedIds.length === 0) return
+    const s = useEventStore.getState()
+    clipboardRef.current = {
+      items: selectedIds.map((id) => s.items[id]).filter((it): it is EventItem => !!it),
+      phaseId: s.currentPhaseId,
+      pastes: 0,
+    }
+  }, [selectedIds])
+
+  const pasteClipboard = useCallback(() => {
+    const cb = clipboardRef.current
+    if (!cb) return
+    // Gleiche Phase: versetzt einfügen; andere Phase: an derselben Stelle (Aufbau → Event übernehmen)
+    const samePhase = cb.phaseId === currentPhaseId
+    if (samePhase) cb.pastes += 1
+    const ids = pasteItems(cb.items, cb.phaseId, samePhase ? 20 * cb.pastes : 0)
+    if (ids.length > 0) selectMany(ids, false)
+  }, [currentPhaseId, pasteItems, selectMany])
+
   /** Dupliziert die komplette Auswahl in EINEM Schritt und wählt die Kopien aus. */
   const duplicateSelected = useCallback(() => {
     if (selectedIds.length === 0) return
@@ -445,8 +462,33 @@ export default function EditorView() {
       fitToView: () => canvasRef.current?.fitToView(),
       showShortcuts: () => setActivePanel('shortcuts'),
       goToProjects: closeProject,
+      open3D: () => setShow3D(true),
+      zoomIn: () => canvasRef.current?.zoomIn(),
+      zoomOut: () => canvasRef.current?.zoomOut(),
+      zoomToSelection: () => {
+        const s = useEventStore.getState()
+        const box = unionBox(
+          selectedIds
+            .map((id) => s.items[id])
+            .filter((it): it is EventItem => !!it?.phaseData[s.currentPhaseId])
+            .map((it) => worldBBox(it, it.phaseData[s.currentPhaseId], PPM)),
+        )
+        if (box) canvasRef.current?.zoomToBounds(box)
+      },
+      exportImage: () => void canvasRef.current?.exportImage(),
+      openText: () => setActivePanel('text'),
+      selectedIds,
+      selectAll: () => {
+        const s = useEventStore.getState()
+        selectMany(s.itemOrder.filter((id) => s.items[id]?.phaseData[s.currentPhaseId]?.visible && itemLevel(s.items[id]) === s.currentLevel), false)
+      },
+      clearSelection: () => select(null),
+      copySelection,
+      pasteClipboard,
+      duplicateSelection: duplicateSelected,
+      deleteSelection,
     }),
-    [placeType, placeChairRows, changeTool, openPicker, nivtec.open, handleExportPdf, closeProject, togglePanel],
+    [placeType, placeChairRows, changeTool, openPicker, nivtec.open, handleExportPdf, closeProject, togglePanel, selectedIds, selectMany, select, copySelection, pasteClipboard, duplicateSelected, deleteSelection],
   )
 
   useEffect(() => {
@@ -486,22 +528,12 @@ export default function EditorView() {
       }
       if (isMod && key === 'c' && selectedIds.length > 0) {
         e.preventDefault()
-        const s = useEventStore.getState()
-        clipboardRef.current = {
-          items: selectedIds.map((id) => s.items[id]).filter((it): it is EventItem => !!it),
-          phaseId: s.currentPhaseId,
-          pastes: 0,
-        }
+        copySelection()
         return
       }
       if (isMod && key === 'v' && clipboardRef.current) {
         e.preventDefault()
-        const cb = clipboardRef.current
-        // Gleiche Phase: versetzt einfügen; andere Phase: an derselben Stelle (Aufbau → Event übernehmen)
-        const samePhase = cb.phaseId === currentPhaseId
-        if (samePhase) cb.pastes += 1
-        const ids = pasteItems(cb.items, cb.phaseId, samePhase ? 20 * cb.pastes : 0)
-        if (ids.length > 0) selectMany(ids, false)
+        pasteClipboard()
         return
       }
       if (isMod && key === 'd' && selectedIds.length > 0) {
@@ -595,7 +627,7 @@ export default function EditorView() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [
-    undo, redo, rotateItems, nudgeItems, pasteItems, selectedIds, selectMany, duplicateSelected, deleteSelection, changeTool,
+    undo, redo, rotateItems, nudgeItems, copySelection, pasteClipboard, selectedIds, selectMany, duplicateSelected, deleteSelection, changeTool,
     select, activePanel, placement, tool, phases, currentPhaseId, setCurrentPhase, togglePanel, show3D, gridEnabled, gridSize,
   ])
 
@@ -822,8 +854,6 @@ export default function EditorView() {
         gridSize={gridSize}
         onGridSizeChange={setGridSize}
         onGridToggle={() => setGridEnabled(!gridEnabled)}
-        codesHidden={codesHidden}
-        onCodesToggle={() => toggleLayer('hideCodes')}
         on3D={() => setShow3D(true)}
       />
 
@@ -836,8 +866,8 @@ export default function EditorView() {
             </>
           ) : (
             <>
-              <b className="text-ink">Auswahl</b> Objekte anklicken oder ziehen · freie Fläche ziehen verschiebt die Ansicht ·{' '}
-              <b className="text-ink">⇧</b> + Ziehen wählt per Rechteck
+              <b className="text-ink">Auswahl</b> Rahmen ziehen wählt alles darin aus · Auswahl ziehen verschiebt, <b className="text-ink">⌫</b> löscht ·{' '}
+              <b className="text-ink">H</b> Hand zum Verschieben der Ansicht
             </>
           )}
         </div>
