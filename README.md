@@ -284,7 +284,8 @@ EventItem {
 - Mausrad zoomt.
 - Trackpad: zwei Finger verschieben, Pinch zoomt (`ctrlKey`).
 - Touch: Pinch und Pan.
-- Leertaste + Ziehen oder mittlere Maustaste verschieben die Ansicht.
+- Ziehen auf leerer Fläche (Links-Taste), Leertaste + Ziehen oder mittlere Maustaste verschieben die Ansicht. Ein Auswahlrechteck zieht man mit ⇧ (ergänzt die Auswahl) oder ⌥ (ersetzt sie).
+- Das **Hand-Werkzeug** (H) verschiebt nur die Ansicht, Objekte reagieren dann nicht. Cursor: Hand auf freier Fläche, Fadenkreuz bei gehaltener ⇧/⌥-Taste. Neben dem „?“ steht ein Hinweis zum aktuellen Werkzeug.
 - Die Auswahl passiert schon beim Drücken (`pointerdown`).
 
 **Tastenkürzel** (`EditorView.tsx`):
@@ -344,7 +345,14 @@ Plan und Hintergrund der Überarbeitung stehen in `docs/plan-2d-ueberarbeitung.m
   - Import aus dem NivTec-Tool. Gemeinsames Format: `docs/plan-forex.md`, Abschnitt „Gemeinsame Schnittstelle“.
   - Forex-Blenden (`nivtecData.forexPanels`) hängen nur an freien Außenkanten (`utils/forex.ts`). Drucke liegen in `forexPrints`.
   - Die Objektfarbe ist der Molton.
-- **Stuhlreihen** (`chair_row_group`): `grid = { rows, cols, spacingM }`. Die Stückliste zählt `rows × cols` Stühle.
+- **Stuhlreihen** (`chair_row_group`): `grid = { rows, cols, spacingM, rowSpacingM }`. Die Stückliste zählt `rows × cols` Stühle.
+  - Stuhlabstand 0,50 m, Reihenabstand 0,85 m (`CHAIR_PITCH_M`, `CHAIR_ROW_PITCH_M` in `store.ts`, aus den Bestuhlungsplänen der Stadthalle gemessen).
+  - Alte Stände ohne `rowSpacingM` (Abstand 0,55 m in beide Richtungen) werden beim Laden angehoben (`normalizeChairGroups`), die Gruppe wird dabei größer.
+- **Geschosse** (`item.level`, `src/utils/levels.ts`, `src/data/venueOG.ts`):
+  - `'eg'` oder `'og'`. Fehlt das Feld, gilt EG. Neue Objekte bekommen das Geschoss, das in 2D gerade offen ist (`currentLevel`, nicht im Projekt gespeichert).
+  - 2D zeigt je Geschoss nur dessen Objekte, im OG mit `public/plans/og-plan.png` (im selben Rahmen wie der EG-Plan) als Unterlage. 3D hat EG, OG und Beide, das OG liegt auf +3,50 m.
+  - **Luftraum** (Saal, Bühne, Foyer: `OG_VOIDS`): Im OG hat er keinen Boden. Der Store lehnt jede Änderung ab, die ein OG-Objekt dorthin setzt (Platzieren, Verschieben, Drehen, Einfügen …), zeigt eine Meldung (`notice`) und setzt über `revision` die Zeichenfläche zurück. Das passiert zentral im `set`-Wrapper in `store.ts`.
+  - Die OG-Wände in `venueOG.ts` sind aus den Doppellinien des Werkplans (Blätter 530-503-1/-2, Vektor-PDF) abgeleitet und auf den EG-Rahmen ausgerichtet. Der Westflügel ist wie beim EG-Plan am linken Rand abgeschnitten.
 - **Styropor-Buchstaben** (`foam_letters`, `utils/foamLetters.ts`, `models3d/letters.ts`):
   - `letterText` ist der Schriftzug. Ein „H“ ist 0,5 m breit und 1 m hoch, andere Buchstaben haben die Breite der Schrift (helvetiker bold).
   - 2D und 3D nutzen dieselbe Breitentabelle. `width` wird daraus berechnet.

@@ -9,7 +9,7 @@ import { kbd } from '../utils/ui'
 
 export interface CommandActions {
   placeType: (type: ItemType, quantity: number, mode: 'tap' | 'center') => void
-  placeChairRows: (rows: number, cols: number, mode: 'tap' | 'center') => void
+  placeChairRows: (rows: number, cols: number, mode: 'tap' | 'center', rowSpacingM?: number) => void
   setTool: (tool: ToolMode) => void
   openPicker: (tab: PickerTab) => void
   importNivtec: () => void
@@ -122,6 +122,7 @@ export default function CommandBar({ onClose, actions }: Props) {
 
     const cmds: Omit<Result, 'group'>[] = [
       { id: 'area', icon: '▭', label: 'Bereich zeichnen', hint: 'B', run: () => actions.setTool('area') },
+      { id: 'hand', icon: '✋', label: 'Hand-Werkzeug (nur verschieben)', hint: 'H', run: () => actions.setTool('hand') },
       { id: 'measure', icon: '↔', label: 'Messen', hint: 'M', run: () => actions.setTool('measure') },
       { id: 'select', icon: '↖', label: 'Auswählen', hint: 'V', run: () => actions.setTool('select') },
       { id: 'rowsgen', icon: '▦', label: 'Stuhlreihen-Generator öffnen', run: () => actions.openPicker('rows') },

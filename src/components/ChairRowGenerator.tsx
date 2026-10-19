@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { btn, input } from '../utils/ui'
+import { CHAIR_ROW_PITCH_M } from '../store/store'
 
 interface Props {
   /**
@@ -7,7 +8,7 @@ interface Props {
    * 'center' = sofort in der Mitte des sichtbaren Ausschnitts einfügen.
    * Erzeugt wird immer EIN Gruppen-Objekt (addChairRowGroup), keine Einzelstühle.
    */
-  onCreate: (rows: number, perRow: number, mode: 'tap' | 'center') => void
+  onCreate: (rows: number, perRow: number, mode: 'tap' | 'center', rowSpacingM: number) => void
   initialRows?: number
   initialPerRow?: number
 }
@@ -15,6 +16,7 @@ interface Props {
 export default function ChairRowGenerator({ onCreate, initialRows = 5, initialPerRow = 10 }: Props) {
   const [rows, setRows] = useState(initialRows)
   const [perRow, setPerRow] = useState(initialPerRow)
+  const [rowSpacing, setRowSpacing] = useState(CHAIR_ROW_PITCH_M)
 
   return (
     <div className="space-y-3">
@@ -47,12 +49,23 @@ export default function ChairRowGenerator({ onCreate, initialRows = 5, initialPe
           />
         </label>
       </div>
+      <label className="block text-[11px] text-ink2">
+        Reihenabstand (m)
+        <input
+          type="number"
+          min={0.5}
+          step={0.05}
+          value={rowSpacing}
+          onChange={(e) => setRowSpacing(Math.max(0.5, Number(e.target.value)))}
+          className={`w-full mt-0.5 ${input} text-sm`}
+        />
+      </label>
       <div className="flex gap-2">
-        <button onClick={() => onCreate(rows, perRow, 'tap')} className={`flex-1 ${btn('primary', 'md')}`}>
+        <button onClick={() => onCreate(rows, perRow, 'tap', rowSpacing)} className={`flex-1 ${btn('primary', 'md')}`}>
           {rows * perRow} Stühle im Plan platzieren
         </button>
         <button
-          onClick={() => onCreate(rows, perRow, 'center')}
+          onClick={() => onCreate(rows, perRow, 'center', rowSpacing)}
           className={btn('outline', 'md')}
           title="Direkt in der Mitte des sichtbaren Ausschnitts einfügen"
         >

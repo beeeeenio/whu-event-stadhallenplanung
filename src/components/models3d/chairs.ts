@@ -55,7 +55,7 @@ export function buildChairRowGroup(item: EventItem, color: string): THREE.Group 
   let i = 0
   for (let r = 0; r < grid.rows; r++) {
     for (let c = 0; c < grid.cols; c++) {
-      m.makeTranslation((c + 0.5) * grid.spacingM, 0, (r + 0.5) * grid.spacingM)
+      m.makeTranslation((c + 0.5) * grid.spacingM, 0, (r + 0.5) * (grid.rowSpacingM ?? grid.spacingM))
       seats.setMatrixAt(i, m)
       frames.setMatrixAt(i, m)
       i++

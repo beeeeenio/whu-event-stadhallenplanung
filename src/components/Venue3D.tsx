@@ -10,6 +10,8 @@ import { buildNivtecDeck } from './nivtec3d'
 import { MODELS } from './models3d'
 import { COLUMNS_PX, DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
+import { itemLevel, type Level } from '../utils/levels'
+import { OG_ELEVATION_M, OG_FOOTPRINT, OG_SLAB_THICKNESS_M, OG_VOIDS, OG_WALL_HEIGHT_M, OG_WALLS, subtractRects } from '../data/venueOG'
 
 /** Plan-Abmessungen in Metern (Stromplan 1755×1240px bei 23,6px/m). */
 const PLAN_W = 1755 / POWER_PLAN_NATIVE_PIXELS_PER_METER
@@ -156,7 +158,8 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
   const g = new THREE.Group()
   g.position.set(pd.x / PX, 0, pd.y / PX)
   g.rotation.y = -(pd.rotation * Math.PI) / 180
-  if (item.type !== 'truss' && isOnStage(item, pd)) g.position.y = VENUE.stageHeight
+  if (itemLevel(item) === 'og') g.position.y = OG_ELEVATION_M
+  else if (item.type !== 'truss' && isOnStage(item, pd)) g.position.y = VENUE.stageHeight
   const color = item.color || DEFAULT_3D_COLOR[item.type] || getDefaultColor(item.type)
   const w = item.width
 
@@ -282,6 +285,22 @@ function buildStageAndColumns(): THREE.Group {
   return g
 }
 
+/** Obergeschoss: Wände aus dem Werkplan und der Boden (Grundfläche ohne die Lufträume Saal, Bühne, Foyer). */
+function buildOG(): { walls: THREE.Group; slab: THREE.Group } {
+  const walls = new THREE.Group()
+  for (const [x, z, w, d] of OG_WALLS) {
+    walls.add(box(w, OG_WALL_HEIGHT_M, d, x + w / 2, OG_ELEVATION_M + OG_WALL_HEIGHT_M / 2, z + d / 2, VENUE.upperWallColor))
+  }
+  const slab = new THREE.Group()
+  const cuts = OG_VOIDS.map((v) => v.rect)
+  for (const base of OG_FOOTPRINT) {
+    for (const [x0, z0, x1, z1] of subtractRects(base, cuts)) {
+      slab.add(box(x1 - x0, OG_SLAB_THICKNESS_M, z1 - z0, (x0 + x1) / 2, OG_ELEVATION_M - OG_SLAB_THICKNESS_M / 2, (z0 + z1) / 2, '#d6d3d1'))
+    }
+  }
+  return { walls, slab }
+}
+
 /** Mobile Trennwände im Saal (Holzoptik, volle Höhe). */
 function buildPartitions(): THREE.Group {
   const g = new THREE.Group()
@@ -337,14 +356,92 @@ function saveLastView(camera: THREE.Camera, controls: OrbitControls) {
   }
 }
 
+/** Beschriftete Gruppe im 3D-Bedienpanel. */
+function Group3D({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{label}</div>
+      {children}
+    </div>
+  )
+}
+
+/** Auswahl genau einer Möglichkeit: die gewählte ist weiß hinterlegt und fett. */
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: { id: T; label: string; title?: string }[]
+  onChange: (v: T) => void
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex gap-0.5 p-0.5 rounded-lg bg-black/[0.07]">
+      {options.map((o) => {
+        const active = o.id === value
+        return (
+          <button
+            key={o.id}
+            role="radio"
+            aria-checked={active}
+            title={o.title}
+            onClick={() => onChange(o.id)}
+            className={`flex-1 h-8 rounded-md text-[12px] transition-colors select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
+              active ? 'bg-white text-ink font-semibold shadow-sm' : 'text-ink2 hover:text-ink font-medium'
+            }`}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Ein-/Ausschalter mit sichtbarem Zustand (Schalter links Aus, rechts An). */
+function SwitchRow({
+  label,
+  checked,
+  onChange,
+  disabled,
+  title,
+}: {
+  label: string
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+  title?: string
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      title={title}
+      onClick={() => onChange(!checked)}
+      className="flex items-center justify-between h-8 px-1 rounded-md text-[12px] font-medium text-ink select-none hover:bg-black/5 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+    >
+      <span>{label}</span>
+      <span className={`relative w-8 h-[18px] rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-black/25'}`}>
+        <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-[14px]' : ''}`} />
+      </span>
+    </button>
+  )
+}
+
 interface Props {
   onClose: () => void
+  /** Geschoss, das beim Öffnen gezeigt wird (das gerade bearbeitete). */
+  initialLevel?: Level
 }
 
 /** Schlichte 3D-Ansicht der aktuellen Phase: Grundriss am Boden, Objekte als Blöcke mit typischer Höhe. */
-export default function Venue3D({ onClose }: Props) {
+export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
-  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; partitions: THREE.Group; upperWalls: THREE.Object3D | undefined; sun: THREE.DirectionalLight; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
+  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; partitions: THREE.Group; upperWalls: THREE.Object3D | undefined; stage: THREE.Group; ogWalls: THREE.Group; ogSlab: THREE.Group; sun: THREE.DirectionalLight; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
   const items = useEventStore((s) => s.items)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const phaseName = useEventStore((s) => s.phases.find((p) => p.id === s.currentPhaseId)?.name ?? '')
@@ -359,6 +456,7 @@ export default function Venue3D({ onClose }: Props) {
     setViewNonce((n) => n + 1)
   }
   const [showWalls, setShowWalls] = useState(true)
+  const [levelView, setLevelView] = useState<'eg' | 'og' | 'both'>(initialLevel)
   const [curtainOpen, setCurtainOpen] = useState(false)
   const [showPartitions, setShowPartitions] = useState(false)
   const [shadows, setShadows] = useState(true)
@@ -398,7 +496,10 @@ export default function Venue3D({ onClose }: Props) {
     const wallGroup = new THREE.Group()
     scene.add(wallGroup)
     wallGroup.add(buildVenue())
-    scene.add(buildStageAndColumns())
+    const stageGroup = buildStageAndColumns()
+    scene.add(stageGroup)
+    const og = buildOG()
+    scene.add(og.walls, og.slab)
     const curtainGroup = new THREE.Group()
     scene.add(curtainGroup)
     const partitionGroup = buildPartitions()
@@ -411,7 +512,7 @@ export default function Venue3D({ onClose }: Props) {
     controls.addEventListener('end', () => saveLastView(camera, controls))
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI / 2 - 0.02
-    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, partitions: partitionGroup, upperWalls: wallGroup.getObjectByName('upperWalls'), sun, camera, controls }
+    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, partitions: partitionGroup, upperWalls: wallGroup.getObjectByName('upperWalls'), stage: stageGroup, ogWalls: og.walls, ogSlab: og.slab, sun, camera, controls }
 
     let raf = 0
     const loop = () => {
@@ -449,10 +550,11 @@ export default function Venue3D({ onClose }: Props) {
     for (const item of Object.values(items)) {
       const pd = item.phaseData[currentPhaseId]
       if (!pd?.visible) continue
+      if (levelView !== 'both' && itemLevel(item) !== levelView) continue
       const obj = buildItem(item, pd)
       if (obj) s.items.add(obj)
     }
-  }, [items, currentPhaseId, hideCodes])
+  }, [items, currentPhaseId, hideCodes, levelView])
 
   // Vorhang sanft auf-/zufahren (ca. 1,5 s)
   const curtainPos = useRef(0)
@@ -473,12 +575,8 @@ export default function Venue3D({ onClose }: Props) {
   }, [curtainOpen, hideCodes])
 
   useEffect(() => {
-    if (sceneRef.current) sceneRef.current.partitions.visible = showPartitions
-  }, [showPartitions, hideCodes])
-
-  useEffect(() => {
-    if (sceneRef.current?.upperWalls) sceneRef.current.upperWalls.visible = showUpperWalls
-  }, [showUpperWalls, hideCodes])
+    if (sceneRef.current) sceneRef.current.partitions.visible = showPartitions && levelView !== 'og'
+  }, [showPartitions, levelView, hideCodes])
 
   // Schatten der Sonne an/aus (Schattenkarte bleibt aktiv, nur die Lichtquelle wirft keinen mehr)
   useEffect(() => {
@@ -486,8 +584,18 @@ export default function Venue3D({ onClose }: Props) {
   }, [shadows, hideCodes])
 
   useEffect(() => {
-    if (sceneRef.current) sceneRef.current.walls.visible = showWalls
-  }, [showWalls, hideCodes])
+    const s = sceneRef.current
+    if (!s) return
+    const eg = levelView !== 'og'
+    const og = levelView !== 'eg'
+    s.walls.visible = showWalls && eg
+    s.stage.visible = eg
+    s.curtain.visible = eg
+    s.ogWalls.visible = showWalls && og
+    s.ogSlab.visible = og
+    // Im Doppelbild stehen die EG-Wände nur bis zum Boden des OG, den Rest übernehmen die OG-Wände
+    if (s.upperWalls) s.upperWalls.visible = showUpperWalls && levelView === 'eg'
+  }, [showWalls, showUpperWalls, levelView, hideCodes])
 
   // Kamera: zuletzt benutzte Ansicht wiederherstellen; nach Klick auf Übersicht/Augenhöhe deren Standard
   useEffect(() => {
@@ -525,45 +633,54 @@ export default function Venue3D({ onClose }: Props) {
   return (
     <div className="absolute inset-0 z-40" style={{ background: VENUE.background }}>
       <div ref={mountRef} className="absolute inset-0" />
-      <div className={`absolute top-4 left-4 flex items-center gap-2 p-1.5 pl-3 rounded-xl ${island}`}>
-        <span className="text-xs font-semibold text-ink">3D · {phaseName}</span>
-        <button onClick={() => requestView(false)} className={islandBtn(eye ? 'plain' : 'dark', 'h-8 px-2.5 text-[11px] font-medium')}>
-          Übersicht
-        </button>
-        <button onClick={() => requestView(true)} className={islandBtn(eye ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
-          Augenhöhe
-        </button>
-        <button onClick={() => setCurtainOpen((v) => !v)} className={islandBtn('plain', 'h-8 px-2.5 text-[11px] font-medium')}>
-          {curtainOpen ? 'Vorhang zu' : 'Vorhang auf'}
-        </button>
-        <button
-          onClick={() => setShadows((v) => !v)}
-          className={islandBtn(shadows ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
-          title="Schatten ein-/ausblenden"
-        >
-          Schatten
-        </button>
-        <button
-          onClick={() => setShowPartitions((v) => !v)}
-          className={islandBtn(showPartitions ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
-          title="Mobile Trennwände im großen Saal (teilen ihn in drei Teile)"
-        >
-          Trennwände
-        </button>
-        <button
-          onClick={() => setShowUpperWalls((v) => !v)}
-          className={islandBtn(showUpperWalls ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
-          title="Oberen, weißen Teil der Wände ein-/ausblenden (Holzverkleidung, Türen und Glas bleiben)"
-        >
-          Obere Wände
-        </button>
-        <button onClick={() => setShowWalls((v) => !v)} className={islandBtn(showWalls ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
-          Wände
-        </button>
-        <button onClick={onClose} className={islandBtn('plain', 'h-8 px-2.5 text-[11px] font-medium')}>
-          ✕ Zurück zu 2D
-        </button>
+      <div className={`absolute top-4 left-4 w-[236px] flex flex-col gap-3 p-3 rounded-2xl ${island}`}>
+        <div className="text-xs font-semibold text-ink">3D · {phaseName}</div>
+        <Group3D label="Kamera">
+          <Segmented
+            label="Kamera"
+            value={eye ? 'eye' : 'overview'}
+            options={[
+              { id: 'overview', label: 'Übersicht' },
+              { id: 'eye', label: 'Augenhöhe' },
+            ]}
+            onChange={(v) => requestView(v === 'eye')}
+          />
+        </Group3D>
+        <Group3D label="Geschoss">
+          <Segmented
+            label="Geschoss"
+            value={levelView}
+            options={[
+              { id: 'eg', label: 'EG', title: 'Nur Erdgeschoss' },
+              { id: 'og', label: 'OG', title: 'Nur Obergeschoss' },
+              { id: 'both', label: 'Beide', title: 'Erdgeschoss und Obergeschoss übereinander' },
+            ]}
+            onChange={setLevelView}
+          />
+        </Group3D>
+        <Group3D label="Anzeigen">
+          <SwitchRow label="Wände" checked={showWalls} onChange={setShowWalls} />
+          <SwitchRow
+            label="Obere Wände"
+            checked={showUpperWalls}
+            onChange={setShowUpperWalls}
+            disabled={!showWalls || levelView !== 'eg'}
+            title={levelView !== 'eg' ? 'Nur in der reinen EG-Ansicht (im Doppelbild stehen die EG-Wände bis zum OG-Boden)' : 'Oberen, weißen Teil der Wände ein-/ausblenden'}
+          />
+          <SwitchRow
+            label="Trennwände"
+            checked={showPartitions}
+            onChange={setShowPartitions}
+            disabled={levelView === 'og'}
+            title="Mobile Trennwände im großen Saal (teilen ihn in drei Teile)"
+          />
+          <SwitchRow label="Vorhang offen" checked={curtainOpen} onChange={setCurtainOpen} disabled={levelView === 'og'} title="Hauptvorhang der Bühne" />
+          <SwitchRow label="Schatten" checked={shadows} onChange={setShadows} />
+        </Group3D>
       </div>
+      <button onClick={onClose} className={`absolute top-4 right-4 ${islandBtn('plain', 'h-10 px-3.5 text-[13px] font-semibold')} ${island}`}>
+        ✕ Zurück zu 2D
+      </button>
       <div className={`absolute bottom-4 left-4 px-3 py-2 rounded-xl text-[11px] text-ink3 ${island}`}>
         Ziehen: drehen · Rechtsklick/zwei Finger: verschieben · Scrollen: zoomen
       </div>

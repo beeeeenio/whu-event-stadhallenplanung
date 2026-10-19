@@ -17,7 +17,7 @@ interface Props {
   onPick: (type: ItemType) => void
   /** Doppelklick → sofort in Bildmitte einfügen. */
   onInsertCenter: (type: ItemType) => void
-  onCreateChairRows: (rows: number, perRow: number, mode: 'tap' | 'center') => void
+  onCreateChairRows: (rows: number, perRow: number, mode: 'tap' | 'center', rowSpacingM?: number) => void
   onImportNivtec: () => void
   onCreateCustom: (spec: CustomItemSpec, mode: 'tap' | 'center') => void
   onClose: () => void

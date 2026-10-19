@@ -9,7 +9,7 @@ import CommandBar, { type CommandActions } from './CommandBar'
 import FloatingToolbar from './FloatingToolbar'
 import { SelectionBar, MultiSelectionBar, PropertiesPanel } from './SelectionControls'
 import { useNivtecImport } from './useNivtecImport'
-import { useEventStore, type CustomItemSpec } from '../store/store'
+import { useEventStore, CHAIR_ROW_PITCH_M, type CustomItemSpec } from '../store/store'
 import { useProjectsStore } from '../store/projectsStore'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import type { EventItem, ItemType } from '../types'
@@ -20,6 +20,7 @@ import { exportPhaseToPdf } from '../utils/pdfExport'
 import { buildItemGrid, type Placement } from '../utils/placement'
 import { changedSincePhase, previousPhaseId, sortPhases } from '../utils/phaseDiff'
 import { btn, input as inputCls, island, kbd } from '../utils/ui'
+import { itemLevel, LEVELS } from '../utils/levels'
 
 const PPM = DEFAULT_PIXELS_PER_METER
 
@@ -50,8 +51,9 @@ const SHORTCUTS: [string, string][] = [
   ['Kopieren / Einfügen (auch in andere Phase)', `${MOD}C · ${MOD}V`],
   ['Duplizieren', `${MOD}D`],
   ['Zur Auswahl hinzufügen/entfernen', '⇧Klick'],
-  ['Mehrere per Rechteck wählen', 'Ziehen auf freie Fläche'],
-  ['Ansicht verschieben', 'Leertaste+Ziehen · 2 Finger'],
+  ['Mehrere per Rechteck wählen', '⇧ oder ⌥ + Ziehen auf freie Fläche'],
+  ['Ansicht verschieben', 'Ziehen auf freie Fläche · Leertaste+Ziehen · 2 Finger'],
+  ['Hand-Werkzeug (nur verschieben)', 'H'],
   ['Zoomen', 'Mausrad · Pinch · + / −'],
   ['Einpassen / Auswahl zeigen', '0 · ⇧2'],
   ['Löschen', '⌫'],
@@ -122,6 +124,9 @@ export default function EditorView() {
 
   const phases = useEventStore((s) => s.phases)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
+  const currentLevel = useEventStore((s) => s.currentLevel)
+  const setCurrentLevel = useEventStore((s) => s.setCurrentLevel)
+  const notice = useEventStore((s) => s.notice)
   const items = useEventStore((s) => s.items)
   const itemOrder = useEventStore((s) => s.itemOrder)
   const removeItems = useEventStore((s) => s.removeItems)
@@ -167,10 +172,10 @@ export default function EditorView() {
   // sind, verschwinden automatisch aus der Auswahl.
   useEffect(() => {
     setSelectedIds((prev) => {
-      const next = prev.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible)
+      const next = prev.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible && itemLevel(items[id]) === currentLevel)
       return next.length === prev.length ? prev : next
     })
-  }, [items, currentPhaseId])
+  }, [items, currentPhaseId, currentLevel])
 
   // Panel-Toggle-Helper
   const togglePanel = useCallback((panel: ActivePanel) => {
@@ -193,8 +198,11 @@ export default function EditorView() {
 
   const prevPhaseId = useMemo(() => previousPhaseId(phases, currentPhaseId), [phases, currentPhaseId])
   const ghostItemIds = useMemo(
-    () => (onionSkin && prevPhaseId ? changedSincePhase(items, itemOrder, prevPhaseId, currentPhaseId) : []),
-    [onionSkin, prevPhaseId, items, itemOrder, currentPhaseId],
+    () =>
+      onionSkin && prevPhaseId
+        ? changedSincePhase(items, itemOrder, prevPhaseId, currentPhaseId).filter((id) => itemLevel(items[id]) === currentLevel)
+        : [],
+    [onionSkin, prevPhaseId, items, itemOrder, currentPhaseId, currentLevel],
   )
 
   const viewCenter = useCallback(() => canvasRef.current?.getViewCenter() ?? { x: 200, y: 200 }, [])
@@ -304,18 +312,18 @@ export default function EditorView() {
   )
 
   const placeChairRows = useCallback(
-    (rows: number, cols: number, mode: 'tap' | 'center') => {
+    (rows: number, cols: number, mode: 'tap' | 'center', rowSpacingM: number = CHAIR_ROW_PITCH_M) => {
       setTool('select')
       if (mode === 'center') {
         const c = viewCenter()
-        select(addChairRowGroup(c.x, c.y, rows, cols))
+        select(addChairRowGroup(c.x, c.y, rows, cols, undefined, rowSpacingM))
         setPlacement(null)
         setActivePanel((p) => (p === 'picker' ? null : p))
         return
       }
       setPlacement({
         label: `Stuhlreihen ${rows} × ${cols} (${rows * cols} Stühle)`,
-        place: (x, y) => addChairRowGroup(x, y, rows, cols),
+        place: (x, y) => addChairRowGroup(x, y, rows, cols, undefined, rowSpacingM),
         once: true,
       })
       setActivePanel((p) => (p === 'picker' ? null : p))
@@ -473,7 +481,7 @@ export default function EditorView() {
       if (isMod && key === 'a') {
         e.preventDefault()
         const s = useEventStore.getState()
-        selectMany(s.itemOrder.filter((id) => s.items[id]?.phaseData[s.currentPhaseId]?.visible), false)
+        selectMany(s.itemOrder.filter((id) => s.items[id]?.phaseData[s.currentPhaseId]?.visible && itemLevel(s.items[id]) === s.currentLevel), false)
         return
       }
       if (isMod && key === 'c' && selectedIds.length > 0) {
@@ -559,6 +567,7 @@ export default function EditorView() {
         return
       }
       if (key === 'v') return changeTool('select')
+      if (key === 'h') return changeTool('hand')
       if (key === 'm') return changeTool('measure')
       if (key === 'b') return changeTool('area')
       if (key === 'o') {
@@ -756,6 +765,32 @@ export default function EditorView() {
         </div>
       )}
 
+      {/* Geschoss-Umschalter */}
+      <div className={`absolute left-4 top-[84px] z-20 flex gap-1 p-1 ${island}`} role="group" aria-label="Geschoss">
+        {LEVELS.map((l) => (
+          <button
+            key={l.id}
+            onClick={() => setCurrentLevel(l.id)}
+            title={l.label}
+            aria-pressed={currentLevel === l.id}
+            className={btn(currentLevel === l.id ? 'primary' : 'outline', 'md')}
+          >
+            {l.short}
+          </button>
+        ))}
+      </div>
+
+      {/* Hinweis, z. B. wenn etwas im Luftraum abgelehnt wurde (blendet sich selbst aus) */}
+      {notice && (
+        <div
+          key={notice.seq}
+          role="alert"
+          className={`notice-fade pointer-events-none absolute left-1/2 -translate-x-1/2 top-[84px] z-40 max-w-[min(520px,calc(100vw-32px))] px-4 py-2.5 text-sm font-medium text-red-700 ${island}`}
+        >
+          {notice.text}
+        </div>
+      )}
+
       {/* Phasen-Zeitleiste */}
       <div className="absolute left-4 right-4 bottom-4 z-20">
         <PhaseTimeline
@@ -791,6 +826,22 @@ export default function EditorView() {
         onCodesToggle={() => toggleLayer('hideCodes')}
         on3D={() => setShow3D(true)}
       />
+
+      {/* Hinweis, was Ziehen im aktuellen Werkzeug bewirkt */}
+      {!placement && (tool === 'select' || tool === 'hand') && (
+        <div className={`absolute bottom-48 left-[68px] z-20 h-10 px-3.5 flex items-center gap-2 text-[11px] text-ink2 ${island}`}>
+          {tool === 'hand' ? (
+            <>
+              <b className="text-ink">Hand</b> Ziehen verschiebt die Ansicht · <b className="text-ink">V</b> zurück zur Auswahl
+            </>
+          ) : (
+            <>
+              <b className="text-ink">Auswahl</b> Objekte anklicken oder ziehen · freie Fläche ziehen verschiebt die Ansicht ·{' '}
+              <b className="text-ink">⇧</b> + Ziehen wählt per Rechteck
+            </>
+          )}
+        </div>
+      )}
 
       {/* Tastatur-Hilfe */}
       <button
@@ -844,7 +895,7 @@ export default function EditorView() {
       {/* 3D-Ansicht der aktuellen Phase als Overlay */}
       {show3D && (
         <Suspense fallback={null}>
-          <Venue3D onClose={() => setShow3D(false)} />
+          <Venue3D onClose={() => setShow3D(false)} initialLevel={currentLevel} />
         </Suspense>
       )}
     </div>

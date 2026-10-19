@@ -80,8 +80,10 @@ export interface EventItem {
   nivtecData?: NivtecData
   /** Hex-Farbe oder rgba, z.B. “#3B82F6”; für alle Items nutzbar */
   color?: string
-  /** Nur für type 'chair_row_group': Anzahl Reihen/Stühle je Reihe und Abstand, damit die Gruppe als ein Objekt gezogen werden kann. */
-  grid?: { rows: number; cols: number; spacingM: number }
+  /** Geschoss; fehlt in alten Ständen und bedeutet dann Erdgeschoss. */
+  level?: 'eg' | 'og'
+  /** Nur für type 'chair_row_group': Anzahl Reihen/Stühle je Reihe, Stuhlabstand (spacingM) und Reihenabstand (rowSpacingM, fehlt in alten Ständen), damit die Gruppe als ein Objekt gezogen werden kann. */
+  grid?: { rows: number; cols: number; spacingM: number; rowSpacingM?: number }
   /** Freitext-Notiz zum Objekt (z. B. „Kabel bis Bühne legen”). */
   note?: string
   /** Nur 'visiova_frame': Breiten der Rahmen einer Wand (m), links → rechts; fehlt = ein Rahmen mit `width`. */
