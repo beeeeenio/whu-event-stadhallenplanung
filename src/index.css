@@ -68,3 +68,12 @@ body {
 .no-scrollbar {
   scrollbar-width: none;
 }
+
+/* Hinweis-Meldung: bleibt kurz stehen und blendet dann aus */
+@keyframes notice-fade {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+.notice-fade {
+  animation: notice-fade 4.5s forwards;
+}

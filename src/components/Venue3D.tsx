@@ -10,6 +10,8 @@ import { buildNivtecDeck } from './nivtec3d'
 import { MODELS } from './models3d'
 import { COLUMNS_PX, DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
+import { itemLevel, type Level } from '../utils/levels'
+import { OG_ELEVATION_M, OG_FOOTPRINT, OG_SLAB_THICKNESS_M, OG_VOIDS, OG_WALL_HEIGHT_M, OG_WALLS, subtractRects } from '../data/venueOG'
 
 /** Plan-Abmessungen in Metern (Stromplan 1755×1240px bei 23,6px/m). */
 const PLAN_W = 1755 / POWER_PLAN_NATIVE_PIXELS_PER_METER
@@ -156,7 +158,8 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
   const g = new THREE.Group()
   g.position.set(pd.x / PX, 0, pd.y / PX)
   g.rotation.y = -(pd.rotation * Math.PI) / 180
-  if (item.type !== 'truss' && isOnStage(item, pd)) g.position.y = VENUE.stageHeight
+  if (itemLevel(item) === 'og') g.position.y = OG_ELEVATION_M
+  else if (item.type !== 'truss' && isOnStage(item, pd)) g.position.y = VENUE.stageHeight
   const color = item.color || DEFAULT_3D_COLOR[item.type] || getDefaultColor(item.type)
   const w = item.width
 
@@ -282,6 +285,22 @@ function buildStageAndColumns(): THREE.Group {
   return g
 }
 
+/** Obergeschoss: Wände aus dem Werkplan und der Boden (Grundfläche ohne die Lufträume Saal, Bühne, Foyer). */
+function buildOG(): { walls: THREE.Group; slab: THREE.Group } {
+  const walls = new THREE.Group()
+  for (const [x, z, w, d] of OG_WALLS) {
+    walls.add(box(w, OG_WALL_HEIGHT_M, d, x + w / 2, OG_ELEVATION_M + OG_WALL_HEIGHT_M / 2, z + d / 2, VENUE.upperWallColor))
+  }
+  const slab = new THREE.Group()
+  const cuts = OG_VOIDS.map((v) => v.rect)
+  for (const base of OG_FOOTPRINT) {
+    for (const [x0, z0, x1, z1] of subtractRects(base, cuts)) {
+      slab.add(box(x1 - x0, OG_SLAB_THICKNESS_M, z1 - z0, (x0 + x1) / 2, OG_ELEVATION_M - OG_SLAB_THICKNESS_M / 2, (z0 + z1) / 2, '#d6d3d1'))
+    }
+  }
+  return { walls, slab }
+}
+
 /** Mobile Trennwände im Saal (Holzoptik, volle Höhe). */
 function buildPartitions(): THREE.Group {
   const g = new THREE.Group()
@@ -339,12 +358,14 @@ function saveLastView(camera: THREE.Camera, controls: OrbitControls) {
 
 interface Props {
   onClose: () => void
+  /** Geschoss, das beim Öffnen gezeigt wird (das gerade bearbeitete). */
+  initialLevel?: Level
 }
 
 /** Schlichte 3D-Ansicht der aktuellen Phase: Grundriss am Boden, Objekte als Blöcke mit typischer Höhe. */
-export default function Venue3D({ onClose }: Props) {
+export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
-  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; partitions: THREE.Group; upperWalls: THREE.Object3D | undefined; sun: THREE.DirectionalLight; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
+  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; partitions: THREE.Group; upperWalls: THREE.Object3D | undefined; stage: THREE.Group; ogWalls: THREE.Group; ogSlab: THREE.Group; sun: THREE.DirectionalLight; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
   const items = useEventStore((s) => s.items)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const phaseName = useEventStore((s) => s.phases.find((p) => p.id === s.currentPhaseId)?.name ?? '')
@@ -359,6 +380,7 @@ export default function Venue3D({ onClose }: Props) {
     setViewNonce((n) => n + 1)
   }
   const [showWalls, setShowWalls] = useState(true)
+  const [levelView, setLevelView] = useState<'eg' | 'og' | 'both'>(initialLevel)
   const [curtainOpen, setCurtainOpen] = useState(false)
   const [showPartitions, setShowPartitions] = useState(false)
   const [shadows, setShadows] = useState(true)
@@ -398,7 +420,10 @@ export default function Venue3D({ onClose }: Props) {
     const wallGroup = new THREE.Group()
     scene.add(wallGroup)
     wallGroup.add(buildVenue())
-    scene.add(buildStageAndColumns())
+    const stageGroup = buildStageAndColumns()
+    scene.add(stageGroup)
+    const og = buildOG()
+    scene.add(og.walls, og.slab)
     const curtainGroup = new THREE.Group()
     scene.add(curtainGroup)
     const partitionGroup = buildPartitions()
@@ -411,7 +436,7 @@ export default function Venue3D({ onClose }: Props) {
     controls.addEventListener('end', () => saveLastView(camera, controls))
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI / 2 - 0.02
-    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, partitions: partitionGroup, upperWalls: wallGroup.getObjectByName('upperWalls'), sun, camera, controls }
+    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, partitions: partitionGroup, upperWalls: wallGroup.getObjectByName('upperWalls'), stage: stageGroup, ogWalls: og.walls, ogSlab: og.slab, sun, camera, controls }
 
     let raf = 0
     const loop = () => {
@@ -449,10 +474,11 @@ export default function Venue3D({ onClose }: Props) {
     for (const item of Object.values(items)) {
       const pd = item.phaseData[currentPhaseId]
       if (!pd?.visible) continue
+      if (levelView !== 'both' && itemLevel(item) !== levelView) continue
       const obj = buildItem(item, pd)
       if (obj) s.items.add(obj)
     }
-  }, [items, currentPhaseId, hideCodes])
+  }, [items, currentPhaseId, hideCodes, levelView])
 
   // Vorhang sanft auf-/zufahren (ca. 1,5 s)
   const curtainPos = useRef(0)
@@ -473,12 +499,8 @@ export default function Venue3D({ onClose }: Props) {
   }, [curtainOpen, hideCodes])
 
   useEffect(() => {
-    if (sceneRef.current) sceneRef.current.partitions.visible = showPartitions
-  }, [showPartitions, hideCodes])
-
-  useEffect(() => {
-    if (sceneRef.current?.upperWalls) sceneRef.current.upperWalls.visible = showUpperWalls
-  }, [showUpperWalls, hideCodes])
+    if (sceneRef.current) sceneRef.current.partitions.visible = showPartitions && levelView !== 'og'
+  }, [showPartitions, levelView, hideCodes])
 
   // Schatten der Sonne an/aus (Schattenkarte bleibt aktiv, nur die Lichtquelle wirft keinen mehr)
   useEffect(() => {
@@ -486,8 +508,18 @@ export default function Venue3D({ onClose }: Props) {
   }, [shadows, hideCodes])
 
   useEffect(() => {
-    if (sceneRef.current) sceneRef.current.walls.visible = showWalls
-  }, [showWalls, hideCodes])
+    const s = sceneRef.current
+    if (!s) return
+    const eg = levelView !== 'og'
+    const og = levelView !== 'eg'
+    s.walls.visible = showWalls && eg
+    s.stage.visible = eg
+    s.curtain.visible = eg
+    s.ogWalls.visible = showWalls && og
+    s.ogSlab.visible = og
+    // Im Doppelbild stehen die EG-Wände nur bis zum Boden des OG, den Rest übernehmen die OG-Wände
+    if (s.upperWalls) s.upperWalls.visible = showUpperWalls && levelView === 'eg'
+  }, [showWalls, showUpperWalls, levelView, hideCodes])
 
   // Kamera: zuletzt benutzte Ansicht wiederherstellen; nach Klick auf Übersicht/Augenhöhe deren Standard
   useEffect(() => {
@@ -543,6 +575,16 @@ export default function Venue3D({ onClose }: Props) {
         >
           Schatten
         </button>
+        {([['eg', 'EG'], ['og', 'OG'], ['both', 'Beide']] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setLevelView(id)}
+            className={islandBtn(levelView === id ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
+            title={id === 'both' ? 'Erdgeschoss und Obergeschoss übereinander' : id === 'eg' ? 'Nur Erdgeschoss' : 'Nur Obergeschoss'}
+          >
+            {label}
+          </button>
+        ))}
         <button
           onClick={() => setShowPartitions((v) => !v)}
           className={islandBtn(showPartitions ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}

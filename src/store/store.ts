@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
+import { findVoidViolation, type Level } from '../utils/levels'
 import type { EventItem, EventState, ForexPanel, ItemType, ItemWithId, NivtecData, Phase } from '../types'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import { sortPhases } from '../utils/phaseDiff'
@@ -67,6 +68,13 @@ function counterSnapshot(state: EventState, target: HistorySnapshot): HistorySna
 }
 
 interface Store extends EventState {
+  /** Aktuell bearbeitetes Geschoss (nur Oberfläche, wird nicht im Projekt gespeichert). */
+  currentLevel: Level
+  setCurrentLevel: (level: Level) => void
+  /** Kurzer Hinweistext der Oberfläche (z. B. Platzieren im Luftraum abgelehnt); `seq` zählt hoch. */
+  notice: { text: string; seq: number } | null
+  /** Zählt bei jeder abgelehnten Änderung hoch, damit die Zeichenfläche Objekte neu aufbaut (zurück an ihren Platz). */
+  revision: number
   historyPast: HistorySnapshot[]
   historyFuture: HistorySnapshot[]
 
@@ -251,7 +259,41 @@ function patchItemInCurrentPhase(
   }
 }
 
-export const useEventStore = create<Store>((set, get) => {
+export const useEventStore = create<Store>((rawSet, get) => {
+  /**
+   * Alle Änderungen laufen hier durch: Neue Objekte bekommen das aktuelle Geschoss, und Änderungen,
+   * die ein OG-Objekt in den Luftraum (kein Boden) setzen, werden abgelehnt. Undo/Redo, Laden und
+   * Phasenwechsel ändern auch `phases`/`historyPast` und umgehen die Prüfung.
+   */
+  const set = ((partial: unknown, replace?: boolean) => {
+    const prev = get()
+    const next = (typeof partial === 'function' ? (partial as (s: Store) => unknown)(prev) : partial) as Partial<Store> | null
+    if (!next || !next.items || next.items === prev.items || 'phases' in next || 'historyPast' in next) {
+      rawSet(next as never, replace as never)
+      return
+    }
+    let items = next.items
+    if (prev.currentLevel === 'og') {
+      const stamped: Record<string, EventItem> = { ...items }
+      for (const [id, item] of Object.entries(items)) {
+        if (!prev.items[id] && item.level === undefined) stamped[id] = { ...item, level: 'og' }
+      }
+      items = stamped
+    }
+    const hit = findVoidViolation(prev.items, items)
+    if (hit) {
+      const last = prev.historyPast[prev.historyPast.length - 1]
+      rawSet({
+        notice: { text: `„${hit.item.label}“ kann nicht im Luftraum (${hit.voidName}) stehen, dort ist im Obergeschoss kein Boden.`, seq: (prev.notice?.seq ?? 0) + 1 },
+        revision: prev.revision + 1,
+        // pushHistory lief schon: den leeren Schritt wieder entfernen
+        ...(last && last.items === prev.items ? { historyPast: prev.historyPast.slice(0, -1) } : {}),
+      })
+      return
+    }
+    rawSet({ ...next, items } as never, replace as never)
+  }) as typeof rawSet
+
   /** Snapshot des Objekt-Zustands vor einer mutierenden Aktion auf den Undo-Stack legen. */
   const pushHistory = () => {
     lastNudge = { key: '', at: 0 }
@@ -270,6 +312,10 @@ export const useEventStore = create<Store>((set, get) => {
 
   return {
     eventName: 'Neues Event',
+    currentLevel: 'eg',
+    setCurrentLevel: (level) => set({ currentLevel: level }),
+    notice: null,
+    revision: 0,
     currentPhaseId: PHASE_1,
     phases: [{ id: PHASE_1, name: 'Phase 1', order: 0 }],
     items: {},
@@ -643,7 +689,7 @@ export const useEventStore = create<Store>((set, get) => {
             visible: p.id === currentPhaseId,
           }
         }
-        return { ...source, id: uuid(), locked: false, phaseData }
+        return { ...source, id: uuid(), locked: false, level: undefined, phaseData }
       })
       pushHistory()
       set((state) => ({

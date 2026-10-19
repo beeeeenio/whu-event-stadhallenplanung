@@ -20,6 +20,7 @@ import { exportPhaseToPdf } from '../utils/pdfExport'
 import { buildItemGrid, type Placement } from '../utils/placement'
 import { changedSincePhase, previousPhaseId, sortPhases } from '../utils/phaseDiff'
 import { btn, input as inputCls, island, kbd } from '../utils/ui'
+import { itemLevel, LEVELS } from '../utils/levels'
 
 const PPM = DEFAULT_PIXELS_PER_METER
 
@@ -122,6 +123,9 @@ export default function EditorView() {
 
   const phases = useEventStore((s) => s.phases)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
+  const currentLevel = useEventStore((s) => s.currentLevel)
+  const setCurrentLevel = useEventStore((s) => s.setCurrentLevel)
+  const notice = useEventStore((s) => s.notice)
   const items = useEventStore((s) => s.items)
   const itemOrder = useEventStore((s) => s.itemOrder)
   const removeItems = useEventStore((s) => s.removeItems)
@@ -167,10 +171,10 @@ export default function EditorView() {
   // sind, verschwinden automatisch aus der Auswahl.
   useEffect(() => {
     setSelectedIds((prev) => {
-      const next = prev.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible)
+      const next = prev.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible && itemLevel(items[id]) === currentLevel)
       return next.length === prev.length ? prev : next
     })
-  }, [items, currentPhaseId])
+  }, [items, currentPhaseId, currentLevel])
 
   // Panel-Toggle-Helper
   const togglePanel = useCallback((panel: ActivePanel) => {
@@ -193,8 +197,11 @@ export default function EditorView() {
 
   const prevPhaseId = useMemo(() => previousPhaseId(phases, currentPhaseId), [phases, currentPhaseId])
   const ghostItemIds = useMemo(
-    () => (onionSkin && prevPhaseId ? changedSincePhase(items, itemOrder, prevPhaseId, currentPhaseId) : []),
-    [onionSkin, prevPhaseId, items, itemOrder, currentPhaseId],
+    () =>
+      onionSkin && prevPhaseId
+        ? changedSincePhase(items, itemOrder, prevPhaseId, currentPhaseId).filter((id) => itemLevel(items[id]) === currentLevel)
+        : [],
+    [onionSkin, prevPhaseId, items, itemOrder, currentPhaseId, currentLevel],
   )
 
   const viewCenter = useCallback(() => canvasRef.current?.getViewCenter() ?? { x: 200, y: 200 }, [])
@@ -473,7 +480,7 @@ export default function EditorView() {
       if (isMod && key === 'a') {
         e.preventDefault()
         const s = useEventStore.getState()
-        selectMany(s.itemOrder.filter((id) => s.items[id]?.phaseData[s.currentPhaseId]?.visible), false)
+        selectMany(s.itemOrder.filter((id) => s.items[id]?.phaseData[s.currentPhaseId]?.visible && itemLevel(s.items[id]) === s.currentLevel), false)
         return
       }
       if (isMod && key === 'c' && selectedIds.length > 0) {
@@ -756,6 +763,32 @@ export default function EditorView() {
         </div>
       )}
 
+      {/* Geschoss-Umschalter */}
+      <div className={`absolute left-4 top-[84px] z-20 flex gap-1 p-1 ${island}`} role="group" aria-label="Geschoss">
+        {LEVELS.map((l) => (
+          <button
+            key={l.id}
+            onClick={() => setCurrentLevel(l.id)}
+            title={l.label}
+            aria-pressed={currentLevel === l.id}
+            className={btn(currentLevel === l.id ? 'primary' : 'outline', 'md')}
+          >
+            {l.short}
+          </button>
+        ))}
+      </div>
+
+      {/* Hinweis, z. B. wenn etwas im Luftraum abgelehnt wurde (blendet sich selbst aus) */}
+      {notice && (
+        <div
+          key={notice.seq}
+          role="alert"
+          className={`notice-fade pointer-events-none absolute left-1/2 -translate-x-1/2 top-[84px] z-40 max-w-[min(520px,calc(100vw-32px))] px-4 py-2.5 text-sm font-medium text-red-700 ${island}`}
+        >
+          {notice.text}
+        </div>
+      )}
+
       {/* Phasen-Zeitleiste */}
       <div className="absolute left-4 right-4 bottom-4 z-20">
         <PhaseTimeline
@@ -844,7 +877,7 @@ export default function EditorView() {
       {/* 3D-Ansicht der aktuellen Phase als Overlay */}
       {show3D && (
         <Suspense fallback={null}>
-          <Venue3D onClose={() => setShow3D(false)} />
+          <Venue3D onClose={() => setShow3D(false)} initialLevel={currentLevel} />
         </Suspense>
       )}
     </div>

@@ -9,6 +9,8 @@ import EventItemShape from './EventItemShape'
 import type { Placement } from '../utils/placement'
 import { exportCanvasAsImage } from '../utils/exportImage'
 import { splitVisiovaRun } from '../utils/visiova'
+import { itemLevel } from '../utils/levels'
+import { OG_VOIDS } from '../data/venueOG'
 import { unionBox, translateBox, worldBBox, type Box } from '../utils/geometry'
 import { clampZoom, nextZoomStep, quantizeZoom, interpretWheel, IS_COARSE_POINTER } from '../utils/viewport'
 import {
@@ -149,6 +151,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const [detailedNoCodesImage] = useImage('/plans/power-plan-nolabels.png')
   const [simplifiedNoCodesImage] = useImage('/plans/power-plan-simple-nolabels.png')
   const [powerOverlayImage] = useImage('/plans/power-overlay.png')
+  const currentLevel = useEventStore((s) => s.currentLevel)
+  const revision = useEventStore((s) => s.revision)
+  const [ogImage] = useImage(currentLevel === 'og' ? '/plans/og-plan.png' : '')
   const image = layers.hideCodes
     ? layers.simplified ? simplifiedNoCodesImage : detailedNoCodesImage
     : layers.simplified ? simplifiedImage : detailedImage
@@ -754,7 +759,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     [setVisiovaRun],
   )
 
-  const visibleItemIds = itemOrder.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible)
+  const visibleItemIds = itemOrder.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible && itemLevel(items[id]) === currentLevel)
   dragCtxRef.current = { selectedIds, items, currentPhaseId, visibleItemIds }
 
   const measureStart = measurePoints[0]
@@ -882,15 +887,36 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           {/* Layer 1, statisch: Grundriss, Strom/CEE, Bühnenzüge (Rigging) und Gitter */}
           <Layer listening={false}>
             {/* Wände / Grundriss (Erdgeschoss, kalibriert) */}
-            {layers.walls && image && <KonvaImage image={image} width={STAGE_WIDTH} height={STAGE_HEIGHT} />}
+            {layers.walls && currentLevel === 'eg' && image && <KonvaImage image={image} width={STAGE_WIDTH} height={STAGE_HEIGHT} />}
+            {layers.walls && currentLevel === 'og' && ogImage && <KonvaImage image={ogImage} width={STAGE_WIDTH} height={STAGE_HEIGHT} />}
+            {/* Luftraum im OG: kein Boden, hier lässt sich nichts platzieren */}
+            {currentLevel === 'og' &&
+              OG_VOIDS.map(({ name, rect: [x0, z0, x1, z1] }) => {
+                const w = (x1 - x0) * pixelsPerMeter
+                const h = (z1 - z0) * pixelsPerMeter
+                return (
+                  <Group key={name} x={x0 * pixelsPerMeter} y={z0 * pixelsPerMeter}>
+                    <Rect width={w} height={h} fill="rgba(37,99,235,0.10)" stroke="#2563eb" strokeWidth={1} dash={[8, 5]} />
+                    <Text
+                      width={w}
+                      y={h / 2 - 16}
+                      align="center"
+                      text={`Luftraum ${name}\nnicht belegbar`}
+                      fontSize={14}
+                      fontStyle="600"
+                      fill="#1d4ed8"
+                    />
+                  </Group>
+                )
+              })}
 
             {/* Strom/CEE-Layer: Bodentanks, CEE 16A/32A/63A als eigenes, unabhängig schaltbares Overlay */}
-            {layers.power && powerOverlayImage && (
+            {currentLevel === 'eg' && layers.power && powerOverlayImage && (
               <KonvaImage image={powerOverlayImage} width={STAGE_WIDTH} height={STAGE_HEIGHT} />
             )}
 
             {/* Bühnenzüge (Rigging) Referenzlinien */}
-            {layers.rigging &&
+            {currentLevel === 'eg' && layers.rigging &&
               RIGGING_BARS.map((bar) => {
                 const x = STAGE_FRONT_EDGE.x + metersToPixels(bar.distanceFromStageFrontM, pixelsPerMeter)
                 const widthPx = metersToPixels(STAGE_FRONT_EDGE.widthM, pixelsPerMeter)
@@ -973,7 +999,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
               const phaseData = item.phaseData[currentPhaseId]
               return (
                 <EventItemShape
-                  key={id}
+                  key={`${id}-${revision}`}
                   item={item}
                   phaseData={phaseData}
                   pixelsPerMeter={pixelsPerMeter}
