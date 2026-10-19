@@ -513,7 +513,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     const wantsPan =
       evt.button === 1 ||
       spaceDownRef.current ||
-      (onEmpty && tool === 'select' && !placement && evt.pointerType !== 'mouse')
+      (onEmpty && tool === 'select' && !placement && !(evt.pointerType === 'mouse' && (evt.shiftKey || evt.altKey)))
     if (wantsPan) {
       evt.preventDefault()
       const v = viewRef.current
@@ -547,7 +547,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
     if (placement) return // Klick wird von handlePlacementClick verarbeitet
     if (tool === 'select' && onEmpty) {
-      marqueeAdditiveRef.current = evt.shiftKey
+      marqueeAdditiveRef.current = evt.shiftKey // Shift ergänzt die Auswahl, Alt ersetzt sie
       setMarqueeStart(pt)
       setMarqueeCursor(pt)
     }
@@ -860,7 +860,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       <div
         ref={containerRef}
         className={`absolute inset-0 overflow-hidden touch-none bg-ground ${
-          panning ? 'cursor-grabbing' : spaceDown ? 'cursor-grab' : placement || tool !== 'select' ? 'cursor-crosshair' : ''
+          panning ? 'cursor-grabbing' : spaceDown || (tool === 'select' && !placement) ? 'cursor-grab' : placement || tool !== 'select' ? 'cursor-crosshair' : ''
         }`}
         onPointerDownCapture={() => {
           const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null

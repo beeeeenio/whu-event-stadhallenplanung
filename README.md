@@ -284,7 +284,7 @@ EventItem {
 - Mausrad zoomt.
 - Trackpad: zwei Finger verschieben, Pinch zoomt (`ctrlKey`).
 - Touch: Pinch und Pan.
-- Leertaste + Ziehen oder mittlere Maustaste verschieben die Ansicht.
+- Ziehen auf leerer Fläche (Links-Taste), Leertaste + Ziehen oder mittlere Maustaste verschieben die Ansicht. Ein Auswahlrechteck zieht man mit ⇧ (ergänzt die Auswahl) oder ⌥ (ersetzt sie).
 - Die Auswahl passiert schon beim Drücken (`pointerdown`).
 
 **Tastenkürzel** (`EditorView.tsx`):

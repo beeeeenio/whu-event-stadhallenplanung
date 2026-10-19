@@ -356,6 +356,82 @@ function saveLastView(camera: THREE.Camera, controls: OrbitControls) {
   }
 }
 
+/** Beschriftete Gruppe im 3D-Bedienpanel. */
+function Group3D({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{label}</div>
+      {children}
+    </div>
+  )
+}
+
+/** Auswahl genau einer Möglichkeit: die gewählte ist weiß hinterlegt und fett. */
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: { id: T; label: string; title?: string }[]
+  onChange: (v: T) => void
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex gap-0.5 p-0.5 rounded-lg bg-black/[0.07]">
+      {options.map((o) => {
+        const active = o.id === value
+        return (
+          <button
+            key={o.id}
+            role="radio"
+            aria-checked={active}
+            title={o.title}
+            onClick={() => onChange(o.id)}
+            className={`flex-1 h-8 rounded-md text-[12px] transition-colors select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
+              active ? 'bg-white text-ink font-semibold shadow-sm' : 'text-ink2 hover:text-ink font-medium'
+            }`}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Ein-/Ausschalter mit sichtbarem Zustand (Schalter links Aus, rechts An). */
+function SwitchRow({
+  label,
+  checked,
+  onChange,
+  disabled,
+  title,
+}: {
+  label: string
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+  title?: string
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      title={title}
+      onClick={() => onChange(!checked)}
+      className="flex items-center justify-between h-8 px-1 rounded-md text-[12px] font-medium text-ink select-none hover:bg-black/5 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+    >
+      <span>{label}</span>
+      <span className={`relative w-8 h-[18px] rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-black/25'}`}>
+        <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-[14px]' : ''}`} />
+      </span>
+    </button>
+  )
+}
+
 interface Props {
   onClose: () => void
   /** Geschoss, das beim Öffnen gezeigt wird (das gerade bearbeitete). */
@@ -557,55 +633,54 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
   return (
     <div className="absolute inset-0 z-40" style={{ background: VENUE.background }}>
       <div ref={mountRef} className="absolute inset-0" />
-      <div className={`absolute top-4 left-4 flex items-center gap-2 p-1.5 pl-3 rounded-xl ${island}`}>
-        <span className="text-xs font-semibold text-ink">3D · {phaseName}</span>
-        <button onClick={() => requestView(false)} className={islandBtn(eye ? 'plain' : 'dark', 'h-8 px-2.5 text-[11px] font-medium')}>
-          Übersicht
-        </button>
-        <button onClick={() => requestView(true)} className={islandBtn(eye ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
-          Augenhöhe
-        </button>
-        <button onClick={() => setCurtainOpen((v) => !v)} className={islandBtn('plain', 'h-8 px-2.5 text-[11px] font-medium')}>
-          {curtainOpen ? 'Vorhang zu' : 'Vorhang auf'}
-        </button>
-        <button
-          onClick={() => setShadows((v) => !v)}
-          className={islandBtn(shadows ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
-          title="Schatten ein-/ausblenden"
-        >
-          Schatten
-        </button>
-        {([['eg', 'EG'], ['og', 'OG'], ['both', 'Beide']] as const).map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => setLevelView(id)}
-            className={islandBtn(levelView === id ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
-            title={id === 'both' ? 'Erdgeschoss und Obergeschoss übereinander' : id === 'eg' ? 'Nur Erdgeschoss' : 'Nur Obergeschoss'}
-          >
-            {label}
-          </button>
-        ))}
-        <button
-          onClick={() => setShowPartitions((v) => !v)}
-          className={islandBtn(showPartitions ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
-          title="Mobile Trennwände im großen Saal (teilen ihn in drei Teile)"
-        >
-          Trennwände
-        </button>
-        <button
-          onClick={() => setShowUpperWalls((v) => !v)}
-          className={islandBtn(showUpperWalls ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}
-          title="Oberen, weißen Teil der Wände ein-/ausblenden (Holzverkleidung, Türen und Glas bleiben)"
-        >
-          Obere Wände
-        </button>
-        <button onClick={() => setShowWalls((v) => !v)} className={islandBtn(showWalls ? 'dark' : 'plain', 'h-8 px-2.5 text-[11px] font-medium')}>
-          Wände
-        </button>
-        <button onClick={onClose} className={islandBtn('plain', 'h-8 px-2.5 text-[11px] font-medium')}>
-          ✕ Zurück zu 2D
-        </button>
+      <div className={`absolute top-4 left-4 w-[236px] flex flex-col gap-3 p-3 rounded-2xl ${island}`}>
+        <div className="text-xs font-semibold text-ink">3D · {phaseName}</div>
+        <Group3D label="Kamera">
+          <Segmented
+            label="Kamera"
+            value={eye ? 'eye' : 'overview'}
+            options={[
+              { id: 'overview', label: 'Übersicht' },
+              { id: 'eye', label: 'Augenhöhe' },
+            ]}
+            onChange={(v) => requestView(v === 'eye')}
+          />
+        </Group3D>
+        <Group3D label="Geschoss">
+          <Segmented
+            label="Geschoss"
+            value={levelView}
+            options={[
+              { id: 'eg', label: 'EG', title: 'Nur Erdgeschoss' },
+              { id: 'og', label: 'OG', title: 'Nur Obergeschoss' },
+              { id: 'both', label: 'Beide', title: 'Erdgeschoss und Obergeschoss übereinander' },
+            ]}
+            onChange={setLevelView}
+          />
+        </Group3D>
+        <Group3D label="Anzeigen">
+          <SwitchRow label="Wände" checked={showWalls} onChange={setShowWalls} />
+          <SwitchRow
+            label="Obere Wände"
+            checked={showUpperWalls}
+            onChange={setShowUpperWalls}
+            disabled={!showWalls || levelView !== 'eg'}
+            title={levelView !== 'eg' ? 'Nur in der reinen EG-Ansicht (im Doppelbild stehen die EG-Wände bis zum OG-Boden)' : 'Oberen, weißen Teil der Wände ein-/ausblenden'}
+          />
+          <SwitchRow
+            label="Trennwände"
+            checked={showPartitions}
+            onChange={setShowPartitions}
+            disabled={levelView === 'og'}
+            title="Mobile Trennwände im großen Saal (teilen ihn in drei Teile)"
+          />
+          <SwitchRow label="Vorhang offen" checked={curtainOpen} onChange={setCurtainOpen} disabled={levelView === 'og'} title="Hauptvorhang der Bühne" />
+          <SwitchRow label="Schatten" checked={shadows} onChange={setShadows} />
+        </Group3D>
       </div>
+      <button onClick={onClose} className={`absolute top-4 right-4 ${islandBtn('plain', 'h-10 px-3.5 text-[13px] font-semibold')} ${island}`}>
+        ✕ Zurück zu 2D
+      </button>
       <div className={`absolute bottom-4 left-4 px-3 py-2 rounded-xl text-[11px] text-ink3 ${island}`}>
         Ziehen: drehen · Rechtsklick/zwei Finger: verschieben · Scrollen: zoomen
       </div>
