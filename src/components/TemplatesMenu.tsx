@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { onOpenMenu } from '../utils/uiEvents'
 import { v4 as uuid } from 'uuid'
 import { useEventStore } from '../store/store'
 import type { EventItem } from '../types'
@@ -12,6 +13,7 @@ export default function TemplatesMenu() {
   const addItemsBatch = useEventStore((s) => s.addItemsBatch)
   const canDelete = !!useCurrentUser()
   const [open, setOpen] = useState(false)
+  useEffect(() => onOpenMenu('templates', () => setOpen(true)), [])
   const [templates, setTemplates] = useState<LayoutTemplate[]>([])
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')

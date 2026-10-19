@@ -187,8 +187,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   // Ansichts-Gesten: Verschieben (Leertaste, Mitteltaste, Finger auf leerer Fläche), Pinch, Leertaste
   const [spaceDown, setSpaceDown] = useState(false)
   const spaceDownRef = useRef(false)
-  // ⇧/⌥ gehalten: Ziehen auf leerer Fläche zieht ein Auswahlrechteck (Fadenkreuz-Cursor)
-  const [marqueeKey, setMarqueeKey] = useState(false)
   const [panning, setPanning] = useState(false)
   const panRef = useRef<{ cx: number; cy: number; x: number; y: number; tapOnEmpty: boolean } | null>(null)
   const pinchRef = useRef<{ dist: number; cx: number; cy: number } | null>(null)
@@ -424,7 +422,6 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTextTarget(e.target)) return
-      if (e.key === 'Shift' || e.key === 'Alt') setMarqueeKey(true)
       if (e.code === 'Space') {
         e.preventDefault()
         setSpace(true)
@@ -442,12 +439,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') setSpace(false)
-      if (e.key === 'Shift' || e.key === 'Alt') setMarqueeKey(false)
     }
-    const onBlur = () => {
-      setSpace(false)
-      setMarqueeKey(false)
-    }
+    const onBlur = () => setSpace(false)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
@@ -521,7 +514,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       evt.button === 1 ||
       spaceDownRef.current ||
       tool === 'hand' ||
-      (onEmpty && tool === 'select' && !placement && !(evt.pointerType === 'mouse' && (evt.shiftKey || evt.altKey)))
+      (onEmpty && tool === 'select' && !placement && evt.pointerType !== 'mouse')
     if (wantsPan) {
       evt.preventDefault()
       const v = viewRef.current
@@ -555,7 +548,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
     if (placement) return // Klick wird von handlePlacementClick verarbeitet
     if (tool === 'select' && onEmpty) {
-      marqueeAdditiveRef.current = evt.shiftKey // Shift ergänzt die Auswahl, Alt ersetzt sie
+      marqueeAdditiveRef.current = evt.shiftKey // Shift ergänzt die Auswahl
       setMarqueeStart(pt)
       setMarqueeCursor(pt)
     }
@@ -870,9 +863,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
         className={`absolute inset-0 overflow-hidden touch-none bg-ground ${
           panning
             ? 'cursor-grabbing'
-            : spaceDown || tool === 'hand' || (tool === 'select' && !placement && !marqueeKey)
+            : spaceDown || tool === 'hand'
               ? 'cursor-grab'
-              : placement || tool !== 'select' || marqueeKey
+              : placement || tool !== 'select'
                 ? 'cursor-crosshair'
                 : ''
         }`}

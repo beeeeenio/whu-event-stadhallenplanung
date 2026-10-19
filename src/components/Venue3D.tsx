@@ -11,6 +11,7 @@ import { MODELS } from './models3d'
 import { COLUMNS_PX, DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
 import { itemLevel, type Level } from '../utils/levels'
+import { ControlGroup, Segmented, SwitchRow } from './controls'
 import { OG_ELEVATION_M, OG_FOOTPRINT, OG_SLAB_THICKNESS_M, OG_VOIDS, OG_WALL_HEIGHT_M, OG_WALLS, subtractRects } from '../data/venueOG'
 
 /** Plan-Abmessungen in Metern (Stromplan 1755×1240px bei 23,6px/m). */
@@ -356,82 +357,6 @@ function saveLastView(camera: THREE.Camera, controls: OrbitControls) {
   }
 }
 
-/** Beschriftete Gruppe im 3D-Bedienpanel. */
-function Group3D({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-ink3">{label}</div>
-      {children}
-    </div>
-  )
-}
-
-/** Auswahl genau einer Möglichkeit: die gewählte ist weiß hinterlegt und fett. */
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string
-  value: T
-  options: { id: T; label: string; title?: string }[]
-  onChange: (v: T) => void
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex gap-0.5 p-0.5 rounded-lg bg-black/[0.07]">
-      {options.map((o) => {
-        const active = o.id === value
-        return (
-          <button
-            key={o.id}
-            role="radio"
-            aria-checked={active}
-            title={o.title}
-            onClick={() => onChange(o.id)}
-            className={`flex-1 h-8 rounded-md text-[12px] transition-colors select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 ${
-              active ? 'bg-white text-ink font-semibold shadow-sm' : 'text-ink2 hover:text-ink font-medium'
-            }`}
-          >
-            {o.label}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/** Ein-/Ausschalter mit sichtbarem Zustand (Schalter links Aus, rechts An). */
-function SwitchRow({
-  label,
-  checked,
-  onChange,
-  disabled,
-  title,
-}: {
-  label: string
-  checked: boolean
-  onChange: (v: boolean) => void
-  disabled?: boolean
-  title?: string
-}) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      title={title}
-      onClick={() => onChange(!checked)}
-      className="flex items-center justify-between h-8 px-1 rounded-md text-[12px] font-medium text-ink select-none hover:bg-black/5 disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-    >
-      <span>{label}</span>
-      <span className={`relative w-8 h-[18px] rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-black/25'}`}>
-        <span className={`absolute top-[2px] left-[2px] w-[14px] h-[14px] rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-[14px]' : ''}`} />
-      </span>
-    </button>
-  )
-}
-
 interface Props {
   onClose: () => void
   /** Geschoss, das beim Öffnen gezeigt wird (das gerade bearbeitete). */
@@ -635,7 +560,7 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
       <div ref={mountRef} className="absolute inset-0" />
       <div className={`absolute top-4 left-4 w-[236px] flex flex-col gap-3 p-3 rounded-2xl ${island}`}>
         <div className="text-xs font-semibold text-ink">3D · {phaseName}</div>
-        <Group3D label="Kamera">
+        <ControlGroup label="Kamera">
           <Segmented
             label="Kamera"
             value={eye ? 'eye' : 'overview'}
@@ -645,8 +570,8 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
             ]}
             onChange={(v) => requestView(v === 'eye')}
           />
-        </Group3D>
-        <Group3D label="Geschoss">
+        </ControlGroup>
+        <ControlGroup label="Geschoss">
           <Segmented
             label="Geschoss"
             value={levelView}
@@ -657,8 +582,8 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
             ]}
             onChange={setLevelView}
           />
-        </Group3D>
-        <Group3D label="Anzeigen">
+        </ControlGroup>
+        <ControlGroup label="Anzeigen">
           <SwitchRow label="Wände" checked={showWalls} onChange={setShowWalls} />
           <SwitchRow
             label="Obere Wände"
@@ -676,7 +601,7 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
           />
           <SwitchRow label="Vorhang offen" checked={curtainOpen} onChange={setCurtainOpen} disabled={levelView === 'og'} title="Hauptvorhang der Bühne" />
           <SwitchRow label="Schatten" checked={shadows} onChange={setShadows} />
-        </Group3D>
+        </ControlGroup>
       </div>
       <button onClick={onClose} className={`absolute top-4 right-4 ${islandBtn('plain', 'h-10 px-3.5 text-[13px] font-semibold')} ${island}`}>
         ✕ Zurück zu 2D

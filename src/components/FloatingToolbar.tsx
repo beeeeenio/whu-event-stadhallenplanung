@@ -3,7 +3,9 @@ import type { PickerTab } from './ObjectPicker'
 import type { ItemType } from '../types'
 import type { Placement } from '../utils/placement'
 import { island, islandBtn } from '../utils/ui'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useEventStore } from '../store/store'
+import { ControlGroup, SwitchRow } from './controls'
 
 type ActivePanel = 'picker' | 'inventory' | 'properties' | 'grid' | 'command' | 'text' | 'shortcuts' | null
 
@@ -30,9 +32,61 @@ interface FloatingToolbarProps {
   /** Rasterweite in Pixeln (20 px = 1 m). */
   gridSize: number
   onGridSizeChange: (px: number) => void
-  codesHidden: boolean
-  onCodesToggle: () => void
   on3D?: () => void
+}
+
+/** Ebenen-Menü: Grundriss, Strom/CEE, Bühnenzüge, vereinfachter Plan und Steckdosen-Codes ein-/ausblenden. */
+function LayersMenu() {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const layers = useEventStore((s) => s.layers)
+  const toggleLayer = useEventStore((s) => s.toggleLayer)
+  const level = useEventStore((s) => s.currentLevel)
+  const egOnly = level !== 'eg'
+  const egHint = 'Nur im Erdgeschoss'
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={islandBtn(open ? 'dark' : 'plain', 'h-9 px-2 text-[11px] font-medium')}
+        title="Ebenen: Plan, Strom/CEE, Bühnenzüge, Steckdosen-Codes ein-/ausblenden"
+      >
+        {svg(<><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 12.5l9 5 9-5" /><path d="M3 17l9 5 9-5" /></>)}
+        Ebenen
+      </button>
+      {open && (
+        <div className={`absolute bottom-full right-0 mb-3 w-[250px] flex flex-col gap-3 p-3 rounded-2xl ${island}`}>
+          <ControlGroup label="Plan">
+            <SwitchRow label="Grundriss" checked={layers.walls} onChange={() => toggleLayer('walls')} />
+            <SwitchRow label="Vereinfachter Plan" checked={layers.simplified} onChange={() => toggleLayer('simplified')} disabled={egOnly} title={egOnly ? egHint : 'Aufgehellter statt detaillierter Plan'} />
+            <SwitchRow label="Steckdosen-Codes" checked={!layers.hideCodes} onChange={() => toggleLayer('hideCodes')} disabled={egOnly} title={egOnly ? egHint : 'Codes wie 3F9 im Plan'} />
+          </ControlGroup>
+          <ControlGroup label="Technik">
+            <SwitchRow label="Strom / CEE" checked={layers.power} onChange={() => toggleLayer('power')} disabled={egOnly} title={egOnly ? egHint : 'Bodentanks und CEE-Anschlüsse'} />
+            <SwitchRow label="Bühnenzüge" checked={layers.rigging} onChange={() => toggleLayer('rigging')} disabled={egOnly} title={egOnly ? egHint : 'Züge und Belastbarkeit über der Bühne'} />
+          </ControlGroup>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Helper functions for dock tools
@@ -90,8 +144,6 @@ export default function FloatingToolbar({
   onGridToggle,
   gridSize,
   onGridSizeChange,
-  codesHidden,
-  onCodesToggle,
   on3D,
 }: FloatingToolbarProps) {
 
@@ -216,13 +268,7 @@ export default function FloatingToolbar({
             <option value={40}>2 m</option>
           </select>
         )}
-        <button
-          onClick={onCodesToggle}
-          className={islandBtn(codesHidden ? 'plain' : 'dark', 'h-9 px-2 text-[11px] font-medium')}
-          title="Steckdosen-Codes (z. B. 3F9) im Plan ein-/ausblenden"
-        >
-          Codes
-        </button>
+        <LayersMenu />
         {on3D && (
           <button onClick={on3D} className={islandBtn('plain', 'h-9 px-2 text-[11px] font-medium')} title="Aktuelle Phase in 3D ansehen">
             3D

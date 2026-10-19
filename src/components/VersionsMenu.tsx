@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { onOpenMenu } from '../utils/uiEvents'
 import { v4 as uuid } from 'uuid'
 import { useEventStore } from '../store/store'
 import { useSyncStore } from '../backend/projectSync'
@@ -18,6 +19,7 @@ export default function VersionsMenu() {
   const canDelete = canEdit && !!user
   const restoreVersion = useEventStore((s) => s.restoreVersion)
   const [open, setOpen] = useState(false)
+  useEffect(() => onOpenMenu('versions', () => setOpen(true)), [])
   const [versions, setVersions] = useState<ProjectVersion[]>([])
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')
