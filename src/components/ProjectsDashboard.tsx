@@ -181,7 +181,7 @@ export default function ProjectsDashboard() {
         <button onClick={() => openProject(p.id)} className="text-left w-full">
           <div className="font-medium text-ink truncate">{p.name}</div>
           <div className="text-xs text-ink3 mt-1">
-            Zuletzt bearbeitet: {formatDate(p.updatedAt)}
+            Zuletzt bearbeitet: {formatDate(p.updatedAt)}{p.lastEditorName ? ` von ${p.lastEditorName}` : ''}
             {badge(p) && <span className="ml-2 text-accent">{badge(p)}</span>}
           </div>
         </button>

@@ -19,6 +19,8 @@ export interface ProjectMeta {
   /** Name oder E-Mail des Eigentümers – nur lesbar, wenn man den Account sehen darf. */
   ownerName?: string
   hasOwner: boolean
+  /** Wer zuletzt gespeichert hat (leer bei älteren Projekten oder ohne Änderung). */
+  lastEditorName?: string
 }
 
 export interface LoadedProject {
@@ -42,7 +44,7 @@ const projects = () => pb.collection<ProjectRecord>('projects')
 export async function listProjects(): Promise<ProjectMeta[]> {
   const me = currentUserId()
   const records = await projects().getFullList({
-    fields: 'id,name,updated,owner,editors,viewers,expand.owner.name,expand.owner.email',
+    fields: 'id,name,updated,owner,editors,viewers,lastEditorName,expand.owner.name,expand.owner.email',
     expand: 'owner',
     sort: '-updated',
   })
@@ -54,6 +56,7 @@ export async function listProjects(): Promise<ProjectMeta[]> {
     membership: me ? roleIn(r, me) : null,
     ownerName: r.expand?.owner?.name || r.expand?.owner?.email || undefined,
     hasOwner: !!r.owner,
+    lastEditorName: (r as { lastEditorName?: string }).lastEditorName || undefined,
   }))
 }
 
@@ -107,15 +110,16 @@ interface VersionRecord {
   name: string
   createdAt: number
   data: ProjectData
+  createdByName?: string
 }
 
 export async function listVersions(projectId: string): Promise<ProjectVersion[]> {
   const records = await pb.collection<VersionRecord>('project_versions').getFullList({
     filter: pb.filter('project = {:projectId}', { projectId }),
     sort: '-createdAt',
-    fields: 'id,name,createdAt,data',
+    fields: 'id,name,createdAt,data,createdByName',
   })
-  return records.map(({ id, name, createdAt, data }) => ({ id, name, createdAt, data }))
+  return records.map(({ id, name, createdAt, data, createdByName }) => ({ id, name, createdAt, data, createdByName: createdByName || undefined }))
 }
 
 export async function createVersion(projectId: string, v: ProjectVersion): Promise<void> {
@@ -208,11 +212,124 @@ export async function createAccount(a: { email: string; name: string; password: 
   await users().create({ ...a, passwordConfirm: a.password })
 }
 
-export async function updateAccount(id: string, patch: { role?: 'admin' | 'user'; password?: string }): Promise<void> {
+export async function updateAccount(id: string, patch: { role?: 'admin' | 'user'; password?: string; disabled?: boolean }): Promise<void> {
   const { password, ...rest } = patch
   await users().update(id, password ? { ...rest, password, passwordConfirm: password } : rest)
 }
 
 export async function deleteAccount(id: string): Promise<void> {
   await users().delete(id)
+}
+
+// ---------- Benutzerverwaltung v2 (server/pb_hooks/account_admin.pb.js, Migration 1791159000) ----------
+
+export interface ServerFeatures {
+  features: number
+  mailEnabled: boolean
+  minPassword: number
+}
+
+/** Was der Server kann; null, wenn er noch nicht aktualisiert ist (dann zeigt die App die einfache Verwaltung). */
+export async function serverFeatures(): Promise<ServerFeatures | null> {
+  try {
+    const f = await pb.send<ServerFeatures>('/api/stadthalle/config', { method: 'GET' })
+    return f && typeof f.features === 'number' ? f : null
+  } catch {
+    return null
+  }
+}
+
+export interface AccountOverview {
+  id: string
+  email: string
+  name: string
+  role: AccountRole
+  disabled: boolean
+  /** Zeitpunkt der letzten Anmeldung, leer = noch nie. */
+  lastLogin: string
+  /** Gesetzt, solange die Einladung nicht angenommen wurde. */
+  invitedAt: string
+  created: string
+  /** Anzahl Projekte, die der Account besitzt. */
+  projects: number
+}
+
+export type AccountStatus = 'active' | 'invited' | 'disabled'
+
+export function accountStatus(a: Pick<AccountOverview, 'disabled' | 'invitedAt'>): AccountStatus {
+  return a.disabled ? 'disabled' : a.invitedAt ? 'invited' : 'active'
+}
+
+export function accountsOverview(): Promise<AccountOverview[]> {
+  return pb.send('/api/stadthalle/accounts/overview', { method: 'GET' })
+}
+
+export interface TokenLink {
+  token: string
+  expires: string
+  emailSent: boolean
+  kind?: 'invite' | 'reset'
+}
+
+export function inviteAccount(a: { email: string; name: string; role: 'admin' | 'user' }): Promise<TokenLink & { account: AccountOverview }> {
+  return pb.send('/api/stadthalle/accounts/invite', { method: 'POST', body: a })
+}
+
+export function createResetLink(accountId: string): Promise<TokenLink & { kind: 'invite' | 'reset' }> {
+  return pb.send(`/api/stadthalle/accounts/${accountId}/reset-link`, { method: 'POST' })
+}
+
+export function transferProjects(fromId: string, toUserId: string): Promise<{ projects: number; templates: number }> {
+  return pb.send(`/api/stadthalle/accounts/${fromId}/transfer`, { method: 'POST', body: { toUserId } })
+}
+
+/** Adresse, unter der ein Einladungs- bzw. Reset-Link geöffnet wird. */
+export function tokenLink(kind: 'invite' | 'reset', token: string): string {
+  return `${window.location.origin}/#/${kind === 'invite' ? 'einladung' : 'passwort'}/${token}`
+}
+
+export function tokenInfo(token: string): Promise<{ kind: 'invite' | 'reset'; email: string; name: string }> {
+  return pb.send(`/api/stadthalle/token/${encodeURIComponent(token)}`, { method: 'GET' })
+}
+
+export function redeemToken(token: string, password: string): Promise<{ email: string }> {
+  return pb.send(`/api/stadthalle/token/${encodeURIComponent(token)}/redeem`, { method: 'POST', body: { password } })
+}
+
+export function forgotPassword(email: string): Promise<{ mailEnabled: boolean }> {
+  return pb.send('/api/stadthalle/forgot', { method: 'POST', body: { email } })
+}
+
+// ---------- Betrachter-Links (server/pb_hooks/shares.pb.js) ----------
+
+export interface ShareLink {
+  id: string
+  created: string
+  createdByName: string
+  /** Leer = unbegrenzt. */
+  expires: string
+  revoked: boolean
+  expired: boolean
+  lastUsed: string
+}
+
+export function listShareLinks(projectId: string): Promise<ShareLink[]> {
+  return pb.send(`/api/stadthalle/projects/${projectId}/share-links`, { method: 'GET' })
+}
+
+/** `days` 0 = unbegrenzt. Der Token steht nur in dieser Antwort. */
+export function createShareLink(projectId: string, days: number): Promise<ShareLink & { token: string }> {
+  return pb.send(`/api/stadthalle/projects/${projectId}/share-links`, { method: 'POST', body: { days } })
+}
+
+export async function revokeShareLink(projectId: string, linkId: string): Promise<void> {
+  await pb.send(`/api/stadthalle/projects/${projectId}/share-links/${linkId}`, { method: 'DELETE' })
+}
+
+export function shareUrl(token: string): string {
+  return `${window.location.origin}/#/ansicht/${token}`
+}
+
+export function loadShared(token: string): Promise<{ name: string; data: ProjectData | null; updated: string }> {
+  return pb.send(`/api/stadthalle/shared/${encodeURIComponent(token)}`, { method: 'GET' })
 }

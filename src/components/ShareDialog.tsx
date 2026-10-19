@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import * as api from '../backend/api'
 import { errorMessage, pb, type Role } from '../backend/pb'
 import { btn, Z } from '../utils/ui'
+import LinkBox from './LinkBox'
 
 const ROLE_LABELS: Record<Role, string> = {
   owner: 'Eigentümer',
@@ -77,7 +78,7 @@ export default function ShareDialog({ projectId, projectName, myRole, onClose, o
       <div
         role="dialog"
         aria-label="Projekt teilen"
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-5 max-h-[92vh] overflow-y-auto"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -164,6 +165,8 @@ export default function ShareDialog({ projectId, projectName, myRole, onClose, o
           ))}
         </ul>
 
+        {isOwner && <ViewerLinks projectId={projectId} />}
+
         {!isOwner && (
           <div className="mt-4 flex justify-end">
             <button onClick={leave} disabled={busy} className={btn('dangerOutline', 'sm')}>
@@ -173,5 +176,110 @@ export default function ShareDialog({ projectId, projectName, myRole, onClose, o
         )}
       </div>
     </div>
+  )
+}
+
+const DURATIONS: [number, string][] = [
+  [1, '1 Tag'],
+  [7, '7 Tage'],
+  [30, '30 Tage'],
+  [90, '90 Tage'],
+  [0, 'Unbegrenzt'],
+]
+
+function formatDay(iso: string): string {
+  return new Date(Date.parse(iso.replace(' ', 'T'))).toLocaleDateString('de-DE')
+}
+
+/**
+ * Betrachter-Link: Wer ihn kennt, sieht das Projekt (nur lesen), ohne Account – etwa die Stadt oder Dienstleister.
+ * Der Link wird nur direkt nach dem Erstellen angezeigt (der Server speichert nur einen Hash); später lässt er sich
+ * widerrufen und durch einen neuen ersetzen. Braucht den aktualisierten Server (server/pb_hooks/shares.pb.js).
+ */
+function ViewerLinks({ projectId }: { projectId: string }) {
+  const [supported, setSupported] = useState(false)
+  const [links, setLinks] = useState<api.ShareLink[] | null>(null)
+  const [days, setDays] = useState(30)
+  const [created, setCreated] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    void api.serverFeatures().then((f) => {
+      if (!f) return
+      setSupported(true)
+      api.listShareLinks(projectId).then(setLinks, (err) => setError(errorMessage(err)))
+    })
+  }, [projectId])
+
+  if (!supported) return null
+
+  const run = async (action: () => Promise<void>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await action()
+      setLinks(await api.listShareLinks(projectId))
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="mt-5 border-t border-line pt-4">
+      <h3 className="text-sm font-semibold text-ink">Betrachter-Link</h3>
+      <p className="text-[11px] text-ink3 mb-2">Nur ansehen, ohne Account, zum Beispiel für die Stadt oder Dienstleister. Du kannst ihn jederzeit widerrufen.</p>
+      <div className="flex flex-wrap gap-2">
+        <select value={days} onChange={(e) => setDays(Number(e.target.value))} className={`${field} py-1.5`} aria-label="Gültigkeit">
+          {DURATIONS.map(([d, label]) => (
+            <option key={d} value={d}>
+              Gültig: {label}
+            </option>
+          ))}
+        </select>
+        <button
+          disabled={busy}
+          onClick={() =>
+            void run(async () => {
+              const res = await api.createShareLink(projectId, days)
+              setCreated(api.shareUrl(res.token))
+            })
+          }
+          className={btn('primary', 'md')}
+        >
+          Link erstellen
+        </button>
+      </div>
+      {created && <LinkBox link={created} info="Dieser Link wird nur jetzt angezeigt. Später kannst du ihn nur widerrufen und einen neuen erstellen." />}
+      {error && <p className="mt-2 text-sm text-red-700">{error}</p>}
+      {links && links.length > 0 && (
+        <ul className="mt-3 divide-y divide-line border-t border-line">
+          {links.map((l) => {
+            const active = !l.revoked && !l.expired
+            return (
+              <li key={l.id} className="py-2 flex items-center gap-2 text-xs">
+                <div className="flex-1 min-w-0">
+                  <div className="text-ink">
+                    Erstellt {formatDay(l.created)}
+                    {l.createdByName ? ` von ${l.createdByName}` : ''} · {l.expires ? `gültig bis ${formatDay(l.expires)}` : 'unbegrenzt'}
+                  </div>
+                  <div className="text-ink3">{l.lastUsed ? `Zuletzt geöffnet ${formatDay(l.lastUsed)}` : 'Noch nicht geöffnet'}</div>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 font-medium ${active ? 'bg-plus-soft text-plus' : 'bg-chip text-ink3'}`}>
+                  {l.revoked ? 'Widerrufen' : l.expired ? 'Abgelaufen' : 'Aktiv'}
+                </span>
+                {active && (
+                  <button onClick={() => void run(() => api.revokeShareLink(projectId, l.id))} disabled={busy} className={btn('dangerOutline', 'sm')}>
+                    Widerrufen
+                  </button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
   )
 }

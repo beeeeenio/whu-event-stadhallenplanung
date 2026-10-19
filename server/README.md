@@ -32,6 +32,31 @@ für HTTPS.
     stuft nur der Super-Admin zurück; löschen kann sich ein Admin nur selbst.
   - **user** (oder leer) – sieht eigene und freigegebene Projekte.
 
+### Benutzerverwaltung, Betrachter-Links, Autoren (19.10.2026)
+
+Migration `1791159000_user_management.js`, Hooks `account_admin.pb.js`, `shares.pb.js`
+(Helfer in `pb_hooks/lib/`). Die App prüft über `GET /api/stadthalle/config`, ob der Server das kann;
+ohne Update zeigt sie die einfache Verwaltung von früher und blendet die neuen Bereiche aus.
+
+- **users**: neu `disabled` (gesperrt), `lastLogin`, `invitedAt` (Einladung noch nicht angenommen).
+  Wer gesperrt wird, ist sofort überall abgemeldet und kann sich nicht mehr anmelden.
+- **account_tokens**: Einladungs- und Passwort-Links, nur der Hash des Tokens. Einladung 7 Tage,
+  Passwort-Link 2 Tage gültig, jeweils einmal einlösbar; ein neuer Link macht den alten ungültig.
+  Keine API-Regeln, nur die Hooks greifen zu.
+- **share_links**: Betrachter-Links pro Projekt (nur lesen, ohne Account), ebenfalls nur als Hash; Ablauf
+  1/7/30/90 Tage oder unbegrenzt, widerrufbar.
+- **projects.lastEditorName**, **project_versions.createdByName**: wer zuletzt gespeichert hat. Setzt der
+  Server, der Client kann es nicht fälschen.
+- Routen (alle unter `/api/stadthalle/`):
+  - `GET config` (öffentlich), `GET accounts/overview` (Admins: Status, letzter Login, Projektzahl)
+  - `POST accounts/invite`, `POST accounts/{id}/reset-link`, `POST accounts/{id}/transfer` (Admins; Rechte wie in der Rollen-Tabelle oben)
+  - öffentlich mit Token: `GET token/{token}`, `POST token/{token}/redeem` (Passwort setzen), `POST forgot`
+  - `GET/POST projects/{id}/share-links`, `DELETE projects/{id}/share-links/{linkId}` (Eigentümer und Admins), öffentlich `GET shared/{token}`
+- **E-Mail**: Einladungen und Passwort-Links gehen immer auch als Link zum Kopieren an den Admin. Ist SMTP
+  eingerichtet (Admin-Oberfläche → Settings → Mail, und `Application URL` unter Settings), verschickt der Server sie
+  zusätzlich; „Passwort vergessen“ auf der Anmeldeseite funktioniert nur mit SMTP.
+- **Reihenfolge beim Ausrollen:** zuerst Server (`install.sh`), dann Frontend – oder umgekehrt, die App kommt mit beidem zurecht.
+
 Speichern mit Konflikterkennung: Die App schickt `version` = geladene Version + 1.
 Hat jemand anderes inzwischen gespeichert, antwortet der Server mit **409**
 (`pb_hooks/projects.pb.js`).
@@ -78,7 +103,15 @@ Vor der Domain-Umstellung über den SSH-Tunnel (s. o.) unter
 
 ## Lokal entwickeln
 
-`npm run dev` leitet `/api` und `/_` an PocketBase weiter (`vite.config.ts`),
+Am einfachsten mit Testkonten (lädt PocketBase selbst herunter, Daten in `server/.dev/`):
+
+```sh
+bash server/dev-local.sh     # Terminal 1, läuft bis Strg+C
+npm run dev                  # Terminal 2 → http://localhost:5173
+```
+
+Konten (Passwort jeweils `Passwort1234!`): `super@test.local` (Super-Admin), `admin@test.local`, `olga@test.local`, `otto@test.local`.
+Hintergrund und manuelle Variante: `npm run dev` leitet `/api` und `/_` an PocketBase weiter (`vite.config.ts`),
 standardmäßig an `127.0.0.1:8090`:
 
 - **Mit eigener Test-Datenbank** (empfohlen): PocketBase-Binary herunterladen

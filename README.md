@@ -390,6 +390,7 @@ Das Backend gibt es nur auf dem Branch `backend-pocketbase`. Es besteht aus `ser
 - **Speichern** über `src/backend/projectSync.ts`:
   - Gespeichert wird automatisch und verzögert.
   - Konflikterkennung über `version`: Hat jemand anderes inzwischen gespeichert, antwortet der Server mit 409 (`server/pb_hooks/projects.pb.js`).
+- **Benutzerverwaltung** (Server `account_admin.pb.js`, App `UsersDialog.tsx`): Einladung per Link, Passwort-Links, Sperren statt Löschen, Projekte übertragen, Übersicht mit Status. Betrachter-Links (`shares.pb.js`, `SharedViewer.tsx`, Adresse `#/ansicht/<token>`), Autor bei Änderungen. Alles braucht das Server-Update aus `server/README.md`; ohne es zeigt die App die einfache Verwaltung (`UsersDialogLegacy.tsx`).
 - **Zugang:** Accounts legen Admins in der App an, eine Selbst-Registrierung gibt es nicht. `OPEN_ACCESS` in `src/backend/pb.ts` muss zu den Server-Migrationen passen.
 - **Server-Zugang:** Den Server verwaltet ein Mitbewohner von Benni. Agenten haben **keinen** SSH-Zugang. Das Frontend kommt nur über den Branch und die GitHub Action auf den Server. Server-Änderungen (Hooks, Migrationen) installiert der Admin mit `server/install.sh`.
 

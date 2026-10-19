@@ -36,7 +36,7 @@ interface FloatingToolbarProps {
 }
 
 /** Ebenen-Menü: Grundriss, Strom/CEE, Bühnenzüge, vereinfachter Plan und Steckdosen-Codes ein-/ausblenden. */
-function LayersMenu() {
+export function LayersMenu() {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const layers = useEventStore((s) => s.layers)

@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
+import * as api from '../backend/api'
 import { ClientResponseError } from 'pocketbase'
 import { errorMessage, pb } from '../backend/pb'
 import { btn } from '../utils/ui'
 import BrandLogo from './BrandLogo'
 
-type Step = { kind: 'email' } | { kind: 'code'; otpId: string } | { kind: 'password' }
+type Step = { kind: 'email' } | { kind: 'code'; otpId: string } | { kind: 'password' } | { kind: 'forgot' }
 
 /** Login per E-Mail-Code erst anbieten, wenn auf dem Server SMTP eingerichtet ist (server/README.md). */
 const EMAIL_CODE_LOGIN = false
@@ -25,6 +26,11 @@ export default function LoginView() {
   const [showPassword, setShowPassword] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mailEnabled, setMailEnabled] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
+  useEffect(() => {
+    void api.serverFeatures().then((f) => setMailEnabled(!!f?.mailEnabled))
+  }, [])
 
   /** Bei 400 steht `rejected` da (falscher Code/Passwort), sonst die allgemeine Fehlermeldung. */
   const attempt = async (e: FormEvent, action: () => Promise<unknown>, rejected: string) => {
@@ -176,12 +182,63 @@ export default function LoginView() {
                 Stattdessen Code per E-Mail
               </button>
             )}
+            <button
+              type="button"
+              onClick={() => {
+                setForgotSent(false)
+                switchTo({ kind: 'forgot' })
+              }}
+              className={`${link} block`}
+            >
+              Passwort vergessen?
+            </button>
+          </form>
+        )}
+
+        {step.kind === 'forgot' && (
+          <form
+            onSubmit={(e) =>
+              attempt(
+                e,
+                async () => {
+                  await api.forgotPassword(email.trim())
+                  setForgotSent(true)
+                },
+                'Die Anfrage konnte nicht verschickt werden.',
+              )
+            }
+            className="space-y-3"
+          >
+            <p className="text-sm text-ink2">
+              {mailEnabled
+                ? 'Gib deine E-Mail-Adresse ein. Wenn ein Account existiert, schicken wir dir einen Link zum Festlegen eines neuen Passworts.'
+                : 'Bitte wende dich an einen Admin der Projektleitung. Er kann dir einen Link zum Festlegen eines neuen Passworts schicken.'}
+            </p>
+            {mailEnabled && !forgotSent && (
+              <>
+                <label className="block text-xs font-medium text-ink2">
+                  E-Mail-Adresse
+                  <input type="email" required autoFocus autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={`${field} mt-1`} />
+                </label>
+                <button type="submit" disabled={busy} className={btn('primary', 'md', 'w-full')}>
+                  {busy ? 'Wird gesendet…' : 'Link per E-Mail anfordern'}
+                </button>
+              </>
+            )}
+            {forgotSent && (
+              <p className="text-sm text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                Falls ein Account zu dieser Adresse existiert, ist eine E-Mail unterwegs. Der Link gilt 2 Tage.
+              </p>
+            )}
+            <button type="button" onClick={() => switchTo({ kind: 'password' })} className={link}>
+              Zurück zur Anmeldung
+            </button>
           </form>
         )}
 
         {error && <p className="mt-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
 
-        <p className="mt-6 text-xs text-ink3">Accounts vergibt ein Admin. Bitte wenden Sie sich an die Projektleitung.</p>
+        <p className="mt-6 text-xs text-ink3">Accounts vergibt ein Admin. Neue Personen bekommen von dort einen Einladungslink.</p>
       </div>
     </div>
   )

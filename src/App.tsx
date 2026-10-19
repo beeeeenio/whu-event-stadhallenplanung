@@ -8,10 +8,14 @@ import { useProjectsStore } from './store/projectsStore'
 import { OPEN_ACCESS, pb, useCurrentUser } from './backend/pb'
 import { startSession, useSyncStore } from './backend/projectSync'
 import { btn } from './utils/ui'
+import { useHashRoute } from './utils/hashRoute'
+import SetPasswordView from './components/SetPasswordView'
+import SharedViewer from './components/SharedViewer'
 
 function App() {
   const user = useCurrentUser()
   const currentProjectId = useProjectsStore((s) => s.currentProjectId)
+  const route = useHashRoute()
 
   // Beim Start das Login verlängern; gibt es den Account nicht mehr, abmelden.
   useEffect(() => {
@@ -23,6 +27,9 @@ function App() {
       })
   }, [])
 
+  // Links mit Token funktionieren auch ohne Anmeldung: Passwort festlegen und Betrachter-Ansicht.
+  if (route?.kind === 'einladung' || route?.kind === 'passwort') return <SetPasswordView key={route.token} token={route.token} />
+  if (route?.kind === 'ansicht') return <SharedViewer key={route.token} token={route.token} />
   if (!user && !OPEN_ACCESS) return <LoginView />
   if (!currentProjectId) return <ProjectsDashboard />
   return <ProjectSession key={currentProjectId} projectId={currentProjectId} />

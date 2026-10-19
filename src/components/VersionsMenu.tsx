@@ -121,7 +121,7 @@ export default function VersionsMenu() {
                     <div className="flex-1 min-w-0 px-1">
                       <div className="truncate text-ink font-semibold">{v.name}</div>
                       <div className="font-mono text-[10.5px] text-ink3">
-                        {formatTime(v.createdAt)} · {v.data.itemOrder.length} Obj.
+                        {formatTime(v.createdAt)} · {v.data.itemOrder.length} Obj.{v.createdByName ? ` · ${v.createdByName}` : ''}
                       </div>
                     </div>
                     <button

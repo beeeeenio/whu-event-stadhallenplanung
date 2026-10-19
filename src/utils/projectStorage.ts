@@ -17,6 +17,8 @@ export interface ProjectVersion {
   name: string
   createdAt: number
   data: ProjectData
+  /** Name der Person, die den Stand gespeichert hat (setzt der Server). */
+  createdByName?: string
 }
 
 export function emptyProjectData(): ProjectData {
