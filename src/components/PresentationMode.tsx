@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import BrandLogo from './BrandLogo'
 import { Stage, Layer, Image as KonvaImage } from 'react-konva'
 import useImage from '../utils/useImage'
 import { useEventStore } from '../store/store'
@@ -77,8 +78,9 @@ export default function PresentationMode({ onClose, startPhaseId }: Props) {
   if (!phase) return null
 
   return (
-    <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col">
-      <div className="text-center pt-6 pb-2 shrink-0">
+    <div className="fixed inset-0 z-50 bg-ink flex flex-col">
+      <div className="text-center pt-6 pb-2 shrink-0 relative">
+        <BrandLogo variant="white" className="h-7 absolute left-6 top-6 hidden md:block" />
         <h1 className="text-white text-2xl font-semibold">{phase.name}</h1>
         <p className="text-gray-400 text-sm mt-1">
           Phase {index + 1} von {sortedPhases.length}
@@ -115,28 +117,28 @@ export default function PresentationMode({ onClose, startPhaseId }: Props) {
       <div className="shrink-0 flex items-center justify-center gap-3 py-5">
         <button
           onClick={goPrev}
-          className="text-white border border-gray-600 rounded-full w-11 h-11 flex items-center justify-center hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          className="text-white border border-ink2 rounded-full w-11 h-11 flex items-center justify-center hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           title="Vorherige Phase (←)"
         >
           ‹
         </button>
         <button
           onClick={() => setPlaying((p) => !p)}
-          className="text-white bg-blue-600 rounded-full w-14 h-14 flex items-center justify-center text-xl hover:bg-blue-700 transition-colors shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+          className="text-white bg-accent rounded-full w-14 h-14 flex items-center justify-center text-xl hover:bg-accent-hover transition-colors shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
           title="Automatisch abspielen (Leertaste)"
         >
           {playing ? '⏸' : '▶'}
         </button>
         <button
           onClick={goNext}
-          className="text-white border border-gray-600 rounded-full w-11 h-11 flex items-center justify-center hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          className="text-white border border-ink2 rounded-full w-11 h-11 flex items-center justify-center hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           title="Nächste Phase (→)"
         >
           ›
         </button>
         <button
           onClick={onClose}
-          className="ml-6 text-gray-300 border border-gray-600 rounded-md px-4 py-2 text-sm font-medium hover:bg-gray-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          className="ml-6 text-gray-300 border border-ink2 rounded-md px-4 py-2 text-sm font-medium hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand"
           title="Schließen (Esc)"
         >
           ✕ Beenden

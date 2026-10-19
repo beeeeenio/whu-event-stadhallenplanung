@@ -643,7 +643,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       }
       // Blaue Abstandslinien mit Beschriftung in Metern
       for (const m of gaps) {
-        g.add(new Konva.Line({ points: [m.x1, m.y1, m.x2, m.y2], stroke: '#0ea5e9', strokeWidth: 1 / z, listening: false }))
+        g.add(new Konva.Line({ points: [m.x1, m.y1, m.x2, m.y2], stroke: '#00bce8', strokeWidth: 1 / z, listening: false }))
         g.add(
           new Konva.Text({
             x: (m.x1 + m.x2) / 2 + 4 / z,
@@ -903,7 +903,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                 const h = (z1 - z0) * pixelsPerMeter
                 return (
                   <Group key={name} x={x0 * pixelsPerMeter} y={z0 * pixelsPerMeter}>
-                    <Rect width={w} height={h} fill="rgba(37,99,235,0.10)" stroke="#2563eb" strokeWidth={1} dash={[8, 5]} />
+                    <Rect width={w} height={h} fill="rgba(0,153,194,0.10)" stroke="#0099c2" strokeWidth={1} dash={[8, 5]} />
                     <Text
                       width={w}
                       y={h / 2 - 16}
@@ -911,7 +911,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                       text={`Luftraum ${name}\nnicht belegbar`}
                       fontSize={14}
                       fontStyle="600"
-                      fill="#1d4ed8"
+                      fill="#006680"
                     />
                   </Group>
                 )
@@ -1084,8 +1084,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                 y={Math.min(marqueeStart.y, marqueeCursor.y)}
                 width={Math.abs(marqueeCursor.x - marqueeStart.x)}
                 height={Math.abs(marqueeCursor.y - marqueeStart.y)}
-                fill="rgba(37,99,235,0.08)"
-                stroke="#2563eb"
+                fill="rgba(0,153,194,0.08)"
+                stroke="#0099c2"
                 strokeWidth={1 / zoom}
                 dash={[4 / zoom, 3 / zoom]}
               />

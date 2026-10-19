@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf'
 import type { EventItem, Phase } from '../types'
 import { countVisibleItems, describeFoamLetters } from './countItems'
+import { brandLogoPng } from './brandAssets'
 
 interface ExportArgs {
   eventName: string
@@ -11,8 +12,14 @@ interface ExportArgs {
   planImageDataUrl?: string | null
 }
 
-export function exportPhaseToPdf({ eventName, phase, items, currentPhaseId, planImageDataUrl }: ExportArgs) {
+export async function exportPhaseToPdf({ eventName, phase, items, currentPhaseId, planImageDataUrl }: ExportArgs) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+  // Logo oben rechts (fehlt es, wird der Export trotzdem erstellt)
+  const logo = await brandLogoPng()
+  if (logo) {
+    const w = 46
+    doc.addImage(logo.dataUrl, 'PNG', doc.internal.pageSize.getWidth() - 14 - w, 10, w, w * logo.aspect)
+  }
   const counts = countVisibleItems(items, currentPhaseId)
 
   doc.setFontSize(16)
