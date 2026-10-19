@@ -9,6 +9,8 @@ import EventItemShape from './EventItemShape'
 import type { Placement } from '../utils/placement'
 import { exportCanvasAsImage } from '../utils/exportImage'
 import { splitVisiovaRun } from '../utils/visiova'
+import { itemLevel } from '../utils/levels'
+import { OG_VOIDS } from '../data/venueOG'
 import { unionBox, translateBox, worldBBox, type Box } from '../utils/geometry'
 import { clampZoom, nextZoomStep, quantizeZoom, interpretWheel, IS_COARSE_POINTER } from '../utils/viewport'
 import {
@@ -31,7 +33,7 @@ interface DragSession {
   targets: Box[]
 }
 
-export type ToolMode = 'select' | 'measure' | 'area'
+export type ToolMode = 'select' | 'hand' | 'measure' | 'area'
 
 /** Aktueller Ausschnitt des Plans (für schwebende Bedienelemente an der Auswahl). */
 export interface CanvasViewport {
@@ -149,6 +151,9 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   const [detailedNoCodesImage] = useImage('/plans/power-plan-nolabels.png')
   const [simplifiedNoCodesImage] = useImage('/plans/power-plan-simple-nolabels.png')
   const [powerOverlayImage] = useImage('/plans/power-overlay.png')
+  const currentLevel = useEventStore((s) => s.currentLevel)
+  const revision = useEventStore((s) => s.revision)
+  const [ogImage] = useImage(currentLevel === 'og' ? '/plans/og-plan.png' : '')
   const image = layers.hideCodes
     ? layers.simplified ? simplifiedNoCodesImage : detailedNoCodesImage
     : layers.simplified ? simplifiedImage : detailedImage
@@ -182,6 +187,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   // Ansichts-Gesten: Verschieben (Leertaste, Mitteltaste, Finger auf leerer Fläche), Pinch, Leertaste
   const [spaceDown, setSpaceDown] = useState(false)
   const spaceDownRef = useRef(false)
+  // ⇧/⌥ gehalten: Ziehen auf leerer Fläche zieht ein Auswahlrechteck (Fadenkreuz-Cursor)
+  const [marqueeKey, setMarqueeKey] = useState(false)
   const [panning, setPanning] = useState(false)
   const panRef = useRef<{ cx: number; cy: number; x: number; y: number; tapOnEmpty: boolean } | null>(null)
   const pinchRef = useRef<{ dist: number; cx: number; cy: number } | null>(null)
@@ -417,6 +424,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTextTarget(e.target)) return
+      if (e.key === 'Shift' || e.key === 'Alt') setMarqueeKey(true)
       if (e.code === 'Space') {
         e.preventDefault()
         setSpace(true)
@@ -434,8 +442,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') setSpace(false)
+      if (e.key === 'Shift' || e.key === 'Alt') setMarqueeKey(false)
     }
-    const onBlur = () => setSpace(false)
+    const onBlur = () => {
+      setSpace(false)
+      setMarqueeKey(false)
+    }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
@@ -508,7 +520,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     const wantsPan =
       evt.button === 1 ||
       spaceDownRef.current ||
-      (onEmpty && tool === 'select' && !placement && evt.pointerType !== 'mouse')
+      tool === 'hand' ||
+      (onEmpty && tool === 'select' && !placement && !(evt.pointerType === 'mouse' && (evt.shiftKey || evt.altKey)))
     if (wantsPan) {
       evt.preventDefault()
       const v = viewRef.current
@@ -542,7 +555,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
     if (placement) return // Klick wird von handlePlacementClick verarbeitet
     if (tool === 'select' && onEmpty) {
-      marqueeAdditiveRef.current = evt.shiftKey
+      marqueeAdditiveRef.current = evt.shiftKey // Shift ergänzt die Auswahl, Alt ersetzt sie
       setMarqueeStart(pt)
       setMarqueeCursor(pt)
     }
@@ -754,7 +767,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     [setVisiovaRun],
   )
 
-  const visibleItemIds = itemOrder.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible)
+  const visibleItemIds = itemOrder.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible && itemLevel(items[id]) === currentLevel)
   dragCtxRef.current = { selectedIds, items, currentPhaseId, visibleItemIds }
 
   const measureStart = measurePoints[0]
@@ -855,7 +868,13 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       <div
         ref={containerRef}
         className={`absolute inset-0 overflow-hidden touch-none bg-ground ${
-          panning ? 'cursor-grabbing' : spaceDown ? 'cursor-grab' : placement || tool !== 'select' ? 'cursor-crosshair' : ''
+          panning
+            ? 'cursor-grabbing'
+            : spaceDown || tool === 'hand' || (tool === 'select' && !placement && !marqueeKey)
+              ? 'cursor-grab'
+              : placement || tool !== 'select' || marqueeKey
+                ? 'cursor-crosshair'
+                : ''
         }`}
         onPointerDownCapture={() => {
           const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null
@@ -882,15 +901,36 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           {/* Layer 1, statisch: Grundriss, Strom/CEE, Bühnenzüge (Rigging) und Gitter */}
           <Layer listening={false}>
             {/* Wände / Grundriss (Erdgeschoss, kalibriert) */}
-            {layers.walls && image && <KonvaImage image={image} width={STAGE_WIDTH} height={STAGE_HEIGHT} />}
+            {layers.walls && currentLevel === 'eg' && image && <KonvaImage image={image} width={STAGE_WIDTH} height={STAGE_HEIGHT} />}
+            {layers.walls && currentLevel === 'og' && ogImage && <KonvaImage image={ogImage} width={STAGE_WIDTH} height={STAGE_HEIGHT} />}
+            {/* Luftraum im OG: kein Boden, hier lässt sich nichts platzieren */}
+            {currentLevel === 'og' &&
+              OG_VOIDS.map(({ name, rect: [x0, z0, x1, z1] }) => {
+                const w = (x1 - x0) * pixelsPerMeter
+                const h = (z1 - z0) * pixelsPerMeter
+                return (
+                  <Group key={name} x={x0 * pixelsPerMeter} y={z0 * pixelsPerMeter}>
+                    <Rect width={w} height={h} fill="rgba(37,99,235,0.10)" stroke="#2563eb" strokeWidth={1} dash={[8, 5]} />
+                    <Text
+                      width={w}
+                      y={h / 2 - 16}
+                      align="center"
+                      text={`Luftraum ${name}\nnicht belegbar`}
+                      fontSize={14}
+                      fontStyle="600"
+                      fill="#1d4ed8"
+                    />
+                  </Group>
+                )
+              })}
 
             {/* Strom/CEE-Layer: Bodentanks, CEE 16A/32A/63A als eigenes, unabhängig schaltbares Overlay */}
-            {layers.power && powerOverlayImage && (
+            {currentLevel === 'eg' && layers.power && powerOverlayImage && (
               <KonvaImage image={powerOverlayImage} width={STAGE_WIDTH} height={STAGE_HEIGHT} />
             )}
 
             {/* Bühnenzüge (Rigging) Referenzlinien */}
-            {layers.rigging &&
+            {currentLevel === 'eg' && layers.rigging &&
               RIGGING_BARS.map((bar) => {
                 const x = STAGE_FRONT_EDGE.x + metersToPixels(bar.distanceFromStageFrontM, pixelsPerMeter)
                 const widthPx = metersToPixels(STAGE_FRONT_EDGE.widthM, pixelsPerMeter)
@@ -942,7 +982,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           </Layer>
 
           {/* Layer 2: Geisterbild der Vorphase (Konzept C, nur was dort anders stand oder weg ist), darunter die Objekte */}
-          <Layer>
+          <Layer listening={tool !== 'hand'}>
             {ghostPhaseId && ghostItemIds.length > 0 && (
               <Group listening={false} opacity={0.3}>
                 {ghostItemIds.map((id) => {
@@ -973,7 +1013,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
               const phaseData = item.phaseData[currentPhaseId]
               return (
                 <EventItemShape
-                  key={id}
+                  key={`${id}-${revision}`}
                   item={item}
                   phaseData={phaseData}
                   pixelsPerMeter={pixelsPerMeter}

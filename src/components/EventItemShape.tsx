@@ -381,7 +381,7 @@ function EventItemShape({
               for (let r = 0; r < g.rows; r++) {
                 for (let c = 0; c < g.cols; c++) {
                   const cx = metersToPixels((c + 0.5) * g.spacingM, pixelsPerMeter)
-                  const cy = metersToPixels((r + 0.5) * g.spacingM, pixelsPerMeter)
+                  const cy = metersToPixels((r + 0.5) * (g.rowSpacingM ?? g.spacingM), pixelsPerMeter)
                   ctx.rect(cx - seat / 2, cy - seat / 2, seat, seat)
                 }
               }

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
+import { findVoidViolation, type Level } from '../utils/levels'
 import type { EventItem, EventState, ForexPanel, ItemType, ItemWithId, NivtecData, Phase } from '../types'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import { sortPhases } from '../utils/phaseDiff'
@@ -67,6 +68,13 @@ function counterSnapshot(state: EventState, target: HistorySnapshot): HistorySna
 }
 
 interface Store extends EventState {
+  /** Aktuell bearbeitetes Geschoss (nur Oberfläche, wird nicht im Projekt gespeichert). */
+  currentLevel: Level
+  setCurrentLevel: (level: Level) => void
+  /** Kurzer Hinweistext der Oberfläche (z. B. Platzieren im Luftraum abgelehnt); `seq` zählt hoch. */
+  notice: { text: string; seq: number } | null
+  /** Zählt bei jeder abgelehnten Änderung hoch, damit die Zeichenfläche Objekte neu aufbaut (zurück an ihren Platz). */
+  revision: number
   historyPast: HistorySnapshot[]
   historyFuture: HistorySnapshot[]
 
@@ -153,7 +161,7 @@ interface Store extends EventState {
   duplicateItem: (itemId: string, offsetX?: number, offsetY?: number) => string | null
 
   /** Stuhlreihen als EIN Objekt (Gruppe), damit sie gemeinsam verschoben werden können. */
-  addChairRowGroup: (x: number, y: number, rows: number, cols: number, spacingM?: number) => string
+  addChairRowGroup: (x: number, y: number, rows: number, cols: number, spacingM?: number, rowSpacingM?: number) => string
 
   // Layers
   toggleLayer: (layer: keyof EventState['layers']) => void
@@ -188,6 +196,27 @@ export interface CustomItemSpec {
  * aufgeteilt: Die anderen Phasen behalten eine Kopie mit den alten Eigenschaften, das
  * Objekt selbst (gleiche ID, Auswahl bleibt erhalten) gilt danach nur noch für diese Phase.
  */
+/** Stuhlabstand in der Reihe und Reihenabstand (aus den Bestuhlungsplänen der Stadthalle, gemessen). */
+export const CHAIR_PITCH_M = 0.5
+export const CHAIR_ROW_PITCH_M = 0.85
+
+/** Stuhlreihen aus älteren Ständen (Abstand 0,55 m in beide Richtungen): auf die realistischen Abstände bringen. */
+function normalizeChairGroups(items: Record<string, EventItem>): Record<string, EventItem> {
+  let changed: Record<string, EventItem> | null = null
+  for (const [id, item] of Object.entries(items)) {
+    const g = item.grid
+    if (item.type !== 'chair_row_group' || !g || g.rowSpacingM !== undefined) continue
+    changed ??= { ...items }
+    changed[id] = {
+      ...item,
+      width: g.cols * CHAIR_PITCH_M,
+      height: g.rows * CHAIR_ROW_PITCH_M,
+      grid: { ...g, spacingM: CHAIR_PITCH_M, rowSpacingM: CHAIR_ROW_PITCH_M },
+    }
+  }
+  return changed ?? items
+}
+
 /** Styropor-Schriftzüge aus älteren Ständen: Breite an die aktuelle Buchstabenbreite anpassen. */
 function normalizeFoamLetters(items: Record<string, EventItem>): Record<string, EventItem> {
   let changed: Record<string, EventItem> | null = null
@@ -230,7 +259,41 @@ function patchItemInCurrentPhase(
   }
 }
 
-export const useEventStore = create<Store>((set, get) => {
+export const useEventStore = create<Store>((rawSet, get) => {
+  /**
+   * Alle Änderungen laufen hier durch: Neue Objekte bekommen das aktuelle Geschoss, und Änderungen,
+   * die ein OG-Objekt in den Luftraum (kein Boden) setzen, werden abgelehnt. Undo/Redo, Laden und
+   * Phasenwechsel ändern auch `phases`/`historyPast` und umgehen die Prüfung.
+   */
+  const set = ((partial: unknown, replace?: boolean) => {
+    const prev = get()
+    const next = (typeof partial === 'function' ? (partial as (s: Store) => unknown)(prev) : partial) as Partial<Store> | null
+    if (!next || !next.items || next.items === prev.items || 'phases' in next || 'historyPast' in next) {
+      rawSet(next as never, replace as never)
+      return
+    }
+    let items = next.items
+    if (prev.currentLevel === 'og') {
+      const stamped: Record<string, EventItem> = { ...items }
+      for (const [id, item] of Object.entries(items)) {
+        if (!prev.items[id] && item.level === undefined) stamped[id] = { ...item, level: 'og' }
+      }
+      items = stamped
+    }
+    const hit = findVoidViolation(prev.items, items)
+    if (hit) {
+      const last = prev.historyPast[prev.historyPast.length - 1]
+      rawSet({
+        notice: { text: `„${hit.item.label}“ kann nicht im Luftraum (${hit.voidName}) stehen, dort ist im Obergeschoss kein Boden.`, seq: (prev.notice?.seq ?? 0) + 1 },
+        revision: prev.revision + 1,
+        // pushHistory lief schon: den leeren Schritt wieder entfernen
+        ...(last && last.items === prev.items ? { historyPast: prev.historyPast.slice(0, -1) } : {}),
+      })
+      return
+    }
+    rawSet({ ...next, items } as never, replace as never)
+  }) as typeof rawSet
+
   /** Snapshot des Objekt-Zustands vor einer mutierenden Aktion auf den Undo-Stack legen. */
   const pushHistory = () => {
     lastNudge = { key: '', at: 0 }
@@ -249,6 +312,10 @@ export const useEventStore = create<Store>((set, get) => {
 
   return {
     eventName: 'Neues Event',
+    currentLevel: 'eg',
+    setCurrentLevel: (level) => set({ currentLevel: level }),
+    notice: null,
+    revision: 0,
     currentPhaseId: PHASE_1,
     phases: [{ id: PHASE_1, name: 'Phase 1', order: 0 }],
     items: {},
@@ -622,7 +689,7 @@ export const useEventStore = create<Store>((set, get) => {
             visible: p.id === currentPhaseId,
           }
         }
-        return { ...source, id: uuid(), locked: false, phaseData }
+        return { ...source, id: uuid(), locked: false, level: undefined, phaseData }
       })
       pushHistory()
       set((state) => ({
@@ -935,7 +1002,7 @@ export const useEventStore = create<Store>((set, get) => {
       return id
     },
 
-    addChairRowGroup: (x, y, rows, cols, spacingM = 0.55) => {
+    addChairRowGroup: (x, y, rows, cols, spacingM = CHAIR_PITCH_M, rowSpacingM = CHAIR_ROW_PITCH_M) => {
       const id = uuid()
       const { currentPhaseId, phases, items } = get()
       const groupCount = Object.values(items).filter((i) => i.type === 'chair_row_group').length
@@ -948,10 +1015,10 @@ export const useEventStore = create<Store>((set, get) => {
         type: 'chair_row_group',
         label: `Stuhlreihe ${groupCount + 1} (${rows * cols} Stühle)`,
         width: cols * spacingM,
-        height: rows * spacingM,
+        height: rows * rowSpacingM,
         seats: rows * cols,
         phaseData,
-        grid: { rows, cols, spacingM },
+        grid: { rows, cols, spacingM, rowSpacingM },
       }
       pushHistory()
       set((state) => ({
@@ -1061,7 +1128,7 @@ export const useEventStore = create<Store>((set, get) => {
     importProject: (data) =>
       set({
         ...data,
-        items: normalizeFoamLetters(data.items),
+        items: normalizeChairGroups(normalizeFoamLetters(data.items)),
         historyPast: [],
         historyFuture: [],
       }),
@@ -1069,7 +1136,7 @@ export const useEventStore = create<Store>((set, get) => {
     hydrate: (data) =>
       set({
         ...data,
-        items: normalizeFoamLetters(data.items),
+        items: normalizeChairGroups(normalizeFoamLetters(data.items)),
         historyPast: [],
         historyFuture: [],
       }),
