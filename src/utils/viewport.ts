@@ -28,7 +28,17 @@ export function interpretWheel(e: WheelEvent): WheelIntent {
   const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
   let dx = e.deltaX * unit
   let dy = e.deltaY * unit
-  const isMouseWheel = e.deltaMode !== 0 || (e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 40)
+  // Klassisches Mausrad: Zeilen-/Seitenmodus (Firefox) oder Rasten von 100/120 px, bei denen Chrome/Safari
+  // wheelDeltaY als Vielfaches von 120 melden. Schnelle Trackpad-Wischer liefern auch ganze Zahlen,
+  // dürfen aber nicht zoomen. Beim Trackpad ist wheelDeltaY das Dreifache von deltaY.
+  const wheelDeltaY = (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY
+  const isNotch =
+    e.deltaX === 0 &&
+    Math.abs(e.deltaY) >= 100 &&
+    Number.isInteger(e.deltaY) &&
+    typeof wheelDeltaY === 'number' &&
+    wheelDeltaY === -e.deltaY * 1.2
+  const isMouseWheel = e.deltaMode !== 0 || isNotch
   if (e.ctrlKey || e.metaKey || isMouseWheel) {
     const k = isMouseWheel ? 0.0015 : 0.01
     const factor = Math.min(2, Math.max(0.5, Math.exp(-dy * k)))
