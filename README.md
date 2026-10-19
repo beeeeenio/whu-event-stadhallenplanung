@@ -397,6 +397,11 @@ Das Backend gibt es nur auf dem Branch `backend-pocketbase`. Es besteht aus `ser
 
 ## 15. Konventionen
 
+- **Branding:** Logos in `public/brand/` (schwarz, weiß, quadratisch, Icon), Komponente `BrandLogo`, Favicon `public/favicon.svg` (Drehregler des Logos).
+  - Farben als Tokens in `src/index.css`: Schwarz `ink`, Grau `ink2` (#515256 aus dem Logo), Cyan `brand` (#00BCE8). `accent` (#007A99) ist die dunklere Variante für Knöpfe, damit weißer Text lesbar bleibt (Kontrast 4,9:1).
+  - Auswahl- und Hilfsfarben im Plan (Konva) sind passend zum Cyan fest eingetragen. Die wählbaren Objektfarben (`store.ts`, `itemColors.ts`) bleiben bewusst unverändert.
+  - Das PDF bekommt das Logo über `utils/brandAssets.ts`. Die Anmeldeseite (`LoginView`) liegt nur auf `backend-pocketbase` und muss dort mit `BrandLogo` versehen werden.
+
 - **Code:**
   - Kommentare kurz und auf Deutsch.
   - Bestehende Struktur und Stil beibehalten, keine Massen-Umformatierung.

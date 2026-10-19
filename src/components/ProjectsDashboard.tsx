@@ -8,6 +8,7 @@ import { importAllProjects } from '../utils/importProject'
 import ExportImportDialog from './ExportImportDialog'
 import ShareDialog from './ShareDialog'
 import UsersDialog from './UsersDialog'
+import BrandLogo from './BrandLogo'
 
 function formatDate(ts: number) {
   return new Date(ts).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
@@ -162,7 +163,7 @@ export default function ProjectsDashboard() {
   const card = (p: ProjectMeta) => (
     <li
       key={p.id}
-      className="bg-white border border-gray-200 rounded-2xl p-4 hover:shadow-md hover:border-gray-300 transition-all"
+      className="bg-white border border-line rounded-2xl p-4 hover:shadow-md hover:border-line transition-all"
     >
       {renamingId === p.id ? (
         <input
@@ -174,12 +175,12 @@ export default function ProjectsDashboard() {
             if (e.key === 'Escape') setRenamingId(null)
           }}
           onBlur={() => commitRename(p.id)}
-          className="w-full border border-blue-300 rounded-md px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-200"
+          className="w-full border border-brand rounded-md px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand/30"
         />
       ) : (
         <button onClick={() => openProject(p.id)} className="text-left w-full">
-          <div className="font-medium text-gray-800 truncate">{p.name}</div>
-          <div className="text-xs text-gray-400 mt-1">
+          <div className="font-medium text-ink truncate">{p.name}</div>
+          <div className="text-xs text-ink3 mt-1">
             Zuletzt bearbeitet: {formatDate(p.updatedAt)}
             {badge(p) && <span className="ml-2 text-accent">{badge(p)}</span>}
           </div>
@@ -187,8 +188,8 @@ export default function ProjectsDashboard() {
       )}
 
       {confirmingDeleteId === p.id ? (
-        <div className="flex items-center gap-2 mt-3 text-xs">
-          <span className="text-gray-600">Für alle löschen?</span>
+        <div className="flex flex-wrap items-center gap-2 mt-3 text-xs">
+          <span className="text-ink2">Für alle löschen?</span>
           <button
             onClick={() => {
               void deleteProject(p.id)
@@ -235,10 +236,11 @@ export default function ProjectsDashboard() {
   return (
     <div className="h-screen w-screen overflow-y-auto bg-ground">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+        <BrandLogo className="h-12 mb-6" />
         <div className="flex items-start justify-between gap-4 mb-8">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold text-gray-800 mb-1">Kongresshalle Vallendar – Event-Planungstool</h1>
-            <p className="text-sm text-gray-500">Projekte verwalten und Hallenpläne bearbeiten</p>
+            <h1 className="text-2xl font-semibold text-ink mb-1">Kongresshalle Vallendar – Event-Planungstool</h1>
+            <p className="text-sm text-ink2">Projekte verwalten und Hallenpläne bearbeiten</p>
           </div>
           {user && (
             <div className="flex items-center gap-2 shrink-0 pt-1">
@@ -272,7 +274,7 @@ export default function ProjectsDashboard() {
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !creating && handleCreate()}
             placeholder="Name des neuen Projekts (z. B. Gala-Dinner Mittwoch)"
-            className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent/50"
+            className="flex-1 border border-line rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent/50"
           />
           <button onClick={handleCreate} disabled={creating} className={btn('primary', 'md')}>
             + Neues Projekt
@@ -280,11 +282,11 @@ export default function ProjectsDashboard() {
         </div>
 
         {loading ? (
-          <div className="text-center text-gray-400 text-sm py-16">Projekte werden geladen…</div>
+          <div className="text-center text-ink3 text-sm py-16">Projekte werden geladen…</div>
         ) : (
           <>
             {ownProjects.length === 0 ? (
-              <div className="text-center text-gray-400 text-sm py-16 border border-dashed border-gray-300 rounded-lg">
+              <div className="text-center text-ink3 text-sm py-16 border border-dashed border-line rounded-lg">
                 {backupProjects.length > 0
                   ? 'Noch keine eigenen oder für Sie freigegebenen Projekte.'
                   : 'Noch keine Projekte vorhanden. Legen Sie oben Ihr erstes Projekt an.'}
@@ -307,7 +309,7 @@ export default function ProjectsDashboard() {
           </>
         )}
 
-        <div className="flex gap-3 mt-8 pt-6 border-t border-gray-200">
+        <div className="flex gap-3 mt-8 pt-6 border-t border-line">
           <button
             onClick={handleExport}
             disabled={exportLoading}

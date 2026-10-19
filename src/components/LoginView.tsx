@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { ClientResponseError } from 'pocketbase'
 import { errorMessage, pb } from '../backend/pb'
 import { btn } from '../utils/ui'
+import BrandLogo from './BrandLogo'
 
 type Step = { kind: 'email' } | { kind: 'code'; otpId: string } | { kind: 'password' }
 
@@ -58,8 +59,9 @@ export default function LoginView() {
   return (
     <div className="min-h-screen w-screen bg-ground flex items-center justify-center px-4">
       <div className="w-full max-w-sm bg-white border border-line rounded-2xl shadow-sm p-6">
+        <BrandLogo className="h-11 mb-5" />
         <h1 className="text-lg font-semibold text-ink">Kongresshalle Vallendar</h1>
-        <p className="text-sm text-ink3 mb-6">Event-Planungstool – Anmeldung</p>
+        <p className="text-sm text-ink2 mb-6">Event-Planungstool – Anmeldung</p>
 
         {step.kind === 'email' && (
           <form onSubmit={requestCode} className="space-y-3">

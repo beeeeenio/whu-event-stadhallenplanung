@@ -399,7 +399,7 @@ export default function EditorView() {
     const planImageDataUrl = await canvasRef.current?.exportSnapshot()
     const s = useEventStore.getState()
     const phase = s.phases.find((p) => p.id === s.currentPhaseId)
-    exportPhaseToPdf({ eventName: s.eventName, phase, items: s.items, currentPhaseId: s.currentPhaseId, planImageDataUrl })
+    await exportPhaseToPdf({ eventName: s.eventName, phase, items: s.items, currentPhaseId: s.currentPhaseId, planImageDataUrl })
   }, [])
 
   const copySelection = useCallback(() => {

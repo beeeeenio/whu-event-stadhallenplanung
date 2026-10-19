@@ -135,7 +135,7 @@ function EventItemShape({
     if (c) c.style.cursor = ''
   }
 
-  const stroke = isSelected ? '#2563eb' : hovered ? '#60a5fa' : '#374151'
+  const stroke = isSelected ? '#0099c2' : hovered ? '#4fd3f0' : '#374151'
   const strokeWidth = isSelected ? 2 : 1
   // Detailgrad: Maße erst ab ~70 % Zoom, Beschriftung ab ~40 % (ausgewählte Objekte immer)
   const showDims = isSelected || zoom >= 0.7
@@ -266,7 +266,7 @@ function EventItemShape({
                   key={i}
                   points={points}
                   fill={lightColor}
-                  stroke={isSelected ? '#2563eb' : baseColor}
+                  stroke={isSelected ? '#0099c2' : baseColor}
                   strokeWidth={isSelected ? 2 : 1}
                   closed
                   perfectDrawEnabled={false}
@@ -284,7 +284,7 @@ function EventItemShape({
                 width={pw}
                 height={pd}
                 fill={lightColor}
-                stroke={isSelected ? '#2563eb' : baseColor}
+                stroke={isSelected ? '#0099c2' : baseColor}
                 strokeWidth={isSelected ? 2 : 1}
                 perfectDrawEnabled={false}
                 listening={false}
@@ -338,7 +338,7 @@ function EventItemShape({
                   align="center"
                   fontSize={metersToPixels(FOAM_LETTER.widthM, pixelsPerMeter) * 0.9}
                   fontStyle="bold"
-                  fill={isSelected ? '#2563eb' : '#1f2937'}
+                  fill={isSelected ? '#0099c2' : '#1f2937'}
                 />
               </Group>
             )
@@ -398,7 +398,7 @@ function EventItemShape({
           text={item.label}
           fontSize={13}
           fontStyle="600"
-          fill={isSelected ? '#2563eb' : '#1f2937'}
+          fill={isSelected ? '#0099c2' : '#1f2937'}
           padding={4}
         />
       ) : item.type === 'area' ? (
@@ -486,10 +486,10 @@ function EventItemShape({
                   y={-2 / zoom}
                   width={metersToPixels(fw, pixelsPerMeter)}
                   height={Math.max(h, 4 / zoom) + 4 / zoom}
-                  stroke="#2563eb"
+                  stroke="#0099c2"
                   strokeWidth={1.5 / zoom}
                   dash={[4 / zoom, 3 / zoom]}
-                  fill="rgba(37,99,235,0.15)"
+                  fill="rgba(0,153,194,0.15)"
                 />
               )
             })}
@@ -499,7 +499,7 @@ function EventItemShape({
               text={`${widths.length} Rahmen · ${describeVisiovaRun(widths)} · ${total.toFixed(2).replace('.', ',')} m`}
               fontSize={12 / zoom}
               fontStyle="bold"
-              fill="#1d4ed8"
+              fill="#006680"
             />
           </Group>
         )
@@ -511,7 +511,7 @@ function EventItemShape({
           width={12 / zoom}
           height={12 / zoom}
           cornerRadius={2 / zoom}
-          fill="#2563eb"
+          fill="#0099c2"
           stroke="#ffffff"
           strokeWidth={1.5 / zoom}
           hitStrokeWidth={(IS_COARSE_POINTER ? 24 : 8) / zoom}
@@ -547,7 +547,7 @@ function EventItemShape({
         <>
           <Line
             points={[centerX, topY, handleX, handleY]}
-            stroke="#2563eb"
+            stroke="#0099c2"
             strokeWidth={1 / zoom}
             listening={false}
           />
@@ -556,7 +556,7 @@ function EventItemShape({
             y={handleY}
             radius={7 / zoom}
             fill="#ffffff"
-            stroke="#2563eb"
+            stroke="#0099c2"
             strokeWidth={1.5 / zoom}
             hitStrokeWidth={(IS_COARSE_POINTER ? 30 : 12) / zoom}
             draggable
@@ -567,7 +567,7 @@ function EventItemShape({
             onMouseDown={cancelBubbleAlways}
             onTouchStart={cancelBubbleAlways}
           />
-          <Text ref={angleTextRef} visible={false} listening={false} x={handleX + 12 / zoom} y={handleY - 6 / zoom} fontSize={12 / zoom} fontStyle="bold" fill="#1d4ed8" text="" />
+          <Text ref={angleTextRef} visible={false} listening={false} x={handleX + 12 / zoom} y={handleY - 6 / zoom} fontSize={12 / zoom} fontStyle="bold" fill="#006680" text="" />
         </>
       )}
     </Group>

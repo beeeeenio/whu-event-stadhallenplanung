@@ -6,16 +6,18 @@
  * Verfügbar als Tailwind-Farben, z. B. bg-ground, text-ink, border-line, bg-accent.
  */
 @theme {
-  --color-ground: #f4f5f2;
-  --color-ink: #1b2226;
-  --color-ink2: #4a5559;
-  --color-ink3: #7c8689;
-  --color-line: #dee2dd;
-  --color-chip: #eef0ec;
-  --color-chip-hover: #e3e6e2;
-  --color-accent: #1e5e7a;
-  --color-accent-hover: #174b62;
-  --color-accent-soft: #dce9ee;
+  /* Markenfarben WHU Event: Schwarz, Grau aus dem Logo (#515256), Cyan aus dem Drehregler (#00BCE8) */
+  --color-ground: #f4f5f6;
+  --color-ink: #111315;
+  --color-ink2: #515256;
+  --color-ink3: #7b7e83;
+  --color-line: #dfe1e4;
+  --color-chip: #edeef0;
+  --color-chip-hover: #e2e4e7;
+  --color-brand: #00bce8;
+  --color-accent: #007a99;
+  --color-accent-hover: #006680;
+  --color-accent-soft: #d6f1f9;
   --color-signal: #c2571b;
   --color-plus: #256b3a;
   --color-plus-soft: #e3f1e6;
@@ -43,7 +45,7 @@ body {
 }
 
 ::selection {
-  background: #bfdbfe;
+  background: #b3ecf8;
 }
 
 /* Dezente, konsistente Scrollbars für Panels (Webkit) */
