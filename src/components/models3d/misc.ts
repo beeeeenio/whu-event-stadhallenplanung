@@ -23,8 +23,10 @@ const AREA_LABEL_Y = 0.025
 const AREA_LABEL_PX_PER_M = 96
 const AREA_LABEL_MAX_PX = 1024
 /** Schrifthöhe in Anteilen der kurzen Seite, Anteil der langen Seite, den der Text höchstens belegt. */
-const AREA_LABEL_HEIGHT_FRAC = 0.3
-const AREA_LABEL_WIDTH_FRAC = 0.88
+const AREA_LABEL_HEIGHT_FRAC = 0.2
+const AREA_LABEL_WIDTH_FRAC = 0.7
+/** Schrifthöhe höchstens so groß in Metern, damit der Name in großen Bereichen nicht wuchtig wirkt. */
+const AREA_LABEL_MAX_M = 0.65
 
 /** Höhe des Körpers bei custom_rect und custom_round (1 m). */
 const CUSTOM_H = 1
@@ -49,13 +51,13 @@ function areaLabelMaterial(text: string, color: string, long: number, short: num
   const ctx = canvas.getContext('2d')
   if (ctx) {
     const family = 'system-ui, -apple-system, "Segoe UI", sans-serif'
-    let size = ch * AREA_LABEL_HEIGHT_FRAC
-    ctx.font = `700 ${size}px ${family}`
+    let size = Math.min(ch * AREA_LABEL_HEIGHT_FRAC, AREA_LABEL_MAX_M * (cw / long))
+    ctx.font = `600 ${size}px ${family}`
     const textW = ctx.measureText(text).width
     const maxW = cw * AREA_LABEL_WIDTH_FRAC
     if (textW > maxW) {
       size *= maxW / textW
-      ctx.font = `700 ${size}px ${family}`
+      ctx.font = `600 ${size}px ${family}`
     }
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
