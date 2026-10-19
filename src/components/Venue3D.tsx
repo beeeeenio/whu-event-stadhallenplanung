@@ -235,7 +235,7 @@ function subSegment(seg: [number, number, number, number], t0: number, t1: numbe
   return [...p(t0), ...p(t1)]
 }
 
-/** Feste Bauteile: Wände (unten Holz, oben weiß) mit Türöffnungen und Säulen. Die Bühne steht in `buildStage`. */
+/** Feste Bauteile: Wände (unten Holz, oben weiß) mit Türöffnungen. Bühne und Säulen stehen in `buildStageAndColumns`. */
 function buildVenue(): THREE.Group {
   const g = new THREE.Group()
   // Oberer, weißer Wandteil separat, damit er sich ausblenden lässt (Blick in die Räume)
@@ -262,6 +262,12 @@ function buildVenue(): THREE.Group {
     }
     upper.add(segmentBox(seg, VENUE.glassHeight, VENUE.wallHeight, t, VENUE.upperWallColor))
   }
+  return g
+}
+
+/** Feste Bühne und Säulen; eigene Gruppe, damit sie beim Ausblenden der Wände stehen bleiben. */
+function buildStageAndColumns(): THREE.Group {
+  const g = new THREE.Group()
   // Feste Säulen (Foyer)
   for (const [cx, cy, dPx] of COLUMNS_PX) {
     const r = dPx / NP / 2
@@ -271,12 +277,6 @@ function buildVenue(): THREE.Group {
     col.receiveShadow = true
     g.add(col)
   }
-  return g
-}
-
-/** Feste Bühne; eigene Gruppe, damit sie beim Ausblenden der Wände stehen bleibt. */
-function buildStage(): THREE.Group {
-  const g = new THREE.Group()
   const st = { x: STAGE_PX.x / NP, z: STAGE_PX.y / NP, w: STAGE_PX.w / NP, d: STAGE_PX.h / NP }
   g.add(box(st.w, VENUE.stageHeight, st.d, st.x + st.w / 2, VENUE.stageHeight / 2, st.z + st.d / 2, VENUE.stageColor))
   return g
@@ -398,7 +398,7 @@ export default function Venue3D({ onClose }: Props) {
     const wallGroup = new THREE.Group()
     scene.add(wallGroup)
     wallGroup.add(buildVenue())
-    scene.add(buildStage())
+    scene.add(buildStageAndColumns())
     const curtainGroup = new THREE.Group()
     scene.add(curtainGroup)
     const partitionGroup = buildPartitions()
