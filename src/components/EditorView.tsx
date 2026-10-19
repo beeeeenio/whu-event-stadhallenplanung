@@ -9,7 +9,7 @@ import CommandBar, { type CommandActions } from './CommandBar'
 import FloatingToolbar from './FloatingToolbar'
 import { SelectionBar, MultiSelectionBar, PropertiesPanel } from './SelectionControls'
 import { useNivtecImport } from './useNivtecImport'
-import { useEventStore, type CustomItemSpec } from '../store/store'
+import { useEventStore, CHAIR_ROW_PITCH_M, type CustomItemSpec } from '../store/store'
 import { useProjectsStore } from '../store/projectsStore'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import type { EventItem, ItemType } from '../types'
@@ -304,18 +304,18 @@ export default function EditorView() {
   )
 
   const placeChairRows = useCallback(
-    (rows: number, cols: number, mode: 'tap' | 'center') => {
+    (rows: number, cols: number, mode: 'tap' | 'center', rowSpacingM: number = CHAIR_ROW_PITCH_M) => {
       setTool('select')
       if (mode === 'center') {
         const c = viewCenter()
-        select(addChairRowGroup(c.x, c.y, rows, cols))
+        select(addChairRowGroup(c.x, c.y, rows, cols, undefined, rowSpacingM))
         setPlacement(null)
         setActivePanel((p) => (p === 'picker' ? null : p))
         return
       }
       setPlacement({
         label: `Stuhlreihen ${rows} × ${cols} (${rows * cols} Stühle)`,
-        place: (x, y) => addChairRowGroup(x, y, rows, cols),
+        place: (x, y) => addChairRowGroup(x, y, rows, cols, undefined, rowSpacingM),
         once: true,
       })
       setActivePanel((p) => (p === 'picker' ? null : p))

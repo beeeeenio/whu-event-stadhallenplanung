@@ -153,7 +153,7 @@ interface Store extends EventState {
   duplicateItem: (itemId: string, offsetX?: number, offsetY?: number) => string | null
 
   /** Stuhlreihen als EIN Objekt (Gruppe), damit sie gemeinsam verschoben werden können. */
-  addChairRowGroup: (x: number, y: number, rows: number, cols: number, spacingM?: number) => string
+  addChairRowGroup: (x: number, y: number, rows: number, cols: number, spacingM?: number, rowSpacingM?: number) => string
 
   // Layers
   toggleLayer: (layer: keyof EventState['layers']) => void
@@ -188,6 +188,27 @@ export interface CustomItemSpec {
  * aufgeteilt: Die anderen Phasen behalten eine Kopie mit den alten Eigenschaften, das
  * Objekt selbst (gleiche ID, Auswahl bleibt erhalten) gilt danach nur noch für diese Phase.
  */
+/** Stuhlabstand in der Reihe und Reihenabstand (aus den Bestuhlungsplänen der Stadthalle, gemessen). */
+export const CHAIR_PITCH_M = 0.5
+export const CHAIR_ROW_PITCH_M = 0.85
+
+/** Stuhlreihen aus älteren Ständen (Abstand 0,55 m in beide Richtungen): auf die realistischen Abstände bringen. */
+function normalizeChairGroups(items: Record<string, EventItem>): Record<string, EventItem> {
+  let changed: Record<string, EventItem> | null = null
+  for (const [id, item] of Object.entries(items)) {
+    const g = item.grid
+    if (item.type !== 'chair_row_group' || !g || g.rowSpacingM !== undefined) continue
+    changed ??= { ...items }
+    changed[id] = {
+      ...item,
+      width: g.cols * CHAIR_PITCH_M,
+      height: g.rows * CHAIR_ROW_PITCH_M,
+      grid: { ...g, spacingM: CHAIR_PITCH_M, rowSpacingM: CHAIR_ROW_PITCH_M },
+    }
+  }
+  return changed ?? items
+}
+
 /** Styropor-Schriftzüge aus älteren Ständen: Breite an die aktuelle Buchstabenbreite anpassen. */
 function normalizeFoamLetters(items: Record<string, EventItem>): Record<string, EventItem> {
   let changed: Record<string, EventItem> | null = null
@@ -935,7 +956,7 @@ export const useEventStore = create<Store>((set, get) => {
       return id
     },
 
-    addChairRowGroup: (x, y, rows, cols, spacingM = 0.55) => {
+    addChairRowGroup: (x, y, rows, cols, spacingM = CHAIR_PITCH_M, rowSpacingM = CHAIR_ROW_PITCH_M) => {
       const id = uuid()
       const { currentPhaseId, phases, items } = get()
       const groupCount = Object.values(items).filter((i) => i.type === 'chair_row_group').length
@@ -948,10 +969,10 @@ export const useEventStore = create<Store>((set, get) => {
         type: 'chair_row_group',
         label: `Stuhlreihe ${groupCount + 1} (${rows * cols} Stühle)`,
         width: cols * spacingM,
-        height: rows * spacingM,
+        height: rows * rowSpacingM,
         seats: rows * cols,
         phaseData,
-        grid: { rows, cols, spacingM },
+        grid: { rows, cols, spacingM, rowSpacingM },
       }
       pushHistory()
       set((state) => ({
@@ -1061,7 +1082,7 @@ export const useEventStore = create<Store>((set, get) => {
     importProject: (data) =>
       set({
         ...data,
-        items: normalizeFoamLetters(data.items),
+        items: normalizeChairGroups(normalizeFoamLetters(data.items)),
         historyPast: [],
         historyFuture: [],
       }),
@@ -1069,7 +1090,7 @@ export const useEventStore = create<Store>((set, get) => {
     hydrate: (data) =>
       set({
         ...data,
-        items: normalizeFoamLetters(data.items),
+        items: normalizeChairGroups(normalizeFoamLetters(data.items)),
         historyPast: [],
         historyFuture: [],
       }),

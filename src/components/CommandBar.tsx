@@ -9,7 +9,7 @@ import { kbd } from '../utils/ui'
 
 export interface CommandActions {
   placeType: (type: ItemType, quantity: number, mode: 'tap' | 'center') => void
-  placeChairRows: (rows: number, cols: number, mode: 'tap' | 'center') => void
+  placeChairRows: (rows: number, cols: number, mode: 'tap' | 'center', rowSpacingM?: number) => void
   setTool: (tool: ToolMode) => void
   openPicker: (tab: PickerTab) => void
   importNivtec: () => void
