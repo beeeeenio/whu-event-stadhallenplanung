@@ -73,6 +73,7 @@ Diese README ist bewusst ausführlich. Sie soll Menschen und KI-Agenten (Claude 
   - Trennwände, Schatten und obere Wände lassen sich ein- und ausschalten.
   - Die letzte Kameraposition wird gemerkt.
   - Alle Objekte als richtige Modelle.
+  - Bereiche (`area`) tragen ihren Namen flach auf dem Boden (Textur in `models3d/misc.ts`).
 - **2D-Bedienung:**
   - Drehen um die Mitte.
   - Einrasten an Raster und Objekten mit Hilfslinien und Abständen.
