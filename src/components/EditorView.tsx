@@ -51,9 +51,8 @@ const SHORTCUTS: [string, string][] = [
   ['Kopieren / Einfügen (auch in andere Phase)', `${MOD}C · ${MOD}V`],
   ['Duplizieren', `${MOD}D`],
   ['Zur Auswahl hinzufügen/entfernen', '⇧Klick'],
-  ['Mehrere per Rechteck wählen', '⇧ oder ⌥ + Ziehen auf freie Fläche'],
-  ['Ansicht verschieben', 'Ziehen auf freie Fläche · Leertaste+Ziehen · 2 Finger'],
-  ['Hand-Werkzeug (nur verschieben)', 'H'],
+  ['Alles in einem Bereich auswählen', 'Auswahl: Rahmen ziehen (⇧ ergänzt)'],
+  ['Ansicht verschieben', 'Hand (H) · Leertaste+Ziehen · 2 Finger'],
   ['Zoomen', 'Mausrad · Pinch · + / −'],
   ['Einpassen / Auswahl zeigen', '0 · ⇧2'],
   ['Löschen', '⌫'],
@@ -867,8 +866,8 @@ export default function EditorView() {
             </>
           ) : (
             <>
-              <b className="text-ink">Auswahl</b> Objekte anklicken oder ziehen · freie Fläche ziehen verschiebt die Ansicht ·{' '}
-              <b className="text-ink">⇧</b> + Ziehen wählt per Rechteck
+              <b className="text-ink">Auswahl</b> Rahmen ziehen wählt alles darin aus · Auswahl ziehen verschiebt, <b className="text-ink">⌫</b> löscht ·{' '}
+              <b className="text-ink">H</b> Hand zum Verschieben der Ansicht
             </>
           )}
         </div>
