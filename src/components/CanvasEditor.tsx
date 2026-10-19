@@ -33,7 +33,7 @@ interface DragSession {
   targets: Box[]
 }
 
-export type ToolMode = 'select' | 'measure' | 'area'
+export type ToolMode = 'select' | 'hand' | 'measure' | 'area'
 
 /** Aktueller Ausschnitt des Plans (für schwebende Bedienelemente an der Auswahl). */
 export interface CanvasViewport {
@@ -187,6 +187,8 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
   // Ansichts-Gesten: Verschieben (Leertaste, Mitteltaste, Finger auf leerer Fläche), Pinch, Leertaste
   const [spaceDown, setSpaceDown] = useState(false)
   const spaceDownRef = useRef(false)
+  // ⇧/⌥ gehalten: Ziehen auf leerer Fläche zieht ein Auswahlrechteck (Fadenkreuz-Cursor)
+  const [marqueeKey, setMarqueeKey] = useState(false)
   const [panning, setPanning] = useState(false)
   const panRef = useRef<{ cx: number; cy: number; x: number; y: number; tapOnEmpty: boolean } | null>(null)
   const pinchRef = useRef<{ dist: number; cx: number; cy: number } | null>(null)
@@ -422,6 +424,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTextTarget(e.target)) return
+      if (e.key === 'Shift' || e.key === 'Alt') setMarqueeKey(true)
       if (e.code === 'Space') {
         e.preventDefault()
         setSpace(true)
@@ -439,8 +442,12 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === 'Space') setSpace(false)
+      if (e.key === 'Shift' || e.key === 'Alt') setMarqueeKey(false)
     }
-    const onBlur = () => setSpace(false)
+    const onBlur = () => {
+      setSpace(false)
+      setMarqueeKey(false)
+    }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
@@ -513,6 +520,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     const wantsPan =
       evt.button === 1 ||
       spaceDownRef.current ||
+      tool === 'hand' ||
       (onEmpty && tool === 'select' && !placement && !(evt.pointerType === 'mouse' && (evt.shiftKey || evt.altKey)))
     if (wantsPan) {
       evt.preventDefault()
@@ -860,7 +868,13 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       <div
         ref={containerRef}
         className={`absolute inset-0 overflow-hidden touch-none bg-ground ${
-          panning ? 'cursor-grabbing' : spaceDown || (tool === 'select' && !placement) ? 'cursor-grab' : placement || tool !== 'select' ? 'cursor-crosshair' : ''
+          panning
+            ? 'cursor-grabbing'
+            : spaceDown || tool === 'hand' || (tool === 'select' && !placement && !marqueeKey)
+              ? 'cursor-grab'
+              : placement || tool !== 'select' || marqueeKey
+                ? 'cursor-crosshair'
+                : ''
         }`}
         onPointerDownCapture={() => {
           const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null
@@ -968,7 +982,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           </Layer>
 
           {/* Layer 2: Geisterbild der Vorphase (Konzept C, nur was dort anders stand oder weg ist), darunter die Objekte */}
-          <Layer>
+          <Layer listening={tool !== 'hand'}>
             {ghostPhaseId && ghostItemIds.length > 0 && (
               <Group listening={false} opacity={0.3}>
                 {ghostItemIds.map((id) => {

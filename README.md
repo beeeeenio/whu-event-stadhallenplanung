@@ -285,6 +285,7 @@ EventItem {
 - Trackpad: zwei Finger verschieben, Pinch zoomt (`ctrlKey`).
 - Touch: Pinch und Pan.
 - Ziehen auf leerer Fläche (Links-Taste), Leertaste + Ziehen oder mittlere Maustaste verschieben die Ansicht. Ein Auswahlrechteck zieht man mit ⇧ (ergänzt die Auswahl) oder ⌥ (ersetzt sie).
+- Das **Hand-Werkzeug** (H) verschiebt nur die Ansicht, Objekte reagieren dann nicht. Cursor: Hand auf freier Fläche, Fadenkreuz bei gehaltener ⇧/⌥-Taste. Neben dem „?“ steht ein Hinweis zum aktuellen Werkzeug.
 - Die Auswahl passiert schon beim Drücken (`pointerdown`).
 
 **Tastenkürzel** (`EditorView.tsx`):
