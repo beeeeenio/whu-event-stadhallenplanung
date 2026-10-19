@@ -15,6 +15,9 @@ onRecordUpdateRequest((e) => {
   const body = e.requestInfo().body
   const sendsData = body.data !== undefined
   const sendsVersion = body.version !== undefined
+  // Wer zuletzt gespeichert hat, setzt der Server (nicht der Client), und nur wenn der Plan sich ändert.
+  const original = e.record.original().getString("lastEditorName")
+  e.record.set("lastEditorName", sendsData && e.auth ? e.auth.getString("name") || e.auth.email() : original)
   if (!sendsData && !sendsVersion) return e.next()
   if (!sendsVersion) {
     throw new BadRequestError("Beim Speichern des Plans fehlt die Version.")
@@ -35,3 +38,9 @@ onRecordCreateRequest((e) => {
   e.record.set("version", 0)
   e.next()
 }, "projects")
+
+// Stände merken sich, von wem sie stammen (Mitglieder sehen sich gegenseitig nicht als Accounts).
+onRecordCreateRequest((e) => {
+  if (e.auth) e.record.set("createdByName", e.auth.getString("name") || e.auth.email())
+  e.next()
+}, "project_versions")
