@@ -286,6 +286,8 @@ EventItem {
 - Touch: Pinch und Pan.
 - Ziehen auf leerer Fläche (Links-Taste), Leertaste + Ziehen oder mittlere Maustaste verschieben die Ansicht. Ein Auswahlrechteck zieht man mit ⇧ (ergänzt die Auswahl) oder ⌥ (ersetzt sie).
 - Das **Hand-Werkzeug** (H) verschiebt nur die Ansicht, Objekte reagieren dann nicht. Cursor: Hand auf freier Fläche, Fadenkreuz bei gehaltener ⇧/⌥-Taste. Neben dem „?“ steht ein Hinweis zum aktuellen Werkzeug.
+- **Befehlszeile** (⌘K, `CommandBar.tsx`): Jede Funktion der Oberfläche ist dort auffindbar, auch Ebenen (Strom, Bühnenzüge …), Geschoss, Raster, Auswahl-Aktionen, Phasen, Versionen/Vorlagen und Exporte. Neue Funktionen bitte dort mit eintragen (`keywords` für Suchwörter). Die Kopfleisten-Menüs öffnen über `utils/uiEvents.ts`.
+- **Ebenen-Knopf** in der Werkzeugleiste (`LayersMenu` in `FloatingToolbar.tsx`): Grundriss, vereinfachter Plan, Steckdosen-Codes, Strom/CEE, Bühnenzüge. Gemeinsame Schalter-Bausteine liegen in `components/controls.tsx`.
 - Die Auswahl passiert schon beim Drücken (`pointerdown`).
 
 **Tastenkürzel** (`EditorView.tsx`):
