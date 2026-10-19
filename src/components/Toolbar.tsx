@@ -3,6 +3,7 @@ import { useProjectsStore } from '../store/projectsStore'
 import { island, islandBtn, kbd } from '../utils/ui'
 import TemplatesMenu from './TemplatesMenu'
 import VersionsMenu from './VersionsMenu'
+import BrandLogo from './BrandLogo'
 
 interface Props {
   onOpenCommand: () => void
@@ -24,6 +25,7 @@ export default function Toolbar({ onOpenCommand }: Props) {
         <button onClick={closeProject} title="Zurück zur Projektübersicht" className={islandBtn('chip', 'px-0 w-10 text-base')}>
           ‹
         </button>
+        <BrandLogo variant="icon" className="h-8 shrink-0" />
         <div className="flex flex-col min-w-0">
           <input
             value={eventName}

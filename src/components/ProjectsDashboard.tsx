@@ -4,6 +4,7 @@ import { btn } from '../utils/ui'
 import { exportAllProjects, generateExportFilename } from '../utils/exportProject'
 import { importAllProjects } from '../utils/importProject'
 import ExportImportDialog from './ExportImportDialog'
+import BrandLogo from './BrandLogo'
 
 function formatDate(ts: number) {
   return new Date(ts).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
@@ -109,8 +110,9 @@ export default function ProjectsDashboard() {
   return (
     <div className="h-screen w-screen overflow-y-auto bg-ground">
       <div className="max-w-3xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-semibold text-gray-800 mb-1">Kongresshalle Vallendar – Event-Planungstool</h1>
-        <p className="text-sm text-gray-500 mb-8">Projekte verwalten und Hallenpläne bearbeiten</p>
+        <BrandLogo className="h-12 mb-6" />
+        <h1 className="text-2xl font-semibold text-ink mb-1">Kongresshalle Vallendar – Event-Planungstool</h1>
+        <p className="text-sm text-ink2 mb-8">Projekte verwalten und Hallenpläne bearbeiten</p>
 
         <div className="flex gap-2 mb-8">
           <input
