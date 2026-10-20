@@ -1112,7 +1112,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
       </div>
 
       {/* Werkzeug-Hinweis */}
-      {(tool !== 'select' || placement) && (
+      {(tool === 'measure' || tool === 'area' || placement) && (
         <div className="absolute left-1/2 -translate-x-1/2 top-[148px] z-10 pointer-events-none">
           <div className="bg-accent text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-lg whitespace-nowrap">
             {placement
