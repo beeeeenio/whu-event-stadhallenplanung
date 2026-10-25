@@ -397,6 +397,7 @@ Das Backend gibt es nur auf dem Branch `backend-pocketbase`. Es besteht aus `ser
   - `project_versions`
   - `templates`
   - `users` mit Rollen `superadmin`, `admin` und `user`
+- **Projektname:** Der Name in der Projektübersicht (`projects.name`) und der Titel im Plan (`data.eventName`, Eingabefeld oben links im Editor) sind dasselbe und werden abgeglichen: Speichern schickt den Titel als `name` mit (`saveProjectData`), Umbenennen in der Übersicht setzt beides (`renameProject`), neue Projekte und Kopien starten mit gleichem Namen. Beim Öffnen gewinnt ein eigener Titel im Plan und wird in die Übersicht übernommen; der Standardtitel „Neues Event“ gewinnt nie (`reconcileName` in `projectSync.ts`).
 - **Speichern** über `src/backend/projectSync.ts`:
   - Gespeichert wird automatisch und verzögert.
   - Konflikterkennung über `version`: Hat jemand anderes inzwischen gespeichert, antwortet der Server mit 409 (`server/pb_hooks/projects.pb.js`).

@@ -95,13 +95,28 @@ export function startSession(id: string): () => void {
     .then((p) => {
       if (s.closed) return
       s.version = p.version
-      applyData(s, p.data ?? emptyProjectData(), false)
+      const { data, renameTo } = reconcileName(p.name, p.data ?? emptyProjectData())
+      applyData(s, data, false)
+      // Bestehende Projekte: Name in der Projektübersicht an den Titel im Plan angleichen
+      if (renameTo && (p.role === 'owner' || p.role === 'editor')) void api.setProjectName(id, renameTo).catch(() => undefined)
       setStatus(s, { role: p.role, status: 'saved' })
       watch(s)
     })
     .catch((err) => setStatus(s, { status: 'failed', message: errorMessage(err) }))
 
   return () => endSession(s)
+}
+
+/**
+ * Name in der Projektübersicht (Server-Eintrag) und Titel im Plan (`eventName`) gleichhalten.
+ * Ein eigener Titel im Plan gewinnt (dort wird umbenannt) und wird in die Übersicht übernommen;
+ * der Standardtitel „Neues Event“ gewinnt nie, dann gilt der Name aus der Übersicht.
+ */
+function reconcileName(recordName: string, data: ProjectData): { data: ProjectData; renameTo: string | null } {
+  const title = data.eventName?.trim()
+  if (title && title !== emptyProjectData().eventName && title !== recordName) return { data, renameTo: title }
+  if (recordName && title !== recordName) return { data: { ...data, eventName: recordName }, renameTo: null }
+  return { data, renameTo: null }
 }
 
 function watch(s: Session) {

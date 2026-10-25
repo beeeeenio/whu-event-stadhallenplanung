@@ -56,7 +56,8 @@ export const useProjectsStore = create<ProjectsStore>()(
 
         createProject: (name) =>
           run(async () => {
-            const id = await api.createProject(name || 'Neues Projekt', emptyProjectData())
+            const title = name || 'Neues Projekt'
+            const id = await api.createProject(title, { ...emptyProjectData(), eventName: title })
             set({ currentProjectId: id })
           }),
 

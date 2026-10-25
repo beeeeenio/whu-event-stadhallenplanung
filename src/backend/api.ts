@@ -81,12 +81,26 @@ export async function loadProject(id: string): Promise<LoadedProject> {
  * weil inzwischen jemand anderes gespeichert hat, wirft der Server 409 (isConflict).
  */
 export async function saveProjectData(id: string, data: ProjectData, version: number): Promise<number> {
-  const r = await projects().update(id, { data, version }, { fields: 'version' })
+  // Der Titel im Plan (eventName) ist auch der Name in der Projektübersicht: beim Speichern mitziehen
+  const name = data.eventName?.trim()
+  const r = await projects().update(id, { data, version, ...(name ? { name } : {}) }, { fields: 'version' })
   return r.version
 }
 
-export async function renameProject(id: string, name: string): Promise<void> {
+/** Nur den Namen in der Projektübersicht setzen (ohne den Plan anzufassen). */
+export async function setProjectName(id: string, name: string): Promise<void> {
   await projects().update(id, { name }, { fields: 'id' })
+}
+
+/** Umbenennen aus der Projektübersicht: Name und Titel im Plan (eventName) bleiben gleich. */
+export async function renameProject(id: string, name: string): Promise<void> {
+  const r = await projects().getOne(id, { fields: 'id,data,version' })
+  const data = r.data as ProjectData | null
+  if (!data) {
+    await setProjectName(id, name)
+    return
+  }
+  await projects().update(id, { name, data: { ...data, eventName: name }, version: r.version + 1 }, { fields: 'id' })
 }
 
 export async function deleteProject(id: string): Promise<void> {
@@ -96,7 +110,7 @@ export async function deleteProject(id: string): Promise<void> {
 /** Eigene Kopie samt Versionen – auch von Projekten, die man nur ansehen darf. */
 export async function duplicateProject(sourceId: string, name: string): Promise<string> {
   const [source, versions] = await Promise.all([loadProject(sourceId), listVersions(sourceId)])
-  const id = await createProject(name, source.data ?? ({} as ProjectData))
+  const id = await createProject(name, { ...(source.data ?? ({} as ProjectData)), eventName: name })
   for (const v of [...versions].reverse()) {
     await createVersion(id, { ...v, id: uuid() })
   }
