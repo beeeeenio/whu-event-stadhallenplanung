@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .claude/scheduled_tasks.lock
+
+# Lokale Entwicklungs-PocketBase (server/dev-local.sh): Programm und Testdaten nie einchecken
+server/.dev/

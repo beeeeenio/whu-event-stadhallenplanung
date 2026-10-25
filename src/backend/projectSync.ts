@@ -4,6 +4,7 @@ import { useEventStore } from '../store/store'
 import * as api from './api'
 import { errorMessage, isConflict, isRetryable, myRole, pb, type ProjectRecord, type Role } from './pb'
 import { emptyProjectData, type ProjectData } from '../utils/projectStorage'
+import { reconcileName } from '../utils/projectName'
 
 /**
  * Hält das geöffnete Projekt mit dem Server synchron.
@@ -105,18 +106,6 @@ export function startSession(id: string): () => void {
     .catch((err) => setStatus(s, { status: 'failed', message: errorMessage(err) }))
 
   return () => endSession(s)
-}
-
-/**
- * Name in der Projektübersicht (Server-Eintrag) und Titel im Plan (`eventName`) gleichhalten.
- * Ein eigener Titel im Plan gewinnt (dort wird umbenannt) und wird in die Übersicht übernommen;
- * der Standardtitel „Neues Event“ gewinnt nie, dann gilt der Name aus der Übersicht.
- */
-function reconcileName(recordName: string, data: ProjectData): { data: ProjectData; renameTo: string | null } {
-  const title = data.eventName?.trim()
-  if (title && title !== emptyProjectData().eventName && title !== recordName) return { data, renameTo: title }
-  if (recordName && title !== recordName) return { data: { ...data, eventName: recordName }, renameTo: null }
-  return { data, renameTo: null }
 }
 
 function watch(s: Session) {

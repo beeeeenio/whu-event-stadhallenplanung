@@ -237,6 +237,7 @@ EventItem {
 
 - Ein Objekt existiert in einer Phase, wenn es in `phaseData[phaseId]` vorkommt, und ist dort sichtbar, wenn `visible` gesetzt ist.
 - Ein gespeichertes Projekt (`ProjectData` in `projectStorage.ts`) enthält `eventName`, `currentPhaseId`, `phases`, `items`, `itemOrder` und `layers`.
+- **Projektname:** Der Name in der Projektübersicht und der Titel im Plan (`eventName`, Eingabefeld oben links im Editor) sind dasselbe und bleiben gleich: Speichern übernimmt den Titel in die Übersicht (`touchProject`), Umbenennen in der Übersicht setzt auch den Titel (`renameProject`), Kopien und neue Projekte starten gleich. Beim Öffnen gewinnt ein eigener Titel im Plan, der Standardtitel „Neues Event“ nie (`reconcileName` in `utils/projectName.ts`).
 - Bilder (Visiova-Drucke, Forex-Drucke) werden als **verkleinerte JPEG-Data-URLs** im Objekt gespeichert (`printImage.ts`). Sie sollen klein bleiben, weil localStorage begrenzt ist.
 
 ---
