@@ -281,7 +281,7 @@ EventItem {
 - Bei reinen Deko-Nodes `listening={false}` und `perfectDrawEnabled={false}` setzen.
 
 **Eingabe:**
-- Mausrad zoomt.
+- Mausrad zoomt (eine Raste ca. 35 %, siehe `interpretWheel` in `utils/viewport.ts`).
 - Trackpad: zwei Finger verschieben, Pinch zoomt (`ctrlKey`).
 - Touch: Pinch und Pan.
 - **Auswahl** (V): Ziehen auf leerer Fläche zeichnet einen Rahmen und wählt alles darin aus (⇧ ergänzt die Auswahl). Die Auswahl lässt sich gemeinsam ziehen oder mit Entf löschen.
