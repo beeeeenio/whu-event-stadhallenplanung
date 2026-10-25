@@ -70,7 +70,9 @@ Diese README ist bewusst ausführlich. Sie soll Menschen und KI-Agenten (Claude 
 - **Farben:** Jedes Objekt außer Text-Label bekommt eine Farbe, in 2D und 3D.
 - **3D-Ansicht:**
   - Halle mit Wänden, Türen, Glasfassade, Säulen, Bühne und Hauptvorhang (auf/zu).
-  - Trennwände, Schatten und obere Wände lassen sich ein- und ausschalten.
+  - Trennwände, Schatten, Treppen und obere Wände lassen sich ein- und ausschalten.
+  - **Treppen** (`STAIR_FLIGHTS_PX`, `STAIR_LANDINGS_PX` in `data/venue3d.ts`, Bau in `buildStairs`): Lage und Laufrichtung sind aus dem Grundriss abgelesen, die Höhen angenommen (Treppenhäuser EG → OG +3,50 m als zweiläufige Treppe mit Zwischenpodest, Bühnentreppen 0,90 m). Über den oberen Läufen hat der OG-Boden eine Öffnung. Die Außentreppen am Eingang unten links fehlen noch (Höhen unbekannt).
+  - Die Bühne besteht aus Hauptbühne und Vorbühne (`STAGE_APRON_PX`); an den Ecken vor dem Portal liegen die Bühnentreppen.
   - Die letzte Kameraposition wird gemerkt.
   - Alle Objekte als richtige Modelle.
   - Bereiche (`area`) tragen ihren Namen flach auf dem Boden (Textur in `models3d/misc.ts`).
@@ -285,7 +287,7 @@ EventItem {
 - Trackpad: zwei Finger verschieben, Pinch zoomt (`ctrlKey`).
 - Touch: Pinch und Pan.
 - **Auswahl** (V): Ziehen auf leerer Fläche zeichnet einen Rahmen und wählt alles darin aus (⇧ ergänzt die Auswahl). Die Auswahl lässt sich gemeinsam ziehen oder mit Entf löschen.
-- **Ansicht verschieben** gibt es kein eigenes Hand-Werkzeug mehr. In jedem Werkzeug, auch über Objekten, verschieben die rechte oder mittlere Maustaste, Leertaste + Ziehen, zwei Finger auf dem Trackpad oder (Touch) ein Finger auf leerer Fläche die Ansicht (`handleStagePointerDown`). Das Kontextmenü ist dafür abgeschaltet. Cursor: Hand beim Verschieben. Neben dem „?“ steht ein Hinweis zum Auswahl-Werkzeug.
+- **Ansicht verschieben** gibt es kein eigenes Hand-Werkzeug mehr. In jedem Werkzeug, auch über Objekten, verschieben die rechte oder mittlere Maustaste, Leertaste + Ziehen, zwei Finger auf dem Trackpad oder (Touch) ein Finger auf leerer Fläche die Ansicht (`handleStagePointerDown`). Das Kontextmenü ist dafür abgeschaltet. Cursor: Hand beim Verschieben. Neben dem „?“ steht ein Hinweis zum Auswahl-Werkzeug; er lässt sich wegklicken (×), das merkt sich der Browser (`stadthalle-select-hint-dismissed`).
 - **Nur Ansicht** (`viewOnly` an `CanvasEditor`, z. B. Freigabe-Link auf dem Backend-Branch): Objekte sind nicht anfassbar, Ziehen mit der linken Maustaste verschiebt die Ansicht.
 - **Befehlszeile** (⌘K, `CommandBar.tsx`): Jede Funktion der Oberfläche ist dort auffindbar, auch Ebenen (Strom, Bühnenzüge …), Geschoss, Raster, Auswahl-Aktionen, Phasen, Versionen/Vorlagen und Exporte. Neue Funktionen bitte dort mit eintragen (`keywords` für Suchwörter). Die Kopfleisten-Menüs öffnen über `utils/uiEvents.ts`.
 - **Ebenen-Knopf** in der Werkzeugleiste (`LayersMenu` in `FloatingToolbar.tsx`): Grundriss, vereinfachter Plan, Steckdosen-Codes, Strom/CEE, Bühnenzüge. Gemeinsame Schalter-Bausteine liegen in `components/controls.tsx`.
