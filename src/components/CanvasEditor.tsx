@@ -55,6 +55,8 @@ interface Props {
   /** Werkzeug von außen steuern (Werkzeug-Dock). Ohne Angabe verwaltet der Canvas es selbst. */
   tool?: ToolMode
   onToolChange?: (tool: ToolMode) => void
+  /** Nur Ansicht (z. B. Freigabe-Link): Objekte sind nicht anfassbar, Ziehen verschiebt die Ansicht. */
+  viewOnly?: boolean
   /** Aktiver „Antippen & Platzieren“-Modus: Klick in den Plan setzt das Objekt an diese Stelle. */
   placement?: Placement | null
   onPlacementDone?: () => void
@@ -120,6 +122,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     onSelectMany,
     tool: toolProp,
     onToolChange,
+    viewOnly = false,
     placement = null,
     onPlacementDone,
     ghostPhaseId = null,
@@ -515,6 +518,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     const wantsPan =
       evt.button === 1 ||
       evt.button === 2 ||
+      viewOnly ||
       spaceDownRef.current ||
       (onEmpty && tool === 'select' && !placement && evt.pointerType !== 'mouse')
     if (wantsPan) {
@@ -525,7 +529,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
         cy: evt.clientY,
         x: v.x,
         y: v.y,
-        tapOnEmpty: evt.button === 0 && onEmpty && tool === 'select' && !placement,
+        tapOnEmpty: !viewOnly && evt.button === 0 && onEmpty && tool === 'select' && !placement,
       }
       setPanning(true)
       gestureCbRef.current?.(true)
@@ -866,7 +870,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
         className={`absolute inset-0 overflow-hidden touch-none bg-ground ${
           panning
             ? 'cursor-grabbing'
-            : spaceDown
+            : spaceDown || viewOnly
               ? 'cursor-grab'
               : placement || tool !== 'select'
                 ? 'cursor-crosshair'
@@ -979,7 +983,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           </Layer>
 
           {/* Layer 2: Geisterbild der Vorphase (Konzept C, nur was dort anders stand oder weg ist), darunter die Objekte */}
-          <Layer>
+          <Layer listening={!viewOnly}>
             {ghostPhaseId && ghostItemIds.length > 0 && (
               <Group listening={false} opacity={0.3}>
                 {ghostItemIds.map((id) => {
