@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { EventItem } from '../../types'
 import { VENUE } from '../../data/venue3d'
+import { PIPE_DRAPE_DEFAULT_HEIGHT_M } from '../../utils/pipeDrape'
 import { box, cylinder, drape, group, mat, NEUTRAL, rod, type ModelMap } from './common'
 
 /** Vorhang/Molton: Höhe der Oberkante = Holzpaneel-Höhe des Saals (3,8 m). */
@@ -11,8 +12,6 @@ const CURTAIN_RAIL_D = 0.06
 /** Vorhang: Stoffbahn endet 5 cm unter der Schiene. */
 const CURTAIN_CLOTH_H = CURTAIN_H - 0.05
 
-/** Pipe & Drape: Höhe der Pfosten und Querstange. */
-const PIPE_H = 3
 /** Pipe & Drape: Abstand der Pfosten vom Rand der Bahn. */
 const PIPE_POST_INSET = 0.03
 /** Pipe & Drape: Pfostenabstand in Metern (Anzahl Pfosten = ceil(w / 3) + 1, mindestens 2). */
@@ -54,6 +53,8 @@ export function buildCurtain(item: EventItem, color: string): THREE.Group {
 export function buildPipeDrape(item: EventItem, color: string): THREE.Group {
   const w = item.width
   const zc = item.height / 2
+  // Höhe der Pfosten und Querstange
+  const pipeH = item.heightM ?? PIPE_DRAPE_DEFAULT_HEIGHT_M
   const n = Math.max(2, Math.ceil(w / PIPE_POST_SPACING) + 1)
   const postMat = mat(NEUTRAL.alu, 'metal')
   const footMat = mat(NEUTRAL.anthracite, 'metal')
@@ -61,13 +62,13 @@ export function buildPipeDrape(item: EventItem, color: string): THREE.Group {
   for (let i = 0; i < n; i++) {
     const x = PIPE_POST_INSET + (i * (w - 2 * PIPE_POST_INSET)) / (n - 1)
     parts.push(
-      cylinder(PIPE_POST_R, PIPE_H, x, PIPE_H / 2, zc, postMat, { segments: 12 }),
+      cylinder(PIPE_POST_R, pipeH, x, pipeH / 2, zc, postMat, { segments: 12 }),
       box(PIPE_FOOT, PIPE_FOOT_H, PIPE_FOOT, x, PIPE_FOOT_H / 2, zc, footMat, false),
     )
   }
   parts.push(
-    rod([0, PIPE_H - 0.04, zc], [w, PIPE_H - 0.04, zc], PIPE_BAR_R, postMat),
-    drape(w - 0.02, PIPE_H - 0.08, w / 2, 0.02 + (PIPE_H - 0.08) / 2, zc, mat(color, 'fabric'), { depth: 0.04, fold: 0.25 }),
+    rod([0, pipeH - 0.04, zc], [w, pipeH - 0.04, zc], PIPE_BAR_R, postMat),
+    drape(w - 0.02, pipeH - 0.08, w / 2, 0.02 + (pipeH - 0.08) / 2, zc, mat(color, 'fabric'), { depth: 0.04, fold: 0.25 }),
   )
   return group(...parts)
 }
