@@ -14,6 +14,9 @@ const FRAME_WIDTH_M = 0.04
 const INFILL_RECESS_M = 0.005
 const PANEL_GAP_M = 0.01
 const INFILL_COLOR = '#2b2724'
+/** Tresen wie im NivTec-Tool: unteres Deck dunkelblau, oberes Deck orange. */
+const TRESEN_BASE_COLOR = '#26346b'
+const TRESEN_TOP_COLOR = '#c98a2b'
 const HEX_TILE_M = 0.25
 const FOOT_RADIUS_M = 0.026
 const FOOT_PLATE_RADIUS_M = 0.075
@@ -62,11 +65,11 @@ function hexCanvas(): HTMLCanvasElement | null {
 }
 
 const INFILL_MATERIALS = new Map<string, THREE.MeshStandardMaterial>()
-function infillMaterial(repeatU: number, repeatV: number): THREE.MeshStandardMaterial {
-  const key = `${repeatU.toFixed(3)}|${repeatV.toFixed(3)}`
+function infillMaterial(repeatU: number, repeatV: number, color: string = INFILL_COLOR): THREE.MeshStandardMaterial {
+  const key = `${repeatU.toFixed(3)}|${repeatV.toFixed(3)}|${color}`
   let m = INFILL_MATERIALS.get(key)
   if (m) return m
-  m = new THREE.MeshStandardMaterial({ color: INFILL_COLOR, roughness: 0.82, metalness: 0 })
+  m = new THREE.MeshStandardMaterial({ color, roughness: 0.82, metalness: 0 })
   const canvas = hexCanvas()
   if (canvas) {
     const map = new THREE.CanvasTexture(canvas)
@@ -82,9 +85,6 @@ function infillMaterial(repeatU: number, repeatV: number): THREE.MeshStandardMat
   INFILL_MATERIALS.set(key, m)
   return m
 }
-
-/** Tresen-Aufsatz: helle Platte. */
-const TOP_MATERIAL = new THREE.MeshStandardMaterial({ color: '#e7e5e4', roughness: 0.55, metalness: 0.1 })
 
 const FRAME_MATERIAL = new THREE.MeshStandardMaterial({ color: '#cfd0cc', metalness: 0.9, roughness: 0.4 })
 
@@ -197,6 +197,38 @@ function pointInPolygon(pt: Pt, poly: Pt[]): boolean {
   return inside
 }
 
+/** Platten mit Alu-Rahmen und Belag: Oberkante Belag bei deckY + PANEL_THICKNESS_M. */
+function addDecks(g: THREE.Group, polys: Pt[][], deckY: number, infillColor: string): void {
+  for (const poly of polys) {
+    const outer = insetPolygon(poly, PANEL_GAP_M / 2)
+    const inner = insetPolygon(outer, FRAME_WIDTH_M)
+    g.add(extrudeXZ(outer, [inner], PANEL_THICKNESS_M, deckY, FRAME_MATERIAL))
+    // UVs der Extrusion liegen in Metern → eine Kachel je HEX_TILE_M
+    const mat = infillMaterial(1 / HEX_TILE_M, 1 / HEX_TILE_M, infillColor)
+    g.add(extrudeXZ(inner, [], PANEL_THICKNESS_M - INFILL_RECESS_M, deckY, mat))
+  }
+}
+
+/** Füße von `fromY` bis `toY` (Unterkante der Platten): an jeder Plattenecke, doppelte Ecken nur einmal. */
+function addFeet(g: THREE.Group, polys: Pt[][], fromY: number, toY: number): void {
+  const feet = new Map<string, Pt>()
+  for (const poly of polys) {
+    for (const p of insetPolygon(poly, 0.08)) feet.set(`${Math.round(p.x * 10)}|${Math.round(p.y * 10)}`, p)
+  }
+  const legH = Math.max(toY - fromY, 0.01)
+  const legGeo = new THREE.CylinderGeometry(FOOT_RADIUS_M, FOOT_RADIUS_M, legH, 12)
+  const plateGeo = new THREE.CylinderGeometry(FOOT_PLATE_RADIUS_M * 0.95, FOOT_PLATE_RADIUS_M, 0.008, 24)
+  for (const p of feet.values()) {
+    const leg = new THREE.Mesh(legGeo, GALVANIZED)
+    leg.position.set(p.x, fromY + legH / 2, p.y)
+    leg.castShadow = true
+    g.add(leg)
+    const plate = new THREE.Mesh(plateGeo, GALVANIZED)
+    plate.position.set(p.x, fromY + 0.004, p.y)
+    g.add(plate)
+  }
+}
+
 /**
  * Baut das Podest im lokalen Koordinatensystem des Objekts (Meter, x rechts, z = Plan-y).
  * `heightM` = Oberkante Belag über Boden. `moltonColor` = Behang an freien Außenkanten (null = keiner).
@@ -220,41 +252,17 @@ export function buildNivtecDeck(
   const deckY = Math.max(heightM - PANEL_THICKNESS_M, 0.02)
   const polys = pieces.map(piecePolygon)
 
-  polys.forEach((poly) => {
-    const outer = insetPolygon(poly, PANEL_GAP_M / 2)
-    const inner = insetPolygon(outer, FRAME_WIDTH_M)
-    g.add(extrudeXZ(outer, [inner], PANEL_THICKNESS_M, deckY, FRAME_MATERIAL))
-    // UVs der Extrusion liegen in Metern → eine Kachel je HEX_TILE_M
-    const mat = infillMaterial(1 / HEX_TILE_M, 1 / HEX_TILE_M)
-    g.add(extrudeXZ(inner, [], PANEL_THICKNESS_M - INFILL_RECESS_M, deckY, mat))
-  })
+  // Tresen (mit Aufsatz): unteres Deck dunkelblau, sonst wie bei der Kastenbühne
+  const hasTop = (top?.pieces.length ?? 0) > 0
+  addDecks(g, polys, deckY, hasTop ? TRESEN_BASE_COLOR : INFILL_COLOR)
+  addFeet(g, polys, 0, deckY)
 
-  // Tresen: Aufsatz-Platten stehen auf den Podesten (Oberkante Belag = heightM)
-  for (const p of top?.pieces ?? []) {
-    const rise = Math.max(top?.riseM ?? 0.2, 0.01)
-    const m = new THREE.Mesh(new THREE.BoxGeometry(p.w - PANEL_GAP_M, rise, p.d - PANEL_GAP_M), TOP_MATERIAL)
-    m.position.set(p.x + p.w / 2, heightM + rise / 2, p.y + p.d / 2)
-    m.castShadow = true
-    m.receiveShadow = true
-    g.add(m)
-  }
-
-  // Füße: an jeder Plattenecke, doppelte Ecken (Nachbarplatten) nur einmal
-  const feet = new Map<string, Pt>()
-  for (const poly of polys) {
-    for (const p of insetPolygon(poly, 0.08)) feet.set(`${Math.round(p.x * 10)}|${Math.round(p.y * 10)}`, p)
-  }
-  const legH = Math.max(deckY, 0.01)
-  const legGeo = new THREE.CylinderGeometry(FOOT_RADIUS_M, FOOT_RADIUS_M, legH, 12)
-  const plateGeo = new THREE.CylinderGeometry(FOOT_PLATE_RADIUS_M * 0.95, FOOT_PLATE_RADIUS_M, 0.008, 24)
-  for (const p of feet.values()) {
-    const leg = new THREE.Mesh(legGeo, GALVANIZED)
-    leg.position.set(p.x, legH / 2, p.y)
-    leg.castShadow = true
-    g.add(leg)
-    const plate = new THREE.Mesh(plateGeo, GALVANIZED)
-    plate.position.set(p.x, 0.004, p.y)
-    g.add(plate)
+  // Tresen-Aufsatz: eigenes oranges Deck, `riseM` über dem unteren Deck, auf kurzen Spindeln darauf
+  if (hasTop) {
+    const topPolys = top!.pieces.map(piecePolygon)
+    const topDeckY = heightM + Math.max(top!.riseM, PANEL_THICKNESS_M + 0.02) - PANEL_THICKNESS_M
+    addDecks(g, topPolys, topDeckY, TRESEN_TOP_COLOR)
+    addFeet(g, topPolys, heightM, topDeckY)
   }
 
   // Molton an allen Außenkanten: eine Kante ist innen, wenn direkt daneben eine andere Platte liegt
