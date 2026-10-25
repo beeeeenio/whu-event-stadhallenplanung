@@ -285,7 +285,7 @@ EventItem {
 - Trackpad: zwei Finger verschieben, Pinch zoomt (`ctrlKey`).
 - Touch: Pinch und Pan.
 - **Auswahl** (V): Ziehen auf leerer Fläche zeichnet einen Rahmen und wählt alles darin aus (⇧ ergänzt die Auswahl). Die Auswahl lässt sich gemeinsam ziehen oder mit Entf löschen.
-- **Hand** (H), Leertaste + Ziehen, mittlere Maustaste oder zwei Finger auf dem Trackpad verschieben die Ansicht. Beim Hand-Werkzeug reagieren Objekte nicht. Cursor: Hand beim Verschieben. Neben dem „?“ steht ein Hinweis zum aktuellen Werkzeug.
+- **Ansicht verschieben** gibt es kein eigenes Hand-Werkzeug mehr. In jedem Werkzeug, auch über Objekten, verschieben die rechte oder mittlere Maustaste, Leertaste + Ziehen, zwei Finger auf dem Trackpad oder (Touch) ein Finger auf leerer Fläche die Ansicht (`handleStagePointerDown`). Das Kontextmenü ist dafür abgeschaltet. Cursor: Hand beim Verschieben. Neben dem „?“ steht ein Hinweis zum Auswahl-Werkzeug.
 - **Befehlszeile** (⌘K, `CommandBar.tsx`): Jede Funktion der Oberfläche ist dort auffindbar, auch Ebenen (Strom, Bühnenzüge …), Geschoss, Raster, Auswahl-Aktionen, Phasen, Versionen/Vorlagen und Exporte. Neue Funktionen bitte dort mit eintragen (`keywords` für Suchwörter). Die Kopfleisten-Menüs öffnen über `utils/uiEvents.ts`.
 - **Ebenen-Knopf** in der Werkzeugleiste (`LayersMenu` in `FloatingToolbar.tsx`): Grundriss, vereinfachter Plan, Steckdosen-Codes, Strom/CEE, Bühnenzüge. Gemeinsame Schalter-Bausteine liegen in `components/controls.tsx`.
 - Die Auswahl passiert schon beim Drücken (`pointerdown`).
