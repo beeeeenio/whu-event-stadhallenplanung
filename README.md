@@ -351,6 +351,7 @@ Plan und Hintergrund der Überarbeitung stehen in `docs/plan-2d-ueberarbeitung.m
   - Import aus dem NivTec-Tool. Gemeinsames Format: `docs/plan-forex.md`, Abschnitt „Gemeinsame Schnittstelle“.
   - Forex-Blenden (`nivtecData.forexPanels`) hängen nur an freien Außenkanten (`utils/forex.ts`). Drucke liegen in `forexPrints`.
   - Die Objektfarbe ist der Molton.
+  - Name und Maße stehen in 2D immer aufrecht (gegen die Drehung gedreht), mittig über den echten Podesten, oder unter der Bühne, wenn sie nicht hineinpassen. Die Maße im Label kommen aus `piecesBounds` (`utils/geometry.ts`), weil `width/height` der Gruppe vom Ursprung bis zum äußersten Podest reichen und größer sein können als die Podeste selbst.
 - **Stuhlreihen** (`chair_row_group`): `grid = { rows, cols, spacingM, rowSpacingM }`. Die Stückliste zählt `rows × cols` Stühle.
   - Stuhlabstand 0,50 m, Reihenabstand 0,85 m (`CHAIR_PITCH_M`, `CHAIR_ROW_PITCH_M` in `store.ts`, aus den Bestuhlungsplänen der Stadthalle gemessen).
   - Alte Stände ohne `rowSpacingM` (Abstand 0,55 m in beide Richtungen) werden beim Laden angehoben (`normalizeChairGroups`), die Gruppe wird dabei größer.
