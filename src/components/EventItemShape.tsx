@@ -7,7 +7,7 @@ import { forexEdge } from '../utils/forex'
 import { describeVisiovaRun, splitVisiovaRun } from '../utils/visiova'
 import { clampPipeDrapeLength } from '../utils/pipeDrape'
 import type { DragMods } from '../utils/snapping'
-import { angleDeg, isRoundType, localBounds, positionForRotation, snapAngle, worldCenter, type Pt } from '../utils/geometry'
+import { angleDeg, isRoundType, localBounds, piecesBounds, positionForRotation, snapAngle, worldCenter, type Pt } from '../utils/geometry'
 import { IS_COARSE_POINTER } from '../utils/viewport'
 import { FOAM_DEFAULT_TEXT, FOAM_LETTER, letterSlots } from '../utils/foamLetters'
 import type Konva from 'konva'
@@ -165,6 +165,30 @@ function EventItemShape({
   const topY = lb.y
   const handleX = centerX
   const handleY = topY - 26 / zoom
+  // NivTec-Bühne: Name und Maße immer aufrecht (gegen die Drehung gedreht) und mittig über den echten
+  // Podesten. Passt der Text nicht hinein, steht er unter der Bühne.
+  const nivtecLabel = (() => {
+    const pb = item.type === 'nivtec_group' && showLabel ? piecesBounds(item.nivtecData?.pieces) : null
+    if (!pb) return null
+    const bw = metersToPixels(pb.w, pixelsPerMeter)
+    const bh = metersToPixels(pb.d, pixelsPerMeter)
+    const cx = metersToPixels(pb.x, pixelsPerMeter) + bw / 2
+    const cy = metersToPixels(pb.y, pixelsPerMeter) + bh / 2
+    const rad = (phaseData.rotation * Math.PI) / 180
+    const cos = Math.cos(rad)
+    const sin = Math.sin(rad)
+    // Platzbedarf der gedrehten Box im Plan
+    const worldW = Math.abs(bw * cos) + Math.abs(bh * sin)
+    const worldH = Math.abs(bw * sin) + Math.abs(bh * cos)
+    const fmt = (v: number) => (Math.round(v * 100) / 100).toFixed(2).replace('.', ',')
+    const dims = `${fmt(pb.w)} × ${fmt(pb.d)} m`
+    const w = Math.max(item.label.length * 5.2, showDims ? dims.length * 4.6 : 0) + 10
+    const h = showDims ? 26 : 15
+    const inside = w <= worldW && h <= worldH
+    // Versatz vom Mittelpunkt im Plan (nach unten, wenn außen) und zurück ins lokale System der Gruppe
+    const oy = inside ? 0 : worldH / 2 + 4 + h / 2
+    return { x: cx + oy * sin, y: cy + oy * cos, w, h, dims, inside }
+  })()
   const angleTextRef = useRef<Konva.Text>(null)
   // Start des Ziehens: Mittelpunkt, Zeigerwinkel und Ausgangsrotation. Aus dem Delta ab Griff-Start
   // folgt die Rotation, dadurch springt der Griff beim Greifen nicht.
@@ -431,7 +455,7 @@ function EventItemShape({
         </>
       ) : (
         <>
-          {showLabel && item.type !== 'curtain' && item.type !== 'foam_letters' && (
+          {showLabel && item.type !== 'curtain' && item.type !== 'foam_letters' && item.type !== 'nivtec_group' && (
             <Text
               listening={false}
               text={item.label}
@@ -443,7 +467,7 @@ function EventItemShape({
             />
           )}
           {/* Maßangabe (B x H in Metern), wie im Referenz-Tool */}
-          {showDims && (
+          {showDims && item.type !== 'nivtec_group' && (
             <Text
               listening={false}
               text={`${item.width.toFixed(2)} × ${item.height.toFixed(2)} m`}
@@ -456,6 +480,24 @@ function EventItemShape({
             />
           )}
         </>
+      )}
+      {nivtecLabel && (
+        <Group x={nivtecLabel.x} y={nivtecLabel.y} rotation={-phaseData.rotation} listening={false}>
+          <Rect
+            x={-nivtecLabel.w / 2}
+            y={-nivtecLabel.h / 2}
+            width={nivtecLabel.w}
+            height={nivtecLabel.h}
+            cornerRadius={3}
+            fill="rgba(255,255,255,0.85)"
+            stroke={nivtecLabel.inside ? undefined : '#cbd5e1'}
+            strokeWidth={0.5}
+          />
+          <Text x={-nivtecLabel.w / 2} y={-nivtecLabel.h / 2 + 3} width={nivtecLabel.w} align="center" wrap="none" text={item.label} fontSize={9} fill="#111827" />
+          {showDims && (
+            <Text x={-nivtecLabel.w / 2} y={-nivtecLabel.h / 2 + 14} width={nivtecLabel.w} align="center" wrap="none" text={nivtecLabel.dims} fontSize={8} fill="#6b7280" />
+          )}
+        </Group>
       )}
       {isLocked && (
         <Text
