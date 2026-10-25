@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { v4 as uuid } from 'uuid'
-import { findVoidViolation, type Level } from '../utils/levels'
+import { findVoidViolation, itemLevel, relocateFromVoid, type Level } from '../utils/levels'
 import type { EventItem, EventState, ForexPanel, ItemType, ItemWithId, NivtecData, Phase } from '../types'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import { sortPhases } from '../utils/phaseDiff'
@@ -285,6 +285,17 @@ export const useEventStore = create<Store>((rawSet, get) => {
       }
       items = stamped
     }
+    // Neue OG-Objekte (Platzieren, Import, Einfügen …) landen oft in der Bildmitte, also im Luftraum:
+    // an den nächsten Platz mit Boden schieben, statt abzulehnen. Bestehende Objekte werden weiter abgelehnt.
+    let relocated: Record<string, EventItem> | null = null
+    for (const [id, item] of Object.entries(items)) {
+      if (prev.items[id] || itemLevel(item) !== 'og') continue
+      const moved = relocateFromVoid(item)
+      if (moved === item) continue
+      relocated ??= { ...items }
+      relocated[id] = moved
+    }
+    if (relocated) items = relocated
     const hit = findVoidViolation(prev.items, items)
     if (hit) {
       const last = prev.historyPast[prev.historyPast.length - 1]
