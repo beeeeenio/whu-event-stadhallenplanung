@@ -321,6 +321,21 @@ function EventItemShape({
               />
             )
           })}
+          {/* Tresen: Aufsatz-Platten auf den Podesten */}
+          {(item.nivtecData?.topPieces ?? []).map((piece, i) => (
+            <Rect
+              key={`top-${i}`}
+              x={metersToPixels(piece.x, pixelsPerMeter)}
+              y={metersToPixels(piece.y, pixelsPerMeter)}
+              width={metersToPixels(piece.w, pixelsPerMeter)}
+              height={metersToPixels(piece.d, pixelsPerMeter)}
+              fill={hexToRgba(item.color ?? '#1d4ed8', 0.4)}
+              stroke={isSelected ? '#0099c2' : item.color ?? '#1d4ed8'}
+              strokeWidth={1}
+              perfectDrawEnabled={false}
+              listening={false}
+            />
+          ))}
           {/* Forex-Blenden: kräftige Linie außen an der Kante */}
           {(item.nivtecData?.forexPanels ?? []).map((panel) => {
             const e = forexEdge(item.nivtecData!.pieces, panel)

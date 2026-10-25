@@ -185,6 +185,9 @@ function buildItem(item: EventItem, pd: PhaseData): THREE.Object3D | null {
         buildNivtecDeck(item.nivtecData?.pieces ?? [], heightM, item.color ?? null, {
           panels: item.nivtecData?.forexPanels ?? [],
           prints: item.forexPrints,
+        }, {
+          pieces: item.nivtecData?.topPieces ?? [],
+          riseM: (item.nivtecData?.spindelHeightCm ?? 20) / 100,
         }),
       )
       break

@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { useEventStore } from '../store/store'
-import type { NivtecData } from '../types'
+import { parseNivtecFile } from '../utils/nivtecImport'
 
 /**
  * NivTec-Bühnen/Theken-Import (JSON) als wiederverwendbarer Hook, damit Import sowohl aus
@@ -16,10 +16,7 @@ export function useNivtecImport(getPosition: () => { x: number; y: number }) {
     if (!file) return
     try {
       const text = await file.text()
-      const json = JSON.parse(text) as NivtecData
-      if (!Array.isArray(json.pieces) || json.pieces.length === 0) {
-        throw new Error('Datei enthält kein "pieces"-Array mit Podesten')
-      }
+      const json = parseNivtecFile(JSON.parse(text))
       // NivTec-Exporte haben meist keinen eigenen Namen – Dateiname als Fallback nutzen
       const nameFromFile = file.name.replace(/\.json$/i, '').replace(/[-_]+/g, ' ')
       const pos = getPosition()
