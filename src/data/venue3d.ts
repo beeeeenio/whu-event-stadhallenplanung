@@ -66,6 +66,62 @@ export const STAGE_PX = { x: 385, y: 290, w: 190, h: 410 }
 export const MAIN_CURTAIN_PX: [number, number, number, number] = [572, 365, 572, 630]
 
 /**
+ * Vorbühne vor dem Portal (Plan-Pixel), Teil von STAGE_PX. An den Ecken davor (y < 369 und y > 630)
+ * ist keine Bühne, dort liegen die Bühnentreppen.
+ */
+export const STAGE_APRON_PX = { x: 545, y: 369, w: 30, h: 261 }
+
+/** Ein Treppenlauf im Grundriss (Plan-Pixel). `dir` ist die Richtung des Aufstiegs, `z0`/`z1` die Höhe unten/oben in m. */
+export interface StairFlightPx {
+  x: number
+  y: number
+  w: number
+  h: number
+  dir: 'n' | 's' | 'e' | 'w'
+  z0: number
+  z1: number
+}
+
+/** Podest (Zwischenpodest) einer Treppe: Rechteck in Plan-Pixeln, Oberkante auf Höhe z (m). */
+export interface StairLandingPx {
+  x: number
+  y: number
+  w: number
+  h: number
+  z: number
+}
+
+/** Stufenhöhe in m (Wert nach DIN etwa 17,5 cm; die Läufe teilen ihre Höhe gleichmäßig auf). */
+export const STAIR_RISE_M = 0.175
+
+/**
+ * Treppen aus dem Grundriss (power-plan-simple.png) abgelesen; Lage und Laufrichtung sind gemessen,
+ * die Höhen angenommen (unsicher): Treppenhäuser führen vom EG ins OG (+3,50 m) als zweiläufige
+ * Treppe mit Zwischenpodest, die Bühnentreppen auf Bühnenhöhe (0,90 m).
+ */
+export const STAIR_FLIGHTS_PX: StairFlightPx[] = [
+  // Bühnentreppen an den Ecken der Vorbühne: aufwärts zur Vorbühne hin
+  { x: 545, y: 325, w: 36, h: 44, dir: 's', z0: 0, z1: 0.9 },
+  { x: 545, y: 630, w: 36, h: 44, dir: 'n', z0: 0, z1: 0.9 },
+  // Treppenhaus 1 (links neben dem Haupteingang): erst nach Norden, dann auf der rechten Seite zurück
+  { x: 386, y: 970, w: 33, h: 80, dir: 'n', z0: 0, z1: 1.75 },
+  { x: 428, y: 975, w: 32, h: 76, dir: 's', z0: 1.75, z1: 3.5 },
+  // Treppenhaus 3 (links neben der Bühne), liegt in Ost-West-Richtung (Richtung unsicher)
+  { x: 275, y: 688, w: 72, h: 30, dir: 'w', z0: 0, z1: 1.75 },
+  { x: 281, y: 651, w: 66, h: 30, dir: 'e', z0: 1.75, z1: 3.5 },
+  // Treppenhaus rechts neben dem großen Saal: erst nach Norden (rechter Lauf), dann zurück
+  { x: 1398, y: 644, w: 26, h: 50, dir: 'n', z0: 0, z1: 1.75 },
+  { x: 1369, y: 644, w: 24, h: 50, dir: 's', z0: 1.75, z1: 3.5 },
+]
+
+/** Zwischenpodeste der Treppenhäuser (Höhe 1,75 m) am Wendepunkt der beiden Läufe. */
+export const STAIR_LANDINGS_PX: StairLandingPx[] = [
+  { x: 386, y: 962, w: 74, h: 13, z: 1.75 },
+  { x: 262, y: 651, w: 13, h: 67, z: 1.75 },
+  { x: 1369, y: 630, w: 55, h: 14, z: 1.75 },
+]
+
+/**
  * Türöffnungen als [Mitte x, Mitte y, Breite] in Plan-Pixeln. Liegt eine Öffnung auf einer
  * Wand-Strecke (Abstand < 8 px), wird die Wand dort bis `doorHeight` ausgespart.
  * Aus den Türbögen im Grundriss abgelesen (Positionen ± ca. 0,5 m).
