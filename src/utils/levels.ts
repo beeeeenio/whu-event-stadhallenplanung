@@ -1,5 +1,5 @@
 import type { EventItem, PhaseData } from '../types'
-import { OG_VOIDS } from '../data/venueOG'
+import { OG_FOOTPRINT, OG_VOIDS } from '../data/venueOG'
 import { worldBBox } from './geometry'
 import { DEFAULT_PIXELS_PER_METER } from './scale'
 
@@ -29,6 +29,51 @@ export function ogVoidHit(item: EventItem, pd: PhaseData): string | null {
     }
   }
   return null
+}
+
+/** Mitte des Objekts (px) liegt auf dem Gebäudegrundriss des OG. */
+function centerInFootprint(item: EventItem, pd: PhaseData): boolean {
+  const bb = worldBBox(item, pd, DEFAULT_PIXELS_PER_METER)
+  const cx = (bb.minX + bb.maxX) / 2 / DEFAULT_PIXELS_PER_METER
+  const cz = (bb.minY + bb.maxY) / 2 / DEFAULT_PIXELS_PER_METER
+  return OG_FOOTPRINT.some(([x0, z0, x1, z1]) => cx >= x0 && cx <= x1 && cz >= z0 && cz <= z1)
+}
+
+/**
+ * Nächster Platz mit Boden für ein NEUES OG-Objekt, das im Luftraum landen würde: Versatz in Pixeln
+ * (gleich für alle Phasen) oder null, wenn im Umkreis von 50 m nichts frei ist. Gesucht wird in Ringen
+ * von 0,5 m Schritt um die Wunschposition, im ersten Ring mit freiem Platz der nächste Punkt.
+ */
+export function nearestFloorOffset(item: EventItem, pd: PhaseData): { dx: number; dy: number } | null {
+  const STEP_M = 0.5
+  const MAX_RING = 100
+  const r = DEFAULT_PIXELS_PER_METER
+  for (let ring = 1; ring <= MAX_RING; ring++) {
+    let best: { dx: number; dy: number; d: number } | null = null
+    for (let i = -ring; i <= ring; i++) {
+      for (let j = -ring; j <= ring; j++) {
+        if (Math.max(Math.abs(i), Math.abs(j)) !== ring) continue
+        const dx = i * STEP_M * r
+        const dy = j * STEP_M * r
+        const moved = { ...pd, x: pd.x + dx, y: pd.y + dy }
+        if (ogVoidHit(item, moved) || !centerInFootprint(item, moved)) continue
+        const d = i * i + j * j
+        if (!best || d < best.d) best = { dx, dy, d }
+      }
+    }
+    if (best) return { dx: best.dx, dy: best.dy }
+  }
+  return null
+}
+
+/** Neues OG-Objekt, das im Luftraum läge, an den nächsten Platz mit Boden schieben (alle Phasen gleich). */
+export function relocateFromVoid(item: EventItem): EventItem {
+  const hitPd = Object.values(item.phaseData).find((pd) => pd.visible && ogVoidHit(item, pd))
+  if (!hitPd) return item
+  const off = nearestFloorOffset(item, hitPd)
+  if (!off) return item
+  const phaseData = Object.fromEntries(Object.entries(item.phaseData).map(([id, pd]) => [id, { ...pd, x: pd.x + off.dx, y: pd.y + off.dy }]))
+  return { ...item, phaseData }
 }
 
 const samePlace = (a: PhaseData | undefined, b: PhaseData) =>
