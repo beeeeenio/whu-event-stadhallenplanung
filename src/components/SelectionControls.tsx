@@ -5,7 +5,7 @@ import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
 import { downscaleImage, slicePrint } from '../utils/printImage'
 import { describeVisiovaRun } from '../utils/visiova'
-import { clampPipeDrapeLength } from '../utils/pipeDrape'
+import { clampPipeDrapeHeight, clampPipeDrapeLength, PIPE_DRAPE_DEFAULT_HEIGHT_M } from '../utils/pipeDrape'
 import { FOAM_DEFAULT_TEXT, FOAM_LETTER, foamLettersWidth, letterSlots } from '../utils/foamLetters'
 import { FOREX_SIDE_LABEL, forexEdge, freeEdgesWithoutPanel, frontEdgePanels, pieceKey, sortPanelsForPrint } from '../utils/forex'
 import type { ForexPanel } from '../types'
@@ -231,7 +231,7 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
       {item.type === 'area' ? (
         <AreaSizeFields key={`${item.id}:${item.width}:${item.height}`} item={item} />
       ) : item.type === 'pipe_drape' ? (
-        <PipeDrapeLengthField key={`${item.id}:${item.width}`} item={item} />
+        <PipeDrapeSizeFields key={`${item.id}:${item.width}:${item.heightM ?? ''}`} item={item} />
       ) : item.type !== 'text_label' && item.type !== 'visiova_frame' ? (
         <div className="text-ink3">
           Größe: {item.width}m × {item.height}m
@@ -324,33 +324,50 @@ function AreaSizeFields({ item }: { item: EventItem }) {
   )
 }
 
-/** Pipe & Drape: Länge in Metern tippen, bei Enter/Verlassen EIN Undo-Schritt (10-cm-Raster, mindestens 0,5 m). */
-function PipeDrapeLengthField({ item }: { item: EventItem }) {
+/** Pipe & Drape: Länge und Höhe in Metern tippen, bei Enter/Verlassen EIN Undo-Schritt (10-cm-Raster, mindestens 0,5 m). */
+function PipeDrapeSizeFields({ item }: { item: EventItem }) {
   const setItemLength = useEventStore((s) => s.setItemLength)
+  const setPipeDrapeHeight = useEventStore((s) => s.setPipeDrapeHeight)
   const fmt = (v: number) => String(Math.round(v * 100) / 100).replace('.', ',')
-  const [value, setValue] = useState(fmt(item.width))
+  const height = item.heightM ?? PIPE_DRAPE_DEFAULT_HEIGHT_M
+  const [len, setLen] = useState(fmt(item.width))
+  const [hgt, setHgt] = useState(fmt(height))
+  const parse = (v: string) => parseFloat(v.replace(',', '.'))
   const commit = () => {
-    const n = parseFloat(value.replace(',', '.'))
-    if (Number.isFinite(n) && n > 0) setItemLength(item.id, clampPipeDrapeLength(n))
-    else setValue(fmt(item.width))
+    const nl = parse(len)
+    const nh = parse(hgt)
+    if (Number.isFinite(nl) && nl > 0) setItemLength(item.id, clampPipeDrapeLength(nl))
+    else setLen(fmt(item.width))
+    if (Number.isFinite(nh) && nh > 0) setPipeDrapeHeight(item.id, clampPipeDrapeHeight(nh))
+    else setHgt(fmt(height))
   }
-  return (
-    <label className="block space-y-1">
-      <span className="text-ink3">Länge (m)</span>
+  const field = (label: string, value: string, set: (v: string) => void) => (
+    <label className="flex-1 space-y-1">
+      <span className="text-ink3">{label}</span>
       <input
         inputMode="decimal"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => set(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-          if (e.key === 'Escape') setValue(fmt(item.width))
+          if (e.key === 'Escape') {
+            setLen(fmt(item.width))
+            setHgt(fmt(height))
+          }
         }}
         className={`w-full ${inputCls}`}
-        title="Auch mit dem blauen Griff am rechten Ende ziehbar"
       />
-      <span className="block text-[11px] text-ink3">Tiefe {fmt(item.height)} m · Länge beliebig, mit dem blauen Griff am Ende ziehbar</span>
     </label>
+  )
+  return (
+    <div className="space-y-1">
+      <div className="flex gap-2">
+        {field('Länge (m)', len, setLen)}
+        {field('Höhe (m)', hgt, setHgt)}
+      </div>
+      <span className="block text-[11px] text-ink3">Tiefe {fmt(item.height)} m · Länge auch mit dem blauen Griff am Ende ziehbar, Höhe wirkt in 3D</span>
+    </div>
   )
 }
 
