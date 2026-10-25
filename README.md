@@ -346,6 +346,7 @@ Plan und Hintergrund der Überarbeitung stehen in `docs/plan-2d-ueberarbeitung.m
 - **Pipe & Drape** (`pipe_drape`, `utils/pipeDrape.ts`):
   - Beliebig lang: blauer Griff am rechten Ende in 2D oder Feld „Länge (m)“ im Eigenschaften-Panel (10-cm-Raster, mindestens 0,5 m). Store-Aktion `setItemLength`.
   - Die Standard-Bezeichnung („Pipe & Drape (3x0,2m)“) zieht mit der Länge mit, eigene Namen bleiben. Das 3D-Modell setzt alle 3 m einen Pfosten.
+  - Die Höhe (`heightM`, optional, Standard 3 m, 0,5 bis 10 m) stellt man im Eigenschaften-Panel ein und sie wirkt in 3D. `height` bleibt die Tiefe im Plan. Store-Aktion `setPipeDrapeHeight`.
 - **NivTec-Bühne** (`nivtec_group`):
   - Import aus dem NivTec-Tool. Gemeinsames Format: `docs/plan-forex.md`, Abschnitt „Gemeinsame Schnittstelle“.
   - Forex-Blenden (`nivtecData.forexPanels`) hängen nur an freien Außenkanten (`utils/forex.ts`). Drucke liegen in `forexPrints`.

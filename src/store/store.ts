@@ -6,7 +6,7 @@ import { ITEM_LIBRARY } from '../data/itemLibrary'
 import { sortPhases } from '../utils/phaseDiff'
 import { sanitizeForexPanels } from '../utils/forex'
 import { hasDefaultVisiovaLabel, visiovaLabel } from '../utils/visiova'
-import { hasDefaultPipeDrapeLabel, pipeDrapeLabel } from '../utils/pipeDrape'
+import { hasDefaultPipeDrapeLabel, pipeDrapeLabel, PIPE_DRAPE_DEFAULT_HEIGHT_M } from '../utils/pipeDrape'
 import { FOAM_DEFAULT_TEXT, foamLettersLabel, foamLettersWidth, hasDefaultFoamLabel } from '../utils/foamLetters'
 import { normalizeDeg, positionForRotation, unionBox, worldBBox } from '../utils/geometry'
 import { DEFAULT_PIXELS_PER_METER } from '../utils/scale'
@@ -112,6 +112,8 @@ interface Store extends EventState {
   resizeItem: (itemId: string, width: number, height: number) => void
   /** Länge (Breite in m) ändern, Tiefe bleibt; Standard-Bezeichnung von Pipe & Drape zieht mit. */
   setItemLength: (itemId: string, length: number) => void
+  /** Pipe & Drape: Höhe der Wand in m (nur 3D). */
+  setPipeDrapeHeight: (itemId: string, heightM: number) => void
   setItemColor: (itemId: string, color: string | null) => void
   /** Visiova-Rahmen: Druck (Data-URL) setzen bzw. mit null entfernen. */
   setItemPrint: (itemId: string, image: string | null) => void
@@ -236,7 +238,7 @@ function normalizeFoamLetters(items: Record<string, EventItem>): Record<string, 
 function patchItemInCurrentPhase(
   state: EventState,
   itemId: string,
-  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'printImage' | 'nivtecData' | 'forexPrints' | 'visiovaFrames' | 'letterText'>>,
+  patch: Partial<Pick<EventItem, 'label' | 'note' | 'width' | 'height' | 'color' | 'frameHeight' | 'heightM' | 'printImage' | 'nivtecData' | 'forexPrints' | 'visiovaFrames' | 'letterText'>>,
 ): Pick<EventState, 'items' | 'itemOrder'> {
   const item = state.items[itemId]
   const current = item.phaseData[state.currentPhaseId]
@@ -823,6 +825,14 @@ export const useEventStore = create<Store>((rawSet, get) => {
       pushHistory()
       const label = item.type === 'pipe_drape' && hasDefaultPipeDrapeLabel(item.label) ? pipeDrapeLabel(length, item.height) : item.label
       set((state) => patchItemInCurrentPhase(state, itemId, { width: length, label }))
+    },
+
+    setPipeDrapeHeight: (itemId, heightM) => {
+      const item = get().items[itemId]
+      if (!item || item.type !== 'pipe_drape' || !(heightM > 0) || !Number.isFinite(heightM)) return
+      if ((item.heightM ?? PIPE_DRAPE_DEFAULT_HEIGHT_M) === heightM) return
+      pushHistory()
+      set((state) => patchItemInCurrentPhase(state, itemId, { heightM }))
     },
 
     setItemColor: (itemId, color) => {

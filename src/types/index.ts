@@ -90,6 +90,8 @@ export interface EventItem {
   visiovaFrames?: number[]
   /** Nur 'visiova_frame': Rahmenhöhe in Metern (die 2D-Tiefe `height` ist die Profiltiefe). */
   frameHeight?: number
+  /** Pipe & Drape: Höhe der Wand in m (nur 3D, fehlt = 3 m). `height` ist die Tiefe im Plan. */
+  heightM?: number
   /** Nur 'nivtec_group': Druckbilder der Forex-Blenden je ForexPanel.id (verkleinerte JPEG-Data-URLs). */
   forexPrints?: Record<string, string>
   /** Nur 'visiova_frame': eingesetzter Druck (Vorderseite) als verkleinertes JPEG-Data-URL. */
