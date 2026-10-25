@@ -6,6 +6,7 @@ import { ITEM_LIBRARY } from '../data/itemLibrary'
 import { sortPhases } from '../utils/phaseDiff'
 import { sanitizeForexPanels } from '../utils/forex'
 import { hasDefaultVisiovaLabel, visiovaLabel } from '../utils/visiova'
+import { hasDefaultPipeDrapeLabel, pipeDrapeLabel } from '../utils/pipeDrape'
 import { FOAM_DEFAULT_TEXT, foamLettersLabel, foamLettersWidth, hasDefaultFoamLabel } from '../utils/foamLetters'
 import { normalizeDeg, positionForRotation, unionBox, worldBBox } from '../utils/geometry'
 import { DEFAULT_PIXELS_PER_METER } from '../utils/scale'
@@ -109,6 +110,8 @@ interface Store extends EventState {
   renameItem: (itemId: string, label: string) => void
   setItemNote: (itemId: string, note: string) => void
   resizeItem: (itemId: string, width: number, height: number) => void
+  /** Länge (Breite in m) ändern, Tiefe bleibt; Standard-Bezeichnung von Pipe & Drape zieht mit. */
+  setItemLength: (itemId: string, length: number) => void
   setItemColor: (itemId: string, color: string | null) => void
   /** Visiova-Rahmen: Druck (Data-URL) setzen bzw. mit null entfernen. */
   setItemPrint: (itemId: string, image: string | null) => void
@@ -812,6 +815,14 @@ export const useEventStore = create<Store>((rawSet, get) => {
       if (item.width === width && item.height === height) return
       pushHistory()
       set((state) => patchItemInCurrentPhase(state, itemId, { width, height }))
+    },
+
+    setItemLength: (itemId, length) => {
+      const item = get().items[itemId]
+      if (!item || !(length > 0) || !Number.isFinite(length) || item.width === length) return
+      pushHistory()
+      const label = item.type === 'pipe_drape' && hasDefaultPipeDrapeLabel(item.label) ? pipeDrapeLabel(length, item.height) : item.label
+      set((state) => patchItemInCurrentPhase(state, itemId, { width: length, label }))
     },
 
     setItemColor: (itemId, color) => {

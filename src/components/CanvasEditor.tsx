@@ -759,6 +759,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     (id: string, lengthM: number) => setVisiovaRun(id, splitVisiovaRun(lengthM)),
     [setVisiovaRun],
   )
+  const setItemLength = useEventStore((s) => s.setItemLength)
 
   const visibleItemIds = itemOrder.filter((id) => items[id]?.phaseData[currentPhaseId]?.visible && itemLevel(items[id]) === currentLevel)
   dragCtxRef.current = { selectedIds, items, currentPhaseId, visibleItemIds }
@@ -1017,6 +1018,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
                   onDragEnd={handleItemDragEnd}
                   onRotate={handleItemRotate}
                   onVisiovaRun={handleVisiovaRun}
+                  onLength={setItemLength}
                   draggable={tool === 'select' && !placement && !spaceDown}
                   zoom={selectedIds.includes(id) ? zoom : zoomBucket}
                 />

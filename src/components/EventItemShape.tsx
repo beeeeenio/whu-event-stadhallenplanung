@@ -5,6 +5,7 @@ import { metersToPixels } from '../utils/scale'
 import { getDefaultColor } from '../utils/itemColors'
 import { forexEdge } from '../utils/forex'
 import { describeVisiovaRun, splitVisiovaRun } from '../utils/visiova'
+import { clampPipeDrapeLength } from '../utils/pipeDrape'
 import type { DragMods } from '../utils/snapping'
 import { angleDeg, isRoundType, localBounds, positionForRotation, snapAngle, worldCenter, type Pt } from '../utils/geometry'
 import { IS_COARSE_POINTER } from '../utils/viewport'
@@ -30,6 +31,8 @@ interface Props {
   onRotate?: (id: string, x: number, y: number, rotationDeg: number) => void
   /** Visiova-Rahmen am Endgriff auf eine Länge ziehen (Meter) → Reihe aus lieferbaren Rahmen */
   onVisiovaRun?: (id: string, lengthM: number) => void
+  /** Pipe & Drape am Endgriff auf eine beliebige Länge ziehen (Meter) */
+  onLength?: (id: string, lengthM: number) => void
   draggable?: boolean
   /** aktueller Canvas-Zoom, um eine konstante Mindest-Klickfläche auf dem Bildschirm sicherzustellen */
   zoom?: number
@@ -59,6 +62,7 @@ function EventItemShape({
   onDragEnd,
   onRotate,
   onVisiovaRun,
+  onLength,
   draggable = true,
   zoom = 1,
   isGhost = false,
@@ -70,6 +74,8 @@ function EventItemShape({
   const isLocked = !!item.locked
   // Visiova: gerade gezogene Länge in px (null = kein Ziehen)
   const [runPx, setRunPx] = useState<number | null>(null)
+  // Pipe & Drape: gerade gezogene Länge in px (null = kein Ziehen)
+  const [lenPx, setLenPx] = useState<number | null>(null)
   const [hovered, setHovered] = useState(false)
   // Gruppe direkt über die Konva-Node drehen bzw. verschieben statt über React-State pro Mausmove-Frame.
   const groupRef = useRef<Konva.Group>(null)
@@ -540,6 +546,65 @@ function EventItemShape({
             setRunPx(null)
             e.target.position({ x: w - 6 / zoom, y: h / 2 - 6 / zoom })
             onVisiovaRun(item.id, x / pixelsPerMeter)
+          }}
+        />
+      )}
+      {lenPx !== null && (
+        <Group listening={false}>
+          <Rect
+            y={-2 / zoom}
+            width={lenPx}
+            height={Math.max(h, 4 / zoom) + 4 / zoom}
+            stroke="#0099c2"
+            strokeWidth={1.5 / zoom}
+            dash={[4 / zoom, 3 / zoom]}
+            fill="rgba(0,153,194,0.15)"
+          />
+          <Text
+            y={-22 / zoom}
+            text={`${(lenPx / pixelsPerMeter).toFixed(2).replace('.', ',')} m`}
+            fontSize={12 / zoom}
+            fontStyle="bold"
+            fill="#006680"
+          />
+        </Group>
+      )}
+      {isSelected && onLength && item.type === 'pipe_drape' && !isLocked && (
+        <Rect
+          x={w - 6 / zoom}
+          y={h / 2 - 6 / zoom}
+          width={12 / zoom}
+          height={12 / zoom}
+          cornerRadius={2 / zoom}
+          fill="#0099c2"
+          stroke="#ffffff"
+          strokeWidth={1.5 / zoom}
+          hitStrokeWidth={(IS_COARSE_POINTER ? 24 : 8) / zoom}
+          draggable
+          onPointerDown={cancelBubbleAlways}
+          onMouseDown={cancelBubbleAlways}
+          onTouchStart={cancelBubbleAlways}
+          onMouseEnter={(e) => {
+            const c = e.target.getStage()?.container()
+            if (c) c.style.cursor = 'ew-resize'
+          }}
+          onMouseLeave={(e) => {
+            const c = e.target.getStage()?.container()
+            if (c) c.style.cursor = ''
+          }}
+          onDragMove={(e) => {
+            e.cancelBubble = true
+            // nur entlang der Wandachse ziehen, in 10-cm-Schritten
+            const x = metersToPixels(clampPipeDrapeLength((e.target.x() + 6 / zoom) / pixelsPerMeter), pixelsPerMeter)
+            e.target.position({ x: x - 6 / zoom, y: h / 2 - 6 / zoom })
+            setLenPx(x)
+          }}
+          onDragEnd={(e) => {
+            e.cancelBubble = true
+            const x = lenPx ?? w
+            setLenPx(null)
+            e.target.position({ x: w - 6 / zoom, y: h / 2 - 6 / zoom })
+            onLength(item.id, x / pixelsPerMeter)
           }}
         />
       )}
