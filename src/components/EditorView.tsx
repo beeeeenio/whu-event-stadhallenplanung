@@ -61,6 +61,9 @@ const SHORTCUTS: [string, string][] = [
   ['Diese Hilfe', '?'],
 ]
 
+/** localStorage-Schlüssel: Hinweisleiste unten links weggeklickt. */
+const HINT_DISMISSED_KEY = 'stadthalle-select-hint-dismissed'
+
 type ActivePanel = 'picker' | 'inventory' | 'properties' | 'grid' | 'command' | 'text' | 'shortcuts' | null
 
 export default function EditorView() {
@@ -68,6 +71,22 @@ export default function EditorView() {
   const [presenting, setPresenting] = useState(false)
   const [activePanel, setActivePanel] = useState<ActivePanel>(null)
   const [tool, setTool] = useState<ToolMode>('select')
+  // Hinweisleiste unten links: lässt sich wegklicken, das wird gemerkt (Kürzel stehen weiter unter „?“)
+  const [hintDismissed, setHintDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(HINT_DISMISSED_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const dismissHint = () => {
+    setHintDismissed(true)
+    try {
+      localStorage.setItem(HINT_DISMISSED_KEY, '1')
+    } catch {
+      // Speicher nicht verfügbar: Hinweis bleibt nur für diese Sitzung weg
+    }
+  }
   const [placement, setPlacement] = useState<(Placement & { type?: ItemType }) | null>(null)
   const [pickerTab, setPickerTab] = useState<PickerTab>('furniture')
   const [onionSkin, setOnionSkin] = useState(false)
@@ -857,10 +876,20 @@ export default function EditorView() {
       />
 
       {/* Hinweis, was Ziehen im Auswahl-Werkzeug bewirkt */}
-      {!placement && tool === 'select' && (
-        <div className={`absolute bottom-48 left-[68px] z-20 h-10 px-3.5 flex items-center gap-2 text-[11px] text-ink2 ${island}`}>
-          <b className="text-ink">Auswahl</b> Objekt ziehen verschiebt · Rahmen auf leerer Fläche wählt aus ·{' '}
-          <b className="text-ink">rechte Maustaste</b> oder <b className="text-ink">Leertaste</b> + Ziehen verschiebt die Ansicht
+      {!placement && tool === 'select' && !hintDismissed && (
+        <div className={`absolute bottom-48 left-[68px] z-20 h-10 pl-3.5 pr-1.5 flex items-center gap-2 text-[11px] text-ink2 ${island}`}>
+          <span>
+            <b className="text-ink">Auswahl</b> Objekt ziehen verschiebt · Rahmen auf leerer Fläche wählt aus ·{' '}
+            <b className="text-ink">rechte Maustaste</b> oder <b className="text-ink">Leertaste</b> + Ziehen verschiebt die Ansicht
+          </span>
+          <button
+            onClick={dismissHint}
+            title="Hinweis ausblenden (Kürzel stehen unter ?)"
+            aria-label="Hinweis ausblenden"
+            className="w-7 h-7 shrink-0 rounded-full text-ink3 hover:text-ink hover:bg-chip flex items-center justify-center text-base leading-none"
+          >
+            ×
+          </button>
         </div>
       )}
 
