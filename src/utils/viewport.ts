@@ -25,7 +25,8 @@ export type WheelIntent = { kind: 'zoom'; factor: number } | { kind: 'pan'; dx: 
 /** Wheel-Event deuten: Pinch (ctrlKey) bzw. ⌘/Strg+Rad oder klassisches Mausrad → Zoom-Faktor.
  *  Zwei-Finger-Scrollen auf dem Trackpad → Verschieben (dx/dy in Bildschirm-px). */
 export function interpretWheel(e: WheelEvent): WheelIntent {
-  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
+  // Zeilenmodus (Firefox): 3 Zeilen pro Raste entsprechen den 100 px von Chrome/Safari
+  const unit = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1
   let dx = e.deltaX * unit
   let dy = e.deltaY * unit
   // Klassisches Mausrad: Zeilen-/Seitenmodus (Firefox) oder Rasten von 100/120 px, bei denen Chrome/Safari
@@ -40,7 +41,8 @@ export function interpretWheel(e: WheelEvent): WheelIntent {
     wheelDeltaY === -e.deltaY * 1.2
   const isMouseWheel = e.deltaMode !== 0 || isNotch
   if (e.ctrlKey || e.metaKey || isMouseWheel) {
-    const k = isMouseWheel ? 0.0015 : 0.01
+    // Mausrad: eine Raste (100 px) vergrößert um ca. 35 %, der ganze Zoombereich braucht so rund 10 Rasten
+    const k = isMouseWheel ? 0.003 : 0.01
     const factor = Math.min(2, Math.max(0.5, Math.exp(-dy * k)))
     return { kind: 'zoom', factor }
   }

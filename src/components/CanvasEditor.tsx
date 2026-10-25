@@ -33,7 +33,7 @@ interface DragSession {
   targets: Box[]
 }
 
-export type ToolMode = 'select' | 'hand' | 'measure' | 'area'
+export type ToolMode = 'select' | 'measure' | 'area'
 
 /** Aktueller Ausschnitt des Plans (für schwebende Bedienelemente an der Auswahl). */
 export interface CanvasViewport {
@@ -55,6 +55,8 @@ interface Props {
   /** Werkzeug von außen steuern (Werkzeug-Dock). Ohne Angabe verwaltet der Canvas es selbst. */
   tool?: ToolMode
   onToolChange?: (tool: ToolMode) => void
+  /** Nur Ansicht (z. B. Freigabe-Link): Objekte sind nicht anfassbar, Ziehen verschiebt die Ansicht. */
+  viewOnly?: boolean
   /** Aktiver „Antippen & Platzieren“-Modus: Klick in den Plan setzt das Objekt an diese Stelle. */
   placement?: Placement | null
   onPlacementDone?: () => void
@@ -120,6 +122,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     onSelectMany,
     tool: toolProp,
     onToolChange,
+    viewOnly = false,
     placement = null,
     onPlacementDone,
     ghostPhaseId = null,
@@ -408,7 +411,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     setHasFit(true)
   }, [containerSize, hasFit])
 
-  // Leertaste hält das Verschieben (Hand), Esc bricht laufende Vorgänge ab.
+  // Leertaste hält das Verschieben der Ansicht, Esc bricht laufende Vorgänge ab.
   // Bei Eingabefeldern als Ziel passiert nichts.
   useEffect(() => {
     const isTextTarget = (t: EventTarget | null) => {
@@ -510,10 +513,13 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
     const onEmpty = e.target === stage
     const pt = clientToCanvas(evt.clientX, evt.clientY)
     if (!pt) return
+    // Ansicht verschieben (in jedem Werkzeug, auch über Objekten): mittlere oder rechte Maustaste,
+    // Leertaste gehalten, auf leerer Fläche mit dem Finger
     const wantsPan =
       evt.button === 1 ||
+      evt.button === 2 ||
+      viewOnly ||
       spaceDownRef.current ||
-      tool === 'hand' ||
       (onEmpty && tool === 'select' && !placement && evt.pointerType !== 'mouse')
     if (wantsPan) {
       evt.preventDefault()
@@ -523,7 +529,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
         cy: evt.clientY,
         x: v.x,
         y: v.y,
-        tapOnEmpty: onEmpty && tool === 'select' && !placement,
+        tapOnEmpty: !viewOnly && evt.button === 0 && onEmpty && tool === 'select' && !placement,
       }
       setPanning(true)
       gestureCbRef.current?.(true)
@@ -864,12 +870,13 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
         className={`absolute inset-0 overflow-hidden touch-none bg-ground ${
           panning
             ? 'cursor-grabbing'
-            : spaceDown || tool === 'hand'
+            : spaceDown || viewOnly
               ? 'cursor-grab'
               : placement || tool !== 'select'
                 ? 'cursor-crosshair'
                 : ''
         }`}
+        onContextMenu={(e) => e.preventDefault()} // rechte Maustaste verschiebt die Ansicht
         onPointerDownCapture={() => {
           const active = document.activeElement as HTMLInputElement | HTMLTextAreaElement | null
           if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
@@ -976,7 +983,7 @@ const CanvasEditor = forwardRef<CanvasEditorHandle, Props>(function CanvasEditor
           </Layer>
 
           {/* Layer 2: Geisterbild der Vorphase (Konzept C, nur was dort anders stand oder weg ist), darunter die Objekte */}
-          <Layer listening={tool !== 'hand'}>
+          <Layer listening={!viewOnly}>
             {ghostPhaseId && ghostItemIds.length > 0 && (
               <Group listening={false} opacity={0.3}>
                 {ghostItemIds.map((id) => {

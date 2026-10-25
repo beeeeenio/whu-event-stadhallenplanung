@@ -52,7 +52,7 @@ const SHORTCUTS: [string, string][] = [
   ['Duplizieren', `${MOD}D`],
   ['Zur Auswahl hinzufügen/entfernen', '⇧Klick'],
   ['Alles in einem Bereich auswählen', 'Auswahl: Rahmen ziehen (⇧ ergänzt)'],
-  ['Ansicht verschieben', 'Hand (H) · Leertaste+Ziehen · 2 Finger'],
+  ['Ansicht verschieben', 'Rechte/mittlere Maustaste oder Leertaste + Ziehen · 2 Finger'],
   ['Zoomen', 'Mausrad · Pinch · + / −'],
   ['Einpassen / Auswahl zeigen', '0 · ⇧2'],
   ['Löschen', '⌫'],
@@ -599,7 +599,6 @@ export default function EditorView() {
         return
       }
       if (key === 'v') return changeTool('select')
-      if (key === 'h') return changeTool('hand')
       if (key === 'm') return changeTool('measure')
       if (key === 'b') return changeTool('area')
       if (key === 'o') {
@@ -857,19 +856,11 @@ export default function EditorView() {
         on3D={() => setShow3D(true)}
       />
 
-      {/* Hinweis, was Ziehen im aktuellen Werkzeug bewirkt */}
-      {!placement && (tool === 'select' || tool === 'hand') && (
+      {/* Hinweis, was Ziehen im Auswahl-Werkzeug bewirkt */}
+      {!placement && tool === 'select' && (
         <div className={`absolute bottom-48 left-[68px] z-20 h-10 px-3.5 flex items-center gap-2 text-[11px] text-ink2 ${island}`}>
-          {tool === 'hand' ? (
-            <>
-              <b className="text-ink">Hand</b> Ziehen verschiebt die Ansicht · <b className="text-ink">V</b> zurück zur Auswahl
-            </>
-          ) : (
-            <>
-              <b className="text-ink">Auswahl</b> Rahmen ziehen wählt alles darin aus · Auswahl ziehen verschiebt, <b className="text-ink">⌫</b> löscht ·{' '}
-              <b className="text-ink">H</b> Hand zum Verschieben der Ansicht
-            </>
-          )}
+          <b className="text-ink">Auswahl</b> Objekt ziehen verschiebt · Rahmen auf leerer Fläche wählt aus ·{' '}
+          <b className="text-ink">rechte Maustaste</b> oder <b className="text-ink">Leertaste</b> + Ziehen verschiebt die Ansicht
         </div>
       )}
 
