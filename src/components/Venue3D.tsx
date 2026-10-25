@@ -8,7 +8,7 @@ import { getDefaultColor } from '../utils/itemColors'
 import { worldCenter } from '../utils/geometry'
 import { buildNivtecDeck } from './nivtec3d'
 import { MODELS } from './models3d'
-import { COLUMNS_PX, DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_PX, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
+import { COLUMNS_PX, DOORS_PX, GLASS_SEGMENTS_PX, MAIN_CURTAIN_PX, PARTITIONS_PX, STAGE_APRON_PX, STAGE_PX, STAIR_FLIGHTS_PX, STAIR_LANDINGS_PX, STAIR_RISE_M, VENUE, WALL_SEGMENTS_PX } from '../data/venue3d'
 import { island, islandBtn } from '../utils/ui'
 import { itemLevel, type Level } from '../utils/levels'
 import { ControlGroup, Segmented, SwitchRow } from './controls'
@@ -284,8 +284,52 @@ function buildStageAndColumns(): THREE.Group {
     col.receiveShadow = true
     g.add(col)
   }
-  const st = { x: STAGE_PX.x / NP, z: STAGE_PX.y / NP, w: STAGE_PX.w / NP, d: STAGE_PX.h / NP }
-  g.add(box(st.w, VENUE.stageHeight, st.d, st.x + st.w / 2, VENUE.stageHeight / 2, st.z + st.d / 2, VENUE.stageColor))
+  // Hauptbühne hinter dem Portal und Vorbühne davor; an den Ecken davor liegen die Bühnentreppen
+  const main = { x: STAGE_PX.x / NP, z: STAGE_PX.y / NP, w: (STAGE_APRON_PX.x - STAGE_PX.x) / NP, d: STAGE_PX.h / NP }
+  g.add(box(main.w, VENUE.stageHeight, main.d, main.x + main.w / 2, VENUE.stageHeight / 2, main.z + main.d / 2, VENUE.stageColor))
+  const ap = { x: STAGE_APRON_PX.x / NP, z: STAGE_APRON_PX.y / NP, w: STAGE_APRON_PX.w / NP, d: STAGE_APRON_PX.h / NP }
+  g.add(box(ap.w, VENUE.stageHeight, ap.d, ap.x + ap.w / 2, VENUE.stageHeight / 2, ap.z + ap.d / 2, VENUE.stageColor))
+  return g
+}
+
+const STAIR_COLOR = '#c9c5be'
+/** Dicke der Trittstufen und Podeste (m). */
+const STAIR_STEP_THICKNESS = 0.17
+
+/** Treppenläufe und Podeste aus dem Grundriss (STAIR_FLIGHTS_PX): Stufen als Platten, in Aufstiegsrichtung ansteigend. */
+function buildStairs(): THREE.Group {
+  const g = new THREE.Group()
+  for (const f of STAIR_FLIGHTS_PX) {
+    const x0 = f.x / NP
+    const z0 = f.y / NP
+    const w = f.w / NP
+    const h = f.h / NP
+    const n = Math.max(3, Math.round((f.z1 - f.z0) / STAIR_RISE_M))
+    const rise = (f.z1 - f.z0) / n
+    const alongX = f.dir === 'e' || f.dir === 'w'
+    const len = alongX ? w : h
+    const run = len / n
+    for (let i = 0; i < n; i++) {
+      // Position des Stufenmittelpunkts entlang des Laufs, vom unteren Ende aus
+      const t = (i + 0.5) * run
+      const top = f.z0 + (i + 1) * rise
+      let cx = x0 + w / 2
+      let cz = z0 + h / 2
+      if (f.dir === 's') cz = z0 + t
+      if (f.dir === 'n') cz = z0 + h - t
+      if (f.dir === 'e') cx = x0 + t
+      if (f.dir === 'w') cx = x0 + w - t
+      const thick = Math.min(STAIR_STEP_THICKNESS, top)
+      const m = box(alongX ? run : w, thick, alongX ? h : run, cx, top - thick / 2, cz, STAIR_COLOR)
+      m.castShadow = true
+      g.add(m)
+    }
+  }
+  for (const l of STAIR_LANDINGS_PX) {
+    const m = box(l.w / NP, STAIR_STEP_THICKNESS, l.h / NP, (l.x + l.w / 2) / NP, l.z - STAIR_STEP_THICKNESS / 2, (l.y + l.h / 2) / NP, STAIR_COLOR)
+    m.castShadow = true
+    g.add(m)
+  }
   return g
 }
 
@@ -296,7 +340,11 @@ function buildOG(): { walls: THREE.Group; slab: THREE.Group } {
     walls.add(box(w, OG_WALL_HEIGHT_M, d, x + w / 2, OG_ELEVATION_M + OG_WALL_HEIGHT_M / 2, z + d / 2, VENUE.upperWallColor))
   }
   const slab = new THREE.Group()
-  const cuts = OG_VOIDS.map((v) => v.rect)
+  // Öffnungen im Boden, wo die Treppenhäuser das OG erreichen (oberer Lauf)
+  const stairOpenings = STAIR_FLIGHTS_PX.filter((f) => f.z1 >= OG_ELEVATION_M).map(
+    (f): [number, number, number, number] => [f.x / NP, f.y / NP, (f.x + f.w) / NP, (f.y + f.h) / NP],
+  )
+  const cuts = [...OG_VOIDS.map((v) => v.rect), ...stairOpenings]
   for (const base of OG_FOOTPRINT) {
     for (const [x0, z0, x1, z1] of subtractRects(base, cuts)) {
       slab.add(box(x1 - x0, OG_SLAB_THICKNESS_M, z1 - z0, (x0 + x1) / 2, OG_ELEVATION_M - OG_SLAB_THICKNESS_M / 2, (z0 + z1) / 2, '#d6d3d1'))
@@ -369,7 +417,7 @@ interface Props {
 /** Schlichte 3D-Ansicht der aktuellen Phase: Grundriss am Boden, Objekte als Blöcke mit typischer Höhe. */
 export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
   const mountRef = useRef<HTMLDivElement>(null)
-  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; curtain: THREE.Group; partitions: THREE.Group; upperWalls: THREE.Object3D | undefined; stage: THREE.Group; ogWalls: THREE.Group; ogSlab: THREE.Group; sun: THREE.DirectionalLight; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
+  const sceneRef = useRef<{ items: THREE.Group; walls: THREE.Group; stairs: THREE.Group; curtain: THREE.Group; partitions: THREE.Group; upperWalls: THREE.Object3D | undefined; stage: THREE.Group; ogWalls: THREE.Group; ogSlab: THREE.Group; sun: THREE.DirectionalLight; camera: THREE.PerspectiveCamera; controls: OrbitControls } | null>(null)
   const items = useEventStore((s) => s.items)
   const currentPhaseId = useEventStore((s) => s.currentPhaseId)
   const phaseName = useEventStore((s) => s.phases.find((p) => p.id === s.currentPhaseId)?.name ?? '')
@@ -384,6 +432,7 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
     setViewNonce((n) => n + 1)
   }
   const [showWalls, setShowWalls] = useState(true)
+  const [showStairs, setShowStairs] = useState(true)
   const [levelView, setLevelView] = useState<'eg' | 'og' | 'both'>(initialLevel)
   const [curtainOpen, setCurtainOpen] = useState(false)
   const [showPartitions, setShowPartitions] = useState(false)
@@ -426,6 +475,8 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
     wallGroup.add(buildVenue())
     const stageGroup = buildStageAndColumns()
     scene.add(stageGroup)
+    const stairGroup = buildStairs()
+    scene.add(stairGroup)
     const og = buildOG()
     scene.add(og.walls, og.slab)
     const curtainGroup = new THREE.Group()
@@ -440,7 +491,7 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
     controls.addEventListener('end', () => saveLastView(camera, controls))
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI / 2 - 0.02
-    sceneRef.current = { items: itemGroup, walls: wallGroup, curtain: curtainGroup, partitions: partitionGroup, upperWalls: wallGroup.getObjectByName('upperWalls'), stage: stageGroup, ogWalls: og.walls, ogSlab: og.slab, sun, camera, controls }
+    sceneRef.current = { items: itemGroup, walls: wallGroup, stairs: stairGroup, curtain: curtainGroup, partitions: partitionGroup, upperWalls: wallGroup.getObjectByName('upperWalls'), stage: stageGroup, ogWalls: og.walls, ogSlab: og.slab, sun, camera, controls }
 
     let raf = 0
     const loop = () => {
@@ -518,12 +569,14 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
     const og = levelView !== 'eg'
     s.walls.visible = showWalls && eg
     s.stage.visible = eg
+    // Treppen führen vom EG ins OG: in der reinen OG-Ansicht ausgeblendet
+    s.stairs.visible = showStairs && eg
     s.curtain.visible = eg
     s.ogWalls.visible = showWalls && og
     s.ogSlab.visible = og
     // Im Doppelbild stehen die EG-Wände nur bis zum Boden des OG, den Rest übernehmen die OG-Wände
     if (s.upperWalls) s.upperWalls.visible = showUpperWalls && levelView === 'eg'
-  }, [showWalls, showUpperWalls, levelView, hideCodes])
+  }, [showWalls, showStairs, showUpperWalls, levelView, hideCodes])
 
   // Kamera: zuletzt benutzte Ansicht wiederherstellen; nach Klick auf Übersicht/Augenhöhe deren Standard
   useEffect(() => {
@@ -602,6 +655,7 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
             disabled={levelView === 'og'}
             title="Mobile Trennwände im großen Saal (teilen ihn in drei Teile)"
           />
+          <SwitchRow label="Treppen" checked={showStairs} onChange={setShowStairs} disabled={levelView === 'og'} title="Treppen und Treppenhäuser aus dem Grundriss" />
           <SwitchRow label="Vorhang offen" checked={curtainOpen} onChange={setCurtainOpen} disabled={levelView === 'og'} title="Hauptvorhang der Bühne" />
           <SwitchRow label="Schatten" checked={shadows} onChange={setShadows} />
         </ControlGroup>
