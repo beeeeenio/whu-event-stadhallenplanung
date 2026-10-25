@@ -5,6 +5,7 @@ import type { EventItem } from '../types'
 import { sortPhases } from '../utils/phaseDiff'
 import { downscaleImage, slicePrint } from '../utils/printImage'
 import { describeVisiovaRun } from '../utils/visiova'
+import { clampPipeDrapeLength } from '../utils/pipeDrape'
 import { FOAM_DEFAULT_TEXT, FOAM_LETTER, foamLettersWidth, letterSlots } from '../utils/foamLetters'
 import { FOREX_SIDE_LABEL, forexEdge, freeEdgesWithoutPanel, frontEdgePanels, pieceKey, sortPanelsForPrint } from '../utils/forex'
 import type { ForexPanel } from '../types'
@@ -229,6 +230,8 @@ export function PropertiesPanel({ item, currentPhaseId, onClose, onDuplicate, on
 
       {item.type === 'area' ? (
         <AreaSizeFields key={`${item.id}:${item.width}:${item.height}`} item={item} />
+      ) : item.type === 'pipe_drape' ? (
+        <PipeDrapeLengthField key={`${item.id}:${item.width}`} item={item} />
       ) : item.type !== 'text_label' && item.type !== 'visiova_frame' ? (
         <div className="text-ink3">
           Größe: {item.width}m × {item.height}m
@@ -318,6 +321,36 @@ function AreaSizeFields({ item }: { item: EventItem }) {
       {field('Breite (m)', w, setW)}
       {field('Tiefe (m)', h, setH)}
     </div>
+  )
+}
+
+/** Pipe & Drape: Länge in Metern tippen, bei Enter/Verlassen EIN Undo-Schritt (10-cm-Raster, mindestens 0,5 m). */
+function PipeDrapeLengthField({ item }: { item: EventItem }) {
+  const setItemLength = useEventStore((s) => s.setItemLength)
+  const fmt = (v: number) => String(Math.round(v * 100) / 100).replace('.', ',')
+  const [value, setValue] = useState(fmt(item.width))
+  const commit = () => {
+    const n = parseFloat(value.replace(',', '.'))
+    if (Number.isFinite(n) && n > 0) setItemLength(item.id, clampPipeDrapeLength(n))
+    else setValue(fmt(item.width))
+  }
+  return (
+    <label className="block space-y-1">
+      <span className="text-ink3">Länge (m)</span>
+      <input
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          if (e.key === 'Escape') setValue(fmt(item.width))
+        }}
+        className={`w-full ${inputCls}`}
+        title="Auch mit dem blauen Griff am rechten Ende ziehbar"
+      />
+      <span className="block text-[11px] text-ink3">Tiefe {fmt(item.height)} m · Länge beliebig, mit dem blauen Griff am Ende ziehbar</span>
+    </label>
   )
 }
 
