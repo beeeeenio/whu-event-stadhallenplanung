@@ -350,6 +350,8 @@ Plan und Hintergrund der Überarbeitung stehen in `docs/plan-2d-ueberarbeitung.m
   - Die Höhe (`heightM`, optional, Standard 3 m, 0,5 bis 10 m) stellt man im Eigenschaften-Panel ein und sie wirkt in 3D. `height` bleibt die Tiefe im Plan. Store-Aktion `setPipeDrapeHeight`.
 - **NivTec-Bühne** (`nivtec_group`):
   - Import aus dem NivTec-Tool. Gemeinsames Format: `docs/plan-forex.md`, Abschnitt „Gemeinsame Schnittstelle“.
+  - Der Import (`utils/nivtecImport.ts`, `parseNivtecFile`) kennt zwei Dateiformate: Kastenbühne (`{ heightCm, pieces, forexPanels? }`) und **Tresen** (`kind: "tresen"`, `{ baseHeightCm, spindelHeightCm, basePieces, topPieces }`).
+  - Beim Tresen werden `basePieces` wie eine Kastenbühne behandelt (Höhe `baseHeightCm`). Die `topPieces` liegen als Aufsatz-Platten darauf, in 2D dunkler eingezeichnet und in 3D `spindelHeightCm` hoch (`NivtecData.topPieces`, `spindelHeightCm`). Die Höhen-Deutung der Spindel ist eine Annahme und noch nicht mit dem NivTec-Tool abgestimmt.
   - Forex-Blenden (`nivtecData.forexPanels`) hängen nur an freien Außenkanten (`utils/forex.ts`). Drucke liegen in `forexPrints`.
   - Die Objektfarbe ist der Molton.
   - Name und Maße stehen in 2D immer aufrecht (gegen die Drehung gedreht), mittig über den echten Podesten, oder unter der Bühne, wenn sie nicht hineinpassen. Die Maße im Label kommen aus `piecesBounds` (`utils/geometry.ts`), weil `width/height` der Gruppe vom Ursprung bis zum äußersten Podest reichen und größer sein können als die Podeste selbst.

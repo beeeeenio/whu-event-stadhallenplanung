@@ -83,6 +83,9 @@ function infillMaterial(repeatU: number, repeatV: number): THREE.MeshStandardMat
   return m
 }
 
+/** Tresen-Aufsatz: helle Platte. */
+const TOP_MATERIAL = new THREE.MeshStandardMaterial({ color: '#e7e5e4', roughness: 0.55, metalness: 0.1 })
+
 const FRAME_MATERIAL = new THREE.MeshStandardMaterial({ color: '#cfd0cc', metalness: 0.9, roughness: 0.4 })
 
 /** Eckpunkte eines Dreiecks (wie im 2D-Plan: rechter Winkel an `corner`). */
@@ -204,6 +207,7 @@ export function buildNivtecDeck(
   heightM: number,
   moltonColor: string | null,
   forex?: { panels: ForexPanel[]; prints?: Record<string, string> },
+  top?: { pieces: Piece2D[]; riseM: number },
 ): THREE.Group {
   const g = new THREE.Group()
   const forexMidpoints = new Set<string>()
@@ -224,6 +228,16 @@ export function buildNivtecDeck(
     const mat = infillMaterial(1 / HEX_TILE_M, 1 / HEX_TILE_M)
     g.add(extrudeXZ(inner, [], PANEL_THICKNESS_M - INFILL_RECESS_M, deckY, mat))
   })
+
+  // Tresen: Aufsatz-Platten stehen auf den Podesten (Oberkante Belag = heightM)
+  for (const p of top?.pieces ?? []) {
+    const rise = Math.max(top?.riseM ?? 0.2, 0.01)
+    const m = new THREE.Mesh(new THREE.BoxGeometry(p.w - PANEL_GAP_M, rise, p.d - PANEL_GAP_M), TOP_MATERIAL)
+    m.position.set(p.x + p.w / 2, heightM + rise / 2, p.y + p.d / 2)
+    m.castShadow = true
+    m.receiveShadow = true
+    g.add(m)
+  }
 
   // Füße: an jeder Plattenecke, doppelte Ecken (Nachbarplatten) nur einmal
   const feet = new Map<string, Pt>()

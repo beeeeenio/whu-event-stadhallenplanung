@@ -64,6 +64,10 @@ export interface NivtecData {
   /** Gesamthöhe in cm, so wie NivTec sie exportiert (Feldname "heightCm"). */
   heightCm?: number
   pieces: Piece2D[]
+  /** Tresen-Export (kind "tresen"): Aufsatz-Platten auf den Podesten (`pieces` sind dann die `basePieces`). */
+  topPieces?: Piece2D[]
+  /** Tresen: Höhe des Aufsatzes über der Podest-Oberkante in cm (Feldname "spindelHeightCm"). */
+  spindelHeightCm?: number
   /** Forex-Blenden an Außenkanten (gemeinsames Format mit dem NivTec-Tool, docs/plan-forex.md). */
   forexPanels?: ForexPanel[]
 }
