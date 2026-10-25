@@ -1,4 +1,4 @@
-import type { EventItem, ItemType, PhaseData } from '../types'
+import type { EventItem, ItemType, PhaseData, Piece2D } from '../types'
 import { ITEM_LIBRARY } from '../data/itemLibrary'
 import { metersToPixels } from './scale'
 
@@ -45,6 +45,15 @@ function rotatePt(p: Pt, deg: number): Pt {
   const c = Math.cos(r)
   const s = Math.sin(r)
   return { x: p.x * c - p.y * s, y: p.x * s + p.y * c }
+}
+
+/** Tatsächliche Box der NivTec-Podeste in Metern. `item.width/height` reichen immer von 0/0 bis zum
+ *  äußersten Podest, die Podeste selbst können versetzt liegen (z. B. erst ab x = 2 m). */
+export function piecesBounds(pieces: Piece2D[] | undefined): { x: number; y: number; w: number; d: number } | null {
+  if (!pieces || pieces.length === 0) return null
+  const x = Math.min(...pieces.map((p) => p.x))
+  const y = Math.min(...pieces.map((p) => p.y))
+  return { x, y, w: Math.max(...pieces.map((p) => p.x + p.w)) - x, d: Math.max(...pieces.map((p) => p.y + p.d)) - y }
 }
 
 /** Mittelpunkt des Objekts in Plan-Koordinaten (berücksichtigt die Drehung). */
