@@ -74,7 +74,7 @@ export default function SharedViewer({ token }: { token: string }) {
           selectedIds={[]}
           onSelect={noop}
           onSelectMany={noop}
-          tool="hand"
+          viewOnly
           eventName={name}
           phaseName={sorted.find((p) => p.id === currentPhaseId)?.name}
         />
