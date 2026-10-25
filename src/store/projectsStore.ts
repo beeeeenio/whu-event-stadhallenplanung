@@ -25,7 +25,7 @@ interface ProjectsStore {
   renameProject: (id: string, name: string) => void
   deleteProject: (id: string) => void
   duplicateProject: (projectId: string, newName?: string) => void
-  touchProject: (id: string) => void
+  touchProject: (id: string, name?: string) => void
   importProjects: (meta: ProjectMeta[]) => void
 }
 
@@ -50,7 +50,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       createProject: (name) => {
         const id = uuid()
         const meta: ProjectMeta = { id, name: name || 'Neues Projekt', updatedAt: Date.now() }
-        saveProjectData(id, emptyProjectData())
+        saveProjectData(id, { ...emptyProjectData(), eventName: meta.name })
         set((state) => ({ projects: [meta, ...state.projects], currentProjectId: id }))
         return id
       },
@@ -59,10 +59,14 @@ export const useProjectsStore = create<ProjectsStore>()(
 
       closeProject: () => set({ currentProjectId: null }),
 
-      renameProject: (id, name) =>
+      // Umbenennen aus der Übersicht: auch den Titel im Plan setzen, beide bleiben gleich
+      renameProject: (id, name) => {
+        const data = loadProjectData(id)
+        if (data) saveProjectData(id, { ...data, eventName: name })
         set((state) => ({
           projects: state.projects.map((p) => (p.id === id ? { ...p, name } : p)),
-        })),
+        }))
+      },
 
       deleteProject: (id) => {
         deleteProjectData(id)
@@ -84,7 +88,7 @@ export const useProjectsStore = create<ProjectsStore>()(
         const finalName = newName || `${sourceProject.name} (Kopie)`
 
         // Deep clone project data
-        const duplicatedData = structuredClone(sourceData)
+        const duplicatedData = { ...structuredClone(sourceData), eventName: finalName }
 
         // Save duplicated project data
         saveProjectData(newId, duplicatedData)
@@ -105,9 +109,10 @@ export const useProjectsStore = create<ProjectsStore>()(
         set((state) => ({ projects: [meta, ...state.projects] }))
       },
 
-      touchProject: (id) =>
+      // Nach dem Speichern: Zeitstempel setzen und den Namen mit dem Titel im Plan abgleichen
+      touchProject: (id, name) =>
         set((state) => ({
-          projects: state.projects.map((p) => (p.id === id ? { ...p, updatedAt: Date.now() } : p)),
+          projects: state.projects.map((p) => (p.id === id ? { ...p, updatedAt: Date.now(), ...(name?.trim() ? { name: name.trim() } : {}) } : p)),
         })),
 
       importProjects: (meta) =>

@@ -4,6 +4,7 @@ import EditorView from './components/EditorView'
 import { useEventStore } from './store/store'
 import { useProjectsStore } from './store/projectsStore'
 import { loadProjectData, saveProjectData } from './utils/projectStorage'
+import { reconcileName } from './utils/projectName'
 
 const AUTOSAVE_DELAY_MS = 600
 
@@ -20,9 +21,15 @@ function App() {
   useEffect(() => {
     if (!currentProjectId || loadedProjectId.current === currentProjectId) return
     const data = loadProjectData(currentProjectId)
-    if (data) hydrate(data)
+    if (data) {
+      // Name in der Übersicht und Titel im Plan angleichen (ältere Projekte konnten auseinanderlaufen)
+      const listName = useProjectsStore.getState().projects.find((p) => p.id === currentProjectId)?.name ?? data.eventName
+      const { data: reconciled, renameTo } = reconcileName(listName, data)
+      if (renameTo) touchProject(currentProjectId, renameTo)
+      hydrate(reconciled)
+    }
     loadedProjectId.current = currentProjectId
-  }, [currentProjectId, hydrate])
+  }, [currentProjectId, hydrate, touchProject])
 
   // Autosave: bei jeder Änderung am aktiven Projekt debounced in localStorage sichern
   useEffect(() => {
@@ -35,9 +42,10 @@ function App() {
         clearTimeout(saveTimer.current)
         saveTimer.current = null
       }
-      const ok = saveProjectData(projectId, getSnapshot())
+      const snapshot = getSnapshot()
+      const ok = saveProjectData(projectId, snapshot)
       setSaveFailed(!ok)
-      if (ok) touchProject(projectId)
+      if (ok) touchProject(projectId, snapshot.eventName)
     }
     // Ausstehende Änderung sofort sichern (beim Schließen, Tab-Wechsel, App-Wechsel auf dem iPad)
     const flush = () => {
