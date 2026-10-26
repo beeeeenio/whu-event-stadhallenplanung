@@ -6,6 +6,7 @@ import type { PickerTab } from './ObjectPicker'
 import { chairRowSuggestion, matchLibrary, parseQuery, textMatches } from '../utils/commandParser'
 import { crossPhaseInventory, peakAsSummary, sortPhases } from '../utils/phaseDiff'
 import { countVisibleItems } from '../utils/countItems'
+import { nivtecPartsForPhase } from '../utils/nivtecParts'
 import { exportInventoryCsv } from '../utils/exportInventory'
 import { openMenu } from '../utils/uiEvents'
 import { LEVELS } from '../utils/levels'
@@ -363,7 +364,12 @@ export default function CommandBar({ onClose, actions }: Props) {
             run: () => {
               const s = st()
               const phase = s.phases.find((p) => p.id === s.currentPhaseId)
-              exportInventoryCsv(s.eventName, phase?.name ?? 'Phase', countVisibleItems(s.items, s.currentPhaseId).summary)
+              exportInventoryCsv(
+                s.eventName,
+                phase?.name ?? 'Phase',
+                countVisibleItems(s.items, s.currentPhaseId).summary,
+                nivtecPartsForPhase(s.items, s.itemOrder, s.currentPhaseId),
+              )
             },
           },
           {

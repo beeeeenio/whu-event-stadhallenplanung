@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useEventStore } from '../store/store'
 import { countVisibleItems, describeFoamLetters, visibleItemList } from '../utils/countItems'
 import { exportInventoryCsv } from '../utils/exportInventory'
+import { nivtecPartsForPhase } from '../utils/nivtecParts'
 import { crossPhaseInventory, peakAsSummary, sortPhases } from '../utils/phaseDiff'
 import { btn, input, island, segmentedGroup, segmentedItem } from '../utils/ui'
 import type { EventItem, Phase } from '../types'
@@ -62,6 +63,7 @@ export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props
 
   const counts = countVisibleItems(items, currentPhaseId)
   const list = visibleItemList(items, itemOrder, currentPhaseId)
+  const nivtecParts = useMemo(() => nivtecPartsForPhase(items, itemOrder, currentPhaseId), [items, itemOrder, currentPhaseId])
   const q = search.trim().toLowerCase()
   const filteredList = list
     .map((item, i) => ({ item, n: i + 1 }))
@@ -116,6 +118,35 @@ export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props
               <li className="text-xs text-ink3 text-center py-4">Keine Objekte in dieser Phase</li>
             )}
           </ul>
+        )}
+
+        {tab === 'summary' && nivtecParts.length > 0 && (
+          <div className="mt-3 pt-2 border-t border-line">
+            <div className="text-[10.5px] font-semibold text-ink3 uppercase tracking-[0.1em] px-1 mb-1">NivTec-Material</div>
+            {nivtecParts.map((parts) => (
+              <div key={parts.itemId} className="mb-2.5 last:mb-0">
+                <button
+                  onClick={() => onSelect(parts.itemId)}
+                  className={`w-full text-left text-xs font-semibold px-1 py-0.5 rounded truncate ${
+                    selectedIds.includes(parts.itemId) ? 'text-accent' : 'text-ink hover:bg-chip'
+                  }`}
+                >
+                  {parts.name}
+                </button>
+                <ul>
+                  {parts.lines.map((line) => (
+                    <li key={line.label} className="flex items-center gap-2 text-xs text-ink py-1 px-1 border-b border-chip">
+                      <span className="flex-1">{line.label}</span>
+                      <span className="font-mono font-semibold tabular-nums">{line.count}×</span>
+                    </li>
+                  ))}
+                </ul>
+                {parts.facts.map((fact) => (
+                  <p key={fact} className="text-[11px] text-ink3 px-1 mt-1">{fact}</p>
+                ))}
+              </div>
+            ))}
+          </div>
         )}
 
         {tab === 'list' && (
@@ -264,7 +295,7 @@ export default function InventoryPanel({ selectedIds, onSelect, onClose }: Props
           </div>
           <div className="border-t border-line px-4 py-2.5 flex items-center justify-between">
             <span className="text-xs text-ink3">Total <strong className="text-ink">{counts.total}</strong> Objekte</span>
-            <button onClick={() => exportInventoryCsv(eventName, phaseName, counts.summary)} className={btn('dark', 'sm')}>
+            <button onClick={() => exportInventoryCsv(eventName, phaseName, counts.summary, nivtecParts)} className={btn('dark', 'sm')}>
               ⬇ Export
             </button>
           </div>

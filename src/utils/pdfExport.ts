@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf'
 import type { EventItem, Phase } from '../types'
 import { countVisibleItems, describeFoamLetters } from './countItems'
+import { nivtecPartsForPhase } from './nivtecParts'
 import { brandLogoPng } from './brandAssets'
 
 interface ExportArgs {
@@ -86,6 +87,31 @@ export async function exportPhaseToPdf({ eventName, phase, items, currentPhaseId
   if (Object.keys(counts.foamLetters).length > 0) {
     y += 5
     doc.text(`Styropor-Buchstaben: ${describeFoamLetters(counts.foamLetters)}`, 14, y)
+  }
+
+  // NivTec-Material je Bühne (Podeste nach Maß, Forex-Blenden …)
+  const nivtec = nivtecPartsForPhase(items, Object.keys(items), currentPhaseId)
+  for (const parts of nivtec) {
+    y += 8
+    if (y > 190) {
+      doc.addPage()
+      y = 20
+    }
+    doc.setFontSize(10)
+    doc.text(`NivTec-Material: ${parts.name}`, 14, y)
+    doc.setFontSize(9)
+    for (const line of parts.lines) {
+      y += 5
+      doc.text(`${line.count}× ${line.label}`, 18, y)
+      if (y > 200) {
+        doc.addPage()
+        y = 20
+      }
+    }
+    for (const fact of parts.facts) {
+      y += 5
+      doc.text(fact, 18, y)
+    }
   }
 
   doc.save(`${eventName.replace(/\s+/g, '_')}_${phase?.name.replace(/\s+/g, '_') ?? 'phase'}.pdf`)

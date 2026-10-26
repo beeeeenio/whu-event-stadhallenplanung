@@ -84,6 +84,7 @@ Diese README ist bewusst ausführlich. Sie soll Menschen und KI-Agenten (Claude 
   - Tastenkürzel (`?` im Editor zeigt sie).
 - **Stückliste und Export:**
   - Zählung aller Objekte, Stühle, Podeste, Vorhang-Meter, Visiova-Rahmen, Forex-Blenden und Buchstaben je Zeichen.
+  - **NivTec-Material** (`utils/nivtecParts.ts`): Je NivTec-Bühne listet die Stückliste (Übersicht, CSV, PDF) die Podeste nach Maß, Aufsatz-Platten, Forex-Blenden mit Länge × Höhe sowie Höhe, Spindeln und Druckgruppen.
   - Export als CSV, PNG, PDF und als Projekt-ZIP (wieder importierbar).
 - **Projekte, Vorlagen und Versionen:**
   - Auf `main` im Browser (localStorage).
