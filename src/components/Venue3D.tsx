@@ -490,11 +490,18 @@ export default function Venue3D({ onClose, initialLevel = 'eg' }: Props) {
     // Jede Kamerabewegung merken, damit die 3D-Ansicht beim nächsten Öffnen dort weitermacht
     controls.addEventListener('end', () => saveLastView(camera, controls))
     controls.enableDamping = true
+    controls.dampingFactor = 0.15 // weniger „Nachschwimmen“, Bewegung folgt der Maus direkter
+    // Rechtsklick-Verschieben entlang des Bodens (wie Laufen) statt in der Bildschirmebene
+    controls.screenSpacePanning = false
     controls.maxPolarAngle = Math.PI / 2 - 0.02
     sceneRef.current = { items: itemGroup, walls: wallGroup, stairs: stairGroup, curtain: curtainGroup, partitions: partitionGroup, upperWalls: wallGroup.getObjectByName('upperWalls'), stage: stageGroup, ogWalls: og.walls, ogSlab: og.slab, sun, camera, controls }
 
     let raf = 0
     const loop = () => {
+      // OrbitControls verschiebt proportional zum Abstand zum Drehpunkt — nah dran (Laufansicht)
+      // wäre das quälend langsam. Darum bei kleinem Abstand die Verschiebegeschwindigkeit anheben.
+      const dist = camera.position.distanceTo(controls.target)
+      controls.panSpeed = Math.max(1, 20 / Math.max(dist, 1))
       controls.update()
       renderer.render(scene, camera)
       raf = requestAnimationFrame(loop)
