@@ -146,6 +146,9 @@ function EventItemShape({
   // Detailgrad: Maße erst ab ~70 % Zoom, Beschriftung ab ~40 % (ausgewählte Objekte immer)
   const showDims = isSelected || zoom >= 0.7
   const showLabel = isSelected || zoom >= 0.4
+  // Dünne Objekte (Wände, Pipe & Drape, Vorhang): Name über, Maße unter der Linie statt übereinander
+  const isThin = !isRound && h < 16
+  const labelBoxW = Math.max(w, item.label.length * 5.5 + 10)
 
   const minSize = MIN_HIT_TARGET_PX / zoom
   // Text-Labels wachsen nach rechts/unten ab dem Ursprung (Konva-Text-Standardanker), nicht
@@ -182,12 +185,19 @@ function EventItemShape({
     const worldH = Math.abs(bw * sin) + Math.abs(bh * cos)
     const fmt = (v: number) => (Math.round(v * 100) / 100).toFixed(2).replace('.', ',')
     const dims = `${fmt(pb.w)} × ${fmt(pb.d)} m`
-    const w = Math.max(item.label.length * 5.2, showDims ? dims.length * 4.6 : 0) + 10
+    // Erst versuchen, Name + Maße (ggf. verkleinert) IN die Bühne zu setzen, dann nur den Namen.
+    // Außerhalb (weißes Kästchen unter der Bühne) nur bei Auswahl/Hover, sonst überdecken sich
+    // die Kästchen benachbarter Bühnen.
+    const nameW = item.label.length * 5.2 + 8
+    const fullW = Math.max(nameW, dims.length * 4.6 + 8)
+    const fit = (bw2: number, bh2: number) => Math.min(1, (worldW - 4) / bw2, (worldH - 4) / bh2)
+    const MIN_SCALE = 0.6
+    if (showDims && fit(fullW, 26) >= MIN_SCALE) return { x: cx, y: cy, w: fullW, h: 26, dims, withDims: true, inside: true, scale: fit(fullW, 26) }
+    if (fit(nameW, 15) >= 0.4) return { x: cx, y: cy, w: nameW, h: 15, dims, withDims: false, inside: true, scale: fit(nameW, 15) }
+    if (!isSelected && !hovered) return null
     const h = showDims ? 26 : 15
-    const inside = w <= worldW && h <= worldH
-    // Versatz vom Mittelpunkt im Plan (nach unten, wenn außen) und zurück ins lokale System der Gruppe
-    const oy = inside ? 0 : worldH / 2 + 4 + h / 2
-    return { x: cx + oy * sin, y: cy + oy * cos, w, h, dims, inside }
+    const oy = worldH / 2 + 4 + h / 2
+    return { x: cx + oy * sin, y: cy + oy * cos, w: fullW, h, dims, withDims: showDims, inside: false, scale: 1 }
   })()
   const angleTextRef = useRef<Konva.Text>(null)
   // Start des Ziehens: Mittelpunkt, Zeigerwinkel und Ausgangsrotation. Aus dem Delta ab Griff-Start
@@ -475,10 +485,11 @@ function EventItemShape({
               listening={false}
               text={item.label}
               fontSize={9}
-              width={Math.max(w, 40)}
+              wrap="none"
+              width={labelBoxW}
               align="center"
-              y={h ? h / 2 - 5 : -5}
-              x={isRound ? -w / 2 : 0}
+              y={isThin ? -13 : h / 2 - 5}
+              x={(isRound ? 0 : w / 2) - labelBoxW / 2}
             />
           )}
           {/* Maßangabe (B x H in Metern), wie im Referenz-Tool */}
@@ -488,28 +499,29 @@ function EventItemShape({
               text={`${item.width.toFixed(2)} × ${item.height.toFixed(2)} m`}
               fontSize={8}
               fill="#6b7280"
-              width={Math.max(w, 60)}
+              wrap="none"
+              width={Math.max(w, 80)}
               align="center"
               y={(isRound ? w / 2 : h) + 3 + (item.type === 'foam_letters' ? metersToPixels(FOAM_LETTER.widthM, pixelsPerMeter) : 0)}
-              x={isRound ? -w / 2 : 0}
+              x={(isRound ? 0 : w / 2) - Math.max(w, 80) / 2}
             />
           )}
         </>
       )}
       {nivtecLabel && (
-        <Group x={nivtecLabel.x} y={nivtecLabel.y} rotation={-phaseData.rotation} listening={false}>
+        <Group x={nivtecLabel.x} y={nivtecLabel.y} rotation={-phaseData.rotation} scaleX={nivtecLabel.scale} scaleY={nivtecLabel.scale} listening={false}>
           <Rect
             x={-nivtecLabel.w / 2}
             y={-nivtecLabel.h / 2}
             width={nivtecLabel.w}
             height={nivtecLabel.h}
             cornerRadius={3}
-            fill="rgba(255,255,255,0.85)"
+            fill={nivtecLabel.inside ? undefined : 'rgba(255,255,255,0.9)'}
             stroke={nivtecLabel.inside ? undefined : '#cbd5e1'}
             strokeWidth={0.5}
           />
-          <Text x={-nivtecLabel.w / 2} y={-nivtecLabel.h / 2 + 3} width={nivtecLabel.w} align="center" wrap="none" text={item.label} fontSize={9} fill="#111827" />
-          {showDims && (
+          <Text x={-nivtecLabel.w / 2} y={-nivtecLabel.h / 2 + (nivtecLabel.withDims ? 3 : 3)} width={nivtecLabel.w} align="center" wrap="none" text={item.label} fontSize={9} fill="#111827" />
+          {nivtecLabel.withDims && (
             <Text x={-nivtecLabel.w / 2} y={-nivtecLabel.h / 2 + 14} width={nivtecLabel.w} align="center" wrap="none" text={nivtecLabel.dims} fontSize={8} fill="#6b7280" />
           )}
         </Group>
